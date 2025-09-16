@@ -1,10 +1,38 @@
 import { NextResponse } from "next/server"
 import bcrypt from "bcryptjs"
 import jwt from "jsonwebtoken"
-import { User, Court, CourtSettings } from "@/models"
+import { User, Court, CourtSettings, AuditLog } from "@/models"
 
 export async function POST(request) {
   try {
+    // Check if request has body
+    const contentLength = request.headers.get('content-length')
+    if (!contentLength || contentLength === '0') {
+      console.log("❌ Empty request body")
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Request body is empty",
+        },
+        { status: 400 },
+      )
+    }
+
+    // Parse JSON with error handling
+    let requestData
+    try {
+      requestData = await request.json()
+    } catch (parseError) {
+      console.error("❌ JSON parse error:", parseError)
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Invalid JSON in request body",
+        },
+        { status: 400 },
+      )
+    }
+
     const {
       email,
       password,
@@ -14,7 +42,7 @@ export async function POST(request) {
       instituteName,
       instituteType = "college",
       role = "admin",
-    } = await request.json()
+    } = requestData
 
     console.log("📝 Registration attempt:", { 
       email, 
@@ -152,6 +180,36 @@ export async function POST(request) {
       status: "active",
       emailVerified: true,
     })
+
+    // Create audit log for successful registration
+    try {
+      await AuditLog.create({
+        courtId: userCourtId || "system", // Use "system" for registrations without court
+        userId: user.id,
+        action: "USER_REGISTER",
+        entityType: "user",
+        entityId: user.id,
+        metadata: {
+          registrationMethod: "admin",
+          hasCourt: !!court,
+          courtId: userCourtId,
+          userAgent: request.headers.get("user-agent") || "unknown",
+          ipAddress: request.headers.get("x-forwarded-for") || 
+                    request.headers.get("x-real-ip") || 
+                    request.headers.get("x-client-ip") || 
+                    "unknown"
+        },
+        ipAddress: request.headers.get("x-forwarded-for") || 
+                  request.headers.get("x-real-ip") || 
+                  request.headers.get("x-client-ip") || 
+                  "unknown",
+        userAgent: request.headers.get("user-agent") || "unknown"
+      })
+      console.log("✅ Audit log created for user registration:", user.email)
+    } catch (auditError) {
+      console.error("❌ Failed to create audit log for registration:", auditError)
+      // Don't fail the registration if audit log creation fails
+    }
 
     // Generate JWT token
     const token = jwt.sign(

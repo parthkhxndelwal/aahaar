@@ -31,8 +31,10 @@ export default function AdminAuthPage() {
   const [loading, setLoading] = useState(false)
   const [loginError, setLoginError] = useState("")
   const [registerError, setRegisterError] = useState("")
+  const [registerSuccess, setRegisterSuccess] = useState("")
   const [showLoginError, setShowLoginError] = useState(false)
   const [showRegisterError, setShowRegisterError] = useState(false)
+  const [showRegisterSuccess, setShowRegisterSuccess] = useState(false)
   const [validationErrors, setValidationErrors] = useState({
     fullName: "",
     email: "",
@@ -99,6 +101,58 @@ export default function AdminAuthPage() {
     return ""
   }
 
+  // Check email availability
+  const checkEmailAvailability = async (email: string) => {
+    if (!email || validateEmail(email)) return
+    
+    try {
+      const response = await fetch("/api/auth/check-availability", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email }),
+      })
+      
+      if (response.ok) {
+        const data = await response.json()
+        if (data.success && data.data.email && !data.data.email.available) {
+          setValidationErrors(prev => ({ ...prev, email: data.data.email.message }))
+        } else {
+          setValidationErrors(prev => ({ ...prev, email: "" }))
+        }
+      }
+    } catch (error) {
+      console.error("Error checking email availability:", error)
+    }
+  }
+
+  // Check phone availability
+  const checkPhoneAvailability = async (phone: string) => {
+    if (!phone || validatePhone(phone)) return
+    
+    try {
+      const response = await fetch("/api/auth/check-availability", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ phone }),
+      })
+      
+      if (response.ok) {
+        const data = await response.json()
+        if (data.success && data.data.phone && !data.data.phone.available) {
+          setValidationErrors(prev => ({ ...prev, phone: data.data.phone.message }))
+        } else {
+          setValidationErrors(prev => ({ ...prev, phone: "" }))
+        }
+      }
+    } catch (error) {
+      console.error("Error checking phone availability:", error)
+    }
+  }
+
   const validatePassword = (password: string) => {
     if (!password) return "Password is required"
     if (password.length < 8) return "Password must be at least 8 characters long"
@@ -124,9 +178,17 @@ export default function AdminAuthPage() {
         break
       case "email":
         error = validateEmail(value)
+        // If format is valid, check availability
+        if (!error && value) {
+          setTimeout(() => checkEmailAvailability(value), 500) // Debounced availability check
+        }
         break
       case "phone":
         error = validatePhone(value)
+        // If format is valid, check availability
+        if (!error && value) {
+          setTimeout(() => checkPhoneAvailability(value), 500) // Debounced availability check
+        }
         break
       case "password":
         error = validatePassword(value)
@@ -209,6 +271,31 @@ export default function AdminAuthPage() {
     }, 300)
   }
 
+  const showRegisterSuccessWithAnimation = (message: string) => {
+    // If there's already a success message, hide it first
+    if (registerSuccess) {
+      hideRegisterSuccessWithAnimation()
+      setTimeout(() => {
+        setRegisterSuccess(message)
+        setTimeout(() => {
+          setShowRegisterSuccess(true)
+        }, 150)
+      }, 600) // Wait for hide animation to complete
+    } else {
+      setRegisterSuccess(message)
+      setTimeout(() => {
+        setShowRegisterSuccess(true)
+      }, 150)
+    }
+  }
+
+  const hideRegisterSuccessWithAnimation = () => {
+    setShowRegisterSuccess(false) // First hide content
+    setTimeout(() => {
+      setRegisterSuccess("") // Then collapse space
+    }, 300)
+  }
+
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
@@ -220,6 +307,7 @@ export default function AdminAuthPage() {
       return false
     }
 
+    setLoading(true)
     try {
       console.log("🔐 Attempting login with:", { email: loginData.email })
       
@@ -234,20 +322,20 @@ export default function AdminAuthPage() {
         },
       })
       
-      console.log("📡 Response status:", response.status)
+      console.log("📡 Login response status:", response.status)
       
       const data = await response.json()
-      console.log("📦 Response data:", data)
+      console.log("📦 Login response data:", data)
       
       if (data.success) {
         console.log("✅ Login successful, processing...")
         const { token, user } = data.data
-        console.log("🎫 Token:", token?.substring(0, 20) + "...")
-        console.log("👤 User:", user)
+        console.log("🎫 Token received:", !!token)
+        console.log("👤 User received:", user)
         
         login(token, user)
         
-        console.log("👤 User logged in:", user)
+        console.log("👤 User logged in via context")
         
         // Check if admin has courts
         const courtsResponse = await fetch("/api/admin/courts", {
@@ -292,6 +380,8 @@ export default function AdminAuthPage() {
       console.error("🚨 Login error:", error)
       showLoginErrorWithAnimation("An error occurred during login. Please try again.")
       return false
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -302,29 +392,51 @@ export default function AdminAuthPage() {
 
   const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    console.log("🔄 Registration form submitted")
 
     // Validate all fields
     const fields = ['fullName', 'email', 'phone', 'password', 'confirmPassword']
     let hasErrors = false
     
+    console.log("📋 Validating fields:", registerData)
+    
     fields.forEach(field => {
       const isValid = validateField(field, registerData[field as keyof typeof registerData])
+      console.log(`✅ Field ${field}: ${isValid ? 'valid' : 'invalid'}`)
       if (!isValid) hasErrors = true
     })
 
-    // Check if passwords match
+    // Additional password match check
     if (registerData.password !== registerData.confirmPassword) {
+      console.log("❌ Passwords don't match:", { password: registerData.password, confirm: registerData.confirmPassword })
       setValidationErrors(prev => ({ ...prev, confirmPassword: "Passwords do not match" }))
       hasErrors = true
     }
 
+    // Check for existing validation errors
+    const currentErrors = Object.values(validationErrors).filter(error => error)
+    console.log("🚨 Current validation errors:", currentErrors)
+    if (currentErrors.length > 0) {
+      hasErrors = true
+    }
+
     if (hasErrors) {
-      showRegisterErrorWithAnimation("Please resolve the errors")
+      console.log("❌ Validation failed, showing error message")
+      showRegisterErrorWithAnimation("Please resolve all validation errors")
       return false
     }
 
+    console.log("✅ Validation passed, proceeding with registration")
+    setLoading(true)
+
     setLoading(true)
     try {
+      console.log("🚀 Attempting registration with:", { 
+        fullName: registerData.fullName, 
+        email: registerData.email, 
+        phone: registerData.phone 
+      })
+
       const response = await fetch("/api/auth/register", {
         method: "POST",
         headers: {
@@ -333,25 +445,52 @@ export default function AdminAuthPage() {
         body: JSON.stringify(registerData),
       })
 
+      console.log("📡 Registration response status:", response.status)
+
+      const data = await response.json()
+      console.log("📦 Registration response data:", data)
+
       if (!response.ok) {
-        const errorData = await response.json()
-        showRegisterErrorWithAnimation(errorData.message || "Registration failed")
+        showRegisterErrorWithAnimation(data.message || "Registration failed")
         return false
       }
 
-      const data = await response.json()
+      if (data.success) {
+        console.log("✅ Registration successful, showing success message...")
 
-      // Use the login function from context to properly set auth state
-      login(data.data.token, data.data.user)
+        // Clear the registration form
+        setRegisterData({
+          fullName: "",
+          email: "",
+          phone: "",
+          password: "",
+          confirmPassword: "",
+        })
 
-      toast({
-        title: "Success",
-        description: "Account created successfully! Let's set up your first court.",
-      })
+        // Clear any validation errors
+        setValidationErrors({
+          fullName: "",
+          email: "",
+          phone: "",
+          password: "",
+          confirmPassword: ""
+        })
 
-      router.push("/admin/onboarding")
-      return true
+        // Show success message
+        showRegisterSuccessWithAnimation("Account created successfully! Please login to continue.")
+
+        // Switch to login mode after a short delay
+        setTimeout(() => {
+          setIsLogin(true)
+        }, 2000)
+
+        return true
+      } else {
+        showRegisterErrorWithAnimation(data.message || "Registration failed")
+        return false
+      }
     } catch (error: any) {
+      console.error("🚨 Registration error:", error)
       showRegisterErrorWithAnimation("An error occurred during registration. Please try again.")
       return false
     } finally {
@@ -359,15 +498,13 @@ export default function AdminAuthPage() {
     }
   }
 
-  const handleRegisterClick = async (e: React.MouseEvent<HTMLButtonElement>) => {
-    e.preventDefault()
-    return await handleRegisterSubmit(e as any)
-  }
+
 
   const switchMode = () => {
     setIsLogin(!isLogin)
     hideLoginErrorWithAnimation() // Clear login errors with animation
     hideRegisterErrorWithAnimation() // Clear register errors with animation
+    hideRegisterSuccessWithAnimation() // Clear register success with animation
     setValidationErrors({
       fullName: "",
       email: "",
@@ -382,12 +519,41 @@ export default function AdminAuthPage() {
 
   const handleRegisterDataChange = (field: string, value: string) => {
     setRegisterData((prev) => ({ ...prev, [field]: value }))
+    
     // Real-time validation
-    setTimeout(() => validateField(field, value), 300) // Debounce validation
+    const isValid = validateField(field, value)
+    
+    // Special handling for confirmPassword - also validate when password changes
+    if (field === "password" && registerData.confirmPassword) {
+      const confirmValid = validateField("confirmPassword", registerData.confirmPassword)
+      if (!confirmValid) {
+        // Re-validate confirmPassword when password changes
+        setTimeout(() => validateField("confirmPassword", registerData.confirmPassword), 100)
+      }
+    }
+    
+    // Special handling for confirmPassword - also validate when it changes
+    if (field === "confirmPassword" && registerData.password) {
+      // The validation will happen in validateField
+    }
   }
 
   return (
     <div className="w-full">
+      {/* Header */}
+      <header className="w-full bg-transparent">
+        <div className="px-4 sm:px-6">
+          <div className="flex justify-center items-center h-16">
+            {/* Logo */}
+            <img
+              src="/icons/icon-144x144.png"
+              alt="Aahaar"
+              className="h-10 w-10"
+            />
+          </div>
+        </div>
+      </header>
+
       <AnimatePresence mode="wait" initial={false}>
         {isLogin ? (
           <motion.div
@@ -506,7 +672,7 @@ export default function AdminAuthPage() {
                   <CardDescription>Set up your food court management system</CardDescription>
                 </CardHeader>
                 <CardContent>
-                <form className="space-y-6" noValidate>
+                <form onSubmit={handleRegisterSubmit} className="space-y-6" noValidate>
                   {/* Row 1: Full Name and Email */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FloatingInput
@@ -595,7 +761,43 @@ export default function AdminAuthPage() {
                     )}
                   </AnimatePresence>
 
-                  <AnimatedButton type="submit" className="w-full" onAsyncClick={handleRegisterClick}>
+                  <AnimatePresence mode="wait">
+                    {registerSuccess && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0, scale: 0.95 }}
+                        animate={{ height: "auto", opacity: 1, scale: 1 }}
+                        exit={{ height: 0, opacity: 0, scale: 0.95 }}
+                        transition={{ 
+                          duration: 0.4,
+                          ease: [0.4, 0.0, 0.2, 1],
+                          height: { duration: 0.4 },
+                          opacity: { duration: 0.3 },
+                          scale: { duration: 0.3 }
+                        }}
+                        className="overflow-hidden"
+                      >
+                        <div className="p-3 text-sm text-green-400 bg-green-500/10 border border-green-500/20 rounded-md relative">
+                          <div className="pr-8">
+                            {registerSuccess}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault()
+                              e.stopPropagation()
+                              hideRegisterSuccessWithAnimation()
+                            }}
+                            className="absolute top-2 right-2 p-1 hover:bg-green-500/20 rounded-full transition-colors"
+                            aria-label="Dismiss success message"
+                          >
+                            <X size={16} className="text-green-400" />
+                          </button>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
+                  <AnimatedButton type="submit" className="w-full">
                     Create Account
                   </AnimatedButton>
                 </form>

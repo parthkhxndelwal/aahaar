@@ -2,7 +2,6 @@ import { NextResponse } from "next/server"
 import { Order, OrderItem, User, Vendor, MenuItem, Payment, Cart, CartItem } from "@/models"
 import { authenticateTokenNextJS } from "@/middleware/auth"
 import { Op } from "sequelize"
-import { emitToVendor } from "@/lib/socket"
 
 export async function POST(request, { params }) {
   try {
@@ -103,11 +102,10 @@ export async function POST(request, { params }) {
       grandTotal += itemSubtotal
     }
 
-    // Calculate charges
-    const gstAmount = grandTotal * 0.18 // 18% GST
+    // Calculate charges (GST is already included in menu item prices)
     const serviceCharge = grandTotal * 0.05 // 5% Service Charge
     const platformCharge = 5 // ₹5 Platform Charge
-    const totalAmount = grandTotal + gstAmount + serviceCharge + platformCharge
+    const totalAmount = grandTotal + serviceCharge + platformCharge
 
     // Generate shared OTP for the entire order
     const orderOtp = Math.floor(1000 + Math.random() * 9000).toString()
@@ -120,13 +118,12 @@ export async function POST(request, { params }) {
 
     // Create sub-orders for each vendor
     for (const [vendorId, group] of Object.entries(vendorGroups)) {
-      // Calculate vendor-specific charges proportionally
+      // Calculate vendor-specific charges proportionally (no GST since it's already included)
       const vendorSubtotal = group.subtotal
       const vendorProportion = vendorSubtotal / grandTotal
-      const vendorGst = gstAmount * vendorProportion
       const vendorServiceCharge = serviceCharge * vendorProportion
       const vendorPlatformCharge = platformCharge * vendorProportion
-      const vendorTotal = vendorSubtotal + vendorGst + vendorServiceCharge + vendorPlatformCharge
+      const vendorTotal = vendorSubtotal + vendorServiceCharge + vendorPlatformCharge
 
       // Generate unique order number for this vendor
       const orderNumber = `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`
@@ -143,7 +140,7 @@ export async function POST(request, { params }) {
         type: "user_initiated",
         paymentMethod,
         subtotal: vendorSubtotal,
-        taxAmount: vendorGst,
+        taxAmount: 0, // GST is already included in menu item prices
         discountAmount: 0,
         totalAmount: vendorTotal,
         specialInstructions,
@@ -164,7 +161,6 @@ export async function POST(request, { params }) {
           vendorProportion,
           originalGrandTotal: grandTotal,
           charges: {
-            gst: vendorGst,
             serviceCharge: vendorServiceCharge,
             platformCharge: vendorPlatformCharge,
           },
@@ -200,44 +196,9 @@ export async function POST(request, { params }) {
       })
       createdPayments.push(payment)
 
-      // Emit socket event to vendor for new order notification
-      const orderData = {
-        id: order.id,
-        orderNumber: order.orderNumber,
-        customerName: order.customerName,
-        customerPhone: order.customerPhone,
-        items: group.items.map(item => ({
-          name: item.name,
-          quantity: item.quantity,
-          price: item.price,
-          subtotal: item.subtotal,
-          imageUrl: item.imageUrl
-        })),
-        totalAmount: order.totalAmount,
-        status: "pending",
-        estimatedPreparationTime: order.estimatedPreparationTime,
-        orderOtp: order.orderOtp,
-        createdAt: order.createdAt,
-      }
-
-      // Get updated section counts for the vendor
-      const upcomingCount = await Order.count({ where: { vendorId, status: "pending" } })
-      const queueCount = await Order.count({ where: { vendorId, status: { [Op.in]: ["accepted", "preparing"] } } })
-      const readyCount = await Order.count({ where: { vendorId, status: "ready" } })
-
-      // Emit new order to vendor
-      emitToVendor(vendorId, 'new-order', {
-        section: 'upcoming',
-        order: orderData,
-        action: 'new_order',
-        sectionCounts: {
-          upcoming: upcomingCount,
-          queue: queueCount,
-          ready: readyCount,
-        }
-      })
-
-      console.log(`📡 Socket event emitted for new order: ${order.id} to vendor: ${vendorId}`)
+      // Note: Vendor will receive this order through their polling mechanism
+      // The vendor's useVendorOrders hook will detect this new order automatically
+      console.log(`📦 New order created: ${order.id} for vendor: ${vendorId} (will be picked up by vendor polling)`)
     }
 
     // Clear the user's cart after successful order creation
@@ -259,7 +220,6 @@ export async function POST(request, { params }) {
           totalAmount,
           grandTotal,
           charges: {
-            gst: gstAmount,
             serviceCharge,
             platformCharge,
           },

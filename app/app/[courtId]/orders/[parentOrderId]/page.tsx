@@ -83,18 +83,16 @@ export default function OrderDetailsPage({
   const [refreshing, setRefreshing] = useState(false)
   const [otpCopied, setOtpCopied] = useState(false)
 
-  // Use the socket hook for real-time updates
+  // Use the polling hook for real-time updates
   const { 
-    orderDetails: socketOrderDetails, 
+    orderDetails, 
     lastUpdate, 
     statusUpdates,
     updateOrderDetails,
-    isConnected: socketConnected,
-    connectionError: socketError 
-  } = useOrderDetails(user?.id || null, parentOrderId)
-
-  // Use socket data as primary source
-  const orderDetails = socketOrderDetails
+    isLoading: orderDetailsLoading,
+    error: orderDetailsError,
+    refetch
+  } = useOrderDetails(user?.id || null, parentOrderId, courtId)
 
   const pageVariants = {
     initial: { opacity: 0, x: 20 },
@@ -122,16 +120,16 @@ export default function OrderDetailsPage({
     fetchOrderDetails()
   }, [user, token, parentOrderId, courtId, authLoading])
 
-  // Debug effect to track socket connection and updates
+  // Debug effect to track polling connection and updates
   useEffect(() => {
-    console.log(`🔍 [OrderDetails] Debug - userId: "${user?.id}", parentOrderId: "${parentOrderId}", socketConnected: ${socketConnected}`)
+    console.log(`🔍 [OrderDetails] Debug - userId: "${user?.id}", parentOrderId: "${parentOrderId}", polling: ${!orderDetailsError}`)
     if (lastUpdate) {
       console.log(`⏰ [OrderDetails] Last update: ${lastUpdate.toLocaleTimeString()}`)
     }
     if (statusUpdates.length > 0) {
       console.log(`📊 [OrderDetails] Status updates count: ${statusUpdates.length}`)
     }
-  }, [user?.id, parentOrderId, socketConnected, lastUpdate, statusUpdates.length])
+  }, [user?.id, parentOrderId, orderDetailsError, lastUpdate, statusUpdates.length])
 
   const fetchOrderDetails = async (isRefresh = false) => {
     if (isRefresh) {
@@ -153,12 +151,11 @@ export default function OrderDetailsPage({
       if (response.ok) {
         const data = await response.json()
         if (data.success && updateOrderDetails) {
-          // Update socket hook state with fetched data
+          // Update polling hook state with fetched data
           updateOrderDetails(data.data)
-          console.log('📊 [OrderDetails] Initial order details fetched and updated in socket hook:', {
+          console.log('📊 [OrderDetails] Initial order details fetched and updated in polling hook:', {
             parentOrderId: data.data.parentOrderId,
-            vendorsCount: data.data.summary.totalVendors,
-            socketConnected
+            vendorsCount: data.data.summary.totalVendors
           })
         }
       }
@@ -249,12 +246,12 @@ export default function OrderDetailsPage({
           </div>
           {user?.id && parentOrderId && (
             <p className="text-xs text-neutral-500 mt-2">
-              Socket: {socketConnected ? '🟢 Connected' : '🔴 Disconnected'} | User: {user.id} | Order: {parentOrderId}
+              Polling: {!orderDetailsError ? '🟢 Active' : '🔴 Error'} | User: {user.id} | Order: {parentOrderId}
             </p>
           )}
-          {socketError && (
+          {orderDetailsError && (
             <p className="text-xs text-red-500 mt-1">
-              Socket Error: {socketError}
+              Polling Error: {orderDetailsError}
             </p>
           )}
         </div>
@@ -312,14 +309,14 @@ export default function OrderDetailsPage({
               <p className="text-sm text-neutral-600 dark:text-neutral-400">
                 {getOverallStatus(orderDetails?.orders || [])}
               </p>
-              {/* Socket Debug Info */}
+              {/* Polling Debug Info */}
               <div className="text-xs text-neutral-500 mt-1 flex items-center gap-4">
-                <span>Socket: {socketConnected ? '🟢 Connected' : '🔴 Disconnected'}</span>
+                <span>Polling: {!orderDetailsError ? '🟢 Active' : '🔴 Error'}</span>
                 {user?.id && <span>User: {user.id}</span>}
                 {parentOrderId && <span>Order: {parentOrderId}</span>}
                 {lastUpdate && <span>Last Update: {lastUpdate.toLocaleTimeString()}</span>}
                 {statusUpdates.length > 0 && <span>Updates: {statusUpdates.length}</span>}
-                {socketError && <span className="text-red-500">Error: {socketError}</span>}
+                {orderDetailsError && <span className="text-red-500">Error: {orderDetailsError}</span>}
               </div>
             </div>
           </div>

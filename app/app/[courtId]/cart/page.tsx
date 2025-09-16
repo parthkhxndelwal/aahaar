@@ -50,10 +50,10 @@ export default function CartPage({ params }: { params: Promise<{ courtId: string
 
   // Calculate charges
   const itemTotal = cart.total
-  const gst = itemTotal * 0.18 // 18% GST
   const serviceCharge = itemTotal * 0.05 // 5% Service Charge
   const platformCharge = 5 // ₹5 Platform Charge
-  const totalAmount = itemTotal + gst + serviceCharge + platformCharge
+  // GST is pre-included in menu item prices
+  const totalAmount = itemTotal + serviceCharge + platformCharge
 
   // Get unique vendor names from cart items
   const uniqueVendorNames = [...new Set(cart.items.map(item => item.vendorName).filter(Boolean))]
@@ -389,7 +389,7 @@ export default function CartPage({ params }: { params: Promise<{ courtId: string
                   animate={{ x: 0, opacity: 1 }}
                   transition={{ delay: 0.1 }}
                 >
-                  <span className="text-neutral-600 dark:text-neutral-400">Item Total</span>
+                  <span className="text-neutral-600 dark:text-neutral-400">Item Total (Incl. GST)</span>
                   <span className="font-medium text-neutral-900 dark:text-white">₹{Number(itemTotal || 0).toFixed(2)}</span>
                 </motion.div>
                 <motion.div 
@@ -398,15 +398,6 @@ export default function CartPage({ params }: { params: Promise<{ courtId: string
                   animate={{ x: 0, opacity: 1 }}
                   transition={{ delay: 0.15 }}
                 >
-                  <span className="text-neutral-600 dark:text-neutral-400">GST (18%)</span>
-                  <span className="font-medium text-neutral-900 dark:text-white">₹{Number(gst || 0).toFixed(2)}</span>
-                </motion.div>
-                <motion.div 
-                  className="flex justify-between"
-                  initial={{ x: -20, opacity: 0 }}
-                  animate={{ x: 0, opacity: 1 }}
-                  transition={{ delay: 0.2 }}
-                >
                   <span className="text-neutral-600 dark:text-neutral-400">Service Charge (5%)</span>
                   <span className="font-medium text-neutral-900 dark:text-white">₹{serviceCharge.toFixed(2)}</span>
                 </motion.div>
@@ -414,7 +405,7 @@ export default function CartPage({ params }: { params: Promise<{ courtId: string
                   className="flex justify-between"
                   initial={{ x: -20, opacity: 0 }}
                   animate={{ x: 0, opacity: 1 }}
-                  transition={{ delay: 0.25 }}
+                  transition={{ delay: 0.2 }}
                 >
                   <span className="text-neutral-600 dark:text-neutral-400">Platform Charge</span>
                   <span className="font-medium text-neutral-900 dark:text-white">₹{platformCharge.toFixed(2)}</span>
@@ -423,7 +414,7 @@ export default function CartPage({ params }: { params: Promise<{ courtId: string
                   className="border-t border-neutral-200 dark:border-neutral-700 pt-3"
                   initial={{ scale: 0.95, opacity: 0 }}
                   animate={{ scale: 1, opacity: 1 }}
-                  transition={{ delay: 0.3 }}
+                  transition={{ delay: 0.25 }}
                 >
                   <div className="flex justify-between font-semibold text-lg">
                     <span className="text-neutral-900 dark:text-white">Total Amount</span>

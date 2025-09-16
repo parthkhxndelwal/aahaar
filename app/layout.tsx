@@ -10,19 +10,9 @@ import { AuthProvider } from "@/contexts/auth-context"
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "Aahaar - Food Court Management System",
+  title: "Aahaar",
   description: "Complete SaaS solution for Food court management",
   manifest: "/app-manifest.json",
-  viewport: {
-    width: 'device-width',
-    initialScale: 1,
-    maximumScale: 1,
-    userScalable: false,
-  },
-  themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#ffffff' },
-    { media: '(prefers-color-scheme: dark)', color: '#0a0a0a' }
-  ],
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',
@@ -30,7 +20,7 @@ export const metadata: Metadata = {
   },
   openGraph: {
     type: 'website',
-    title: 'Aahaar - Food Ordering App',
+    title: 'Aahaar',
     description: 'Order food from your favorite food court vendors',
     siteName: 'Aahaar'
   },
@@ -41,6 +31,17 @@ export const metadata: Metadata = {
     'msapplication-TileColor': '#3B82F6',
     'msapplication-config': '/browserconfig.xml'
   }
+}
+
+export const viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#ffffff' },
+    { media: '(prefers-color-scheme: dark)', color: '#0a0a0a' }
+  ]
 }
 
 export default function RootLayout({

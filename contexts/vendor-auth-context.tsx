@@ -38,9 +38,16 @@ export function VendorAuthProvider({ children }: { children: React.ReactNode }) 
   const [user, setUser] = useState<VendorUser | null>(null)
   const [token, setToken] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [mounted, setMounted] = useState(false)
   const router = useRouter()
 
   useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  useEffect(() => {
+    if (!mounted) return
+
     // Check for stored auth data on mount with vendor-specific keys
     const storedToken = localStorage.getItem("vendor_auth_token")
     const storedUser = localStorage.getItem("vendor_auth_user")
@@ -92,7 +99,7 @@ export function VendorAuthProvider({ children }: { children: React.ReactNode }) 
 
     setLoading(false)
     console.log('🔍 [VendorAuth] Initial auth check complete')
-  }, [])
+  }, [mounted])
 
   const login = (newToken: string, newUser: VendorUser) => {
     if (newUser.role !== "vendor") {

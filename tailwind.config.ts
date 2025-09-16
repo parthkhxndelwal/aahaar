@@ -97,12 +97,52 @@ const config: Config = {
   				'100%': {
   					transform: 'rotate(720deg)' // 720 degrees = 2 full turns
   				}
+  			},
+  			'fade-in': {
+  				'0%': {
+  					opacity: '0',
+  					transform: 'translateY(10px)'
+  				},
+  				'100%': {
+  					opacity: '1',
+  					transform: 'translateY(0)'
+  				}
+  			},
+  			'float': {
+  				'0%, 100%': {
+  					transform: 'translateY(0px)'
+  				},
+  				'50%': {
+  					transform: 'translateY(-10px)'
+  				}
+  			},
+  			'float-delayed': {
+  				'0%, 100%': {
+  					transform: 'translateY(0px)'
+  				},
+  				'50%': {
+  					transform: 'translateY(-15px)'
+  				}
+  			},
+  			'spotlight': {
+  				'0%': {
+  					opacity: '0',
+  					transform: 'translate(-28%, -62%) scale(0.5)'
+  				},
+  				'100%': {
+  					opacity: '1',
+  					transform: 'translate(-50%, -40%) scale(1)'
+  				}
   			}
   		},
   		animation: {
   			'accordion-down': 'accordion-down 0.2s ease-out',
   			'accordion-up': 'accordion-up 0.2s ease-out',
-  			'logo-spin': 'logo-spin 3s linear infinite'
+  			'logo-spin': 'logo-spin 3s linear infinite',
+  			'fade-in': 'fade-in 0.5s ease-out forwards',
+  			'float': 'float 3s ease-in-out infinite',
+  			'float-delayed': 'float-delayed 3s ease-in-out infinite 1.5s',
+  			'spotlight': 'spotlight 2s ease .75s 1 forwards'
   		}
   	}
   },

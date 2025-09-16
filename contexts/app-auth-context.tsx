@@ -33,9 +33,16 @@ export function AppAuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AppUser | null>(null)
   const [token, setToken] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [mounted, setMounted] = useState(false)
   const router = useRouter()
 
   useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  useEffect(() => {
+    if (!mounted) return
+
     // Check for stored auth data on mount with app-specific keys
     const storedToken = localStorage.getItem("app_auth_token")
     const storedUser = localStorage.getItem("app_auth_user")
@@ -87,7 +94,7 @@ export function AppAuthProvider({ children }: { children: React.ReactNode }) {
 
     setLoading(false)
     console.log('🔍 [AppAuth] Initial auth check complete')
-  }, [])
+  }, [mounted])
 
   const login = (newToken: string, newUser: AppUser) => {
     if (newUser.role !== "user") {

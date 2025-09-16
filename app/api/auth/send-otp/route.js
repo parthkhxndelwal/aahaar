@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { Court } from "@/models"
+import { Court, AuditLog } from "@/models"
 
 export async function POST(request) {
   try {
@@ -22,6 +22,34 @@ export async function POST(request) {
     // TODO: Send SMS using your SMS provider
 
     console.log(`OTP for ${phone}: ${otp}`) // For development
+
+    // Create audit log for OTP sent
+    try {
+      await AuditLog.create({
+        courtId: courtId,
+        action: "OTP_SENT",
+        entityType: "user",
+        entityId: phone,
+        metadata: {
+          phone: phone,
+          otpLength: otp.length,
+          environment: process.env.NODE_ENV,
+          userAgent: request.headers.get("user-agent") || "unknown",
+          ipAddress: request.headers.get("x-forwarded-for") || 
+                    request.headers.get("x-real-ip") || 
+                    request.headers.get("x-client-ip") || 
+                    "unknown"
+        },
+        ipAddress: request.headers.get("x-forwarded-for") || 
+                  request.headers.get("x-real-ip") || 
+                  request.headers.get("x-client-ip") || 
+                  "unknown",
+        userAgent: request.headers.get("user-agent") || "unknown"
+      })
+      console.log("✅ Audit log created for OTP sent:", phone)
+    } catch (auditError) {
+      console.error("❌ Failed to create audit log for OTP sent:", auditError)
+    }
 
     return NextResponse.json({
       success: true,

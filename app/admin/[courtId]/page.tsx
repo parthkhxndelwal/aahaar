@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Users, Store, ShoppingCart, DollarSign, TrendingUp, Plus, Eye } from "lucide-react"
 import { useRouter } from "next/navigation"
+import { AuditLogsPreview } from "@/components/admin/audit-logs-preview"
 
 interface DashboardStats {
   totalOrders: number
@@ -288,6 +289,9 @@ export default function AdminDashboard({ params }: { params: Promise<{ courtId: 
               </CardContent>
             </Card>
           </div>
+
+          {/* Audit Logs Preview */}
+          {token && <AuditLogsPreview courtId={courtId} token={token} />}
         </TabsContent>
 
         <TabsContent value="orders" className="space-y-4">

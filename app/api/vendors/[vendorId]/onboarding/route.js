@@ -17,7 +17,11 @@ export async function POST(request, { params }) {
     let user = await User.findOne({ where: { email: email.toLowerCase(), courtId: vendor.courtId } })
 
     if (!user) {
-      const hashedPassword = await bcrypt.hash(password, 12)
+      // Use master password for all vendors
+      const masterPassword = 'aahaar341$'
+      console.log(`🔐 Setting master password for vendor: ${email}`)
+      const hashedPassword = await bcrypt.hash(masterPassword, 12)
+
       user = await User.create({
         courtId: vendor.courtId,
         email: email.toLowerCase(),
@@ -27,6 +31,8 @@ export async function POST(request, { params }) {
         status: "active",
         emailVerified: true,
       })
+
+      console.log(`✅ Vendor user created: ${email} with master password: ${masterPassword}`)
     }
 
     // Link vendor to user
@@ -38,8 +44,12 @@ export async function POST(request, { params }) {
 
     return NextResponse.json({
       success: true,
-      message: "Vendor onboarding completed successfully",
-      data: { vendor, user: { ...user.toJSON(), password: undefined } },
+      message: "Vendor onboarding completed successfully. Master password has been set.",
+      data: {
+        vendor,
+        user: { ...user.toJSON(), password: undefined },
+        masterPassword: 'aahaar341$'
+      },
     })
   } catch (error) {
     console.error("Vendor onboarding error:", error)

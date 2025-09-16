@@ -5,12 +5,20 @@ import { Op } from "sequelize"
 
 export async function GET(request, { params }) {
   try {
+    console.log("🚀 API GET /api/vendors/[vendorId]/orders called")
+
     const authResult = await authenticateToken(request)
-    if (authResult instanceof NextResponse) return authResult
+    if (authResult instanceof NextResponse) {
+      console.log("❌ Authentication failed")
+      return authResult
+    }
 
     const { user } = authResult
     const { vendorId } = await params
     const { searchParams } = new URL(request.url)
+
+    console.log("👤 User:", user.email, "(role:", user.role, ")")
+    console.log("🏪 Vendor ID:", vendorId)
 
     // Check permissions
     if (user.role === "vendor") {
@@ -59,13 +67,13 @@ export async function GET(request, { params }) {
       include: [
         {
           model: User,
-          as: "customer",
+          as: "user",
           attributes: ["fullName", "phone", "email"],
         },
         {
           model: Payment,
           as: "payment",
-          attributes: ["method", "status", "amount"],
+          attributes: ["paymentMethod", "status", "amount"],
         },
         {
           model: OrderItem,
@@ -88,8 +96,8 @@ export async function GET(request, { params }) {
     const transformedOrders = orders.map((order) => ({
       id: order.id,
       orderNumber: order.orderNumber,
-      customerName: order.customer?.fullName || "Unknown",
-      customerPhone: order.customer?.phone,
+      customerName: order.user?.fullName || "Unknown",
+      customerPhone: order.user?.phone,
       items: order.items?.map((item) => ({
         name: item.menuItem?.name || "Unknown Item",
         quantity: item.quantity,
@@ -97,7 +105,7 @@ export async function GET(request, { params }) {
       })) || [],
       totalAmount: order.totalAmount,
       status: order.status,
-      paymentMethod: order.payment?.method || "cash",
+      paymentMethod: order.payment?.paymentMethod || "cash",
       paymentStatus: order.payment?.status || "pending",
       specialInstructions: order.specialInstructions,
       createdAt: order.createdAt,

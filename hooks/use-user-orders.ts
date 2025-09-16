@@ -1,5 +1,4 @@
 import { useEffect, useState, useCallback } from 'react'
-import { useSocket } from './use-socket'
 
 interface OrderItem {
   name: string
@@ -46,234 +45,125 @@ interface OrderUpdate {
   action: 'status_update' | 'vendor_update' | 'order_complete'
 }
 
-export const useUserOrders = (userId: string | null, activeOrderIds: string[] = []) => {
-  const { socket, isConnected, error } = useSocket('/app')
+export const useUserOrders = (userId: string | null, courtId: string | null, activeOrderIds: string[] = []) => {
   const [orderSummaries, setOrderSummaries] = useState<OrderSummary[]>([])
   const [orderUpdates, setOrderUpdates] = useState<OrderUpdate[]>([])
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
-  // Join user room when connected and userId is available
-  useEffect(() => {
-    if (socket && isConnected && userId) {
-      console.log(`📱 Joining user room: ${userId}`)
-      socket.emit('join-user-room', userId)
+  console.log('🔍 [useUserOrders] Hook initialized with userId:', userId)
 
-      // Confirmation handler
-      socket.on('joined-user-room', (data) => {
-        console.log(`✅ Successfully joined user room:`, data)
+  // Fetch user orders from API
+  const fetchUserOrders = useCallback(async () => {
+    if (!userId || !courtId) {
+      console.log('⚠️ [useUserOrders] No userId or courtId provided, skipping fetch')
+      return
+    }
+
+    try {
+      setError(null)
+      setIsLoading(true)
+
+      const token = localStorage.getItem('app_auth_token')
+      console.log('🔑 [useUserOrders] Token present:', !!token)
+      console.log('👤 [useUserOrders] Fetching orders for userId:', userId)
+
+      if (!token) {
+        throw new Error('No authentication token found. Please log in again.')
+      }
+
+      const response = await fetch(`/api/users/orders?courtId=${encodeURIComponent(courtId)}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
       })
 
-      return () => {
-        if (socket && userId) {
-          console.log(`📱 Leaving user room: ${userId}`)
-          socket.emit('leave-user-room', userId)
-          socket.off('joined-user-room')
+      console.log('📡 [useUserOrders] Response status:', response.status)
+      console.log('📡 [useUserOrders] Response ok:', response.ok)
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error('❌ [useUserOrders] Response error:', response.status, errorText)
+
+        if (response.status === 401) {
+          throw new Error('Authentication failed. Please log in again.')
+        } else if (response.status === 403) {
+          throw new Error('Access denied. You may not have permission to view these orders.')
+        } else if (response.status === 404) {
+          throw new Error('User not found or no orders available.')
+        } else {
+          throw new Error(`Failed to fetch user orders (${response.status}): ${errorText || 'Unknown error'}`)
         }
       }
-    }
-  }, [socket, isConnected, userId])
 
-  // Join specific order rooms for active orders
+      const data = await response.json()
+      console.log('✅ [useUserOrders] Response data:', data)
+
+      if (data.success) {
+        setOrderSummaries(data.data.orders || [])
+        setLastUpdate(new Date())
+        console.log('✅ [useUserOrders] Successfully updated order summaries:', data.data.orders?.length || 0, 'orders')
+      } else {
+        throw new Error(data.message || 'Failed to fetch user orders')
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to fetch user orders'
+      setError(errorMessage)
+      console.error('❌ [useUserOrders] Error:', err)
+    } finally {
+      setIsLoading(false)
+    }
+  }, [userId, courtId])
+
+  // Set up polling every 5 seconds
   useEffect(() => {
-    if (socket && isConnected && activeOrderIds.length > 0) {
-      activeOrderIds.forEach(orderId => {
-        console.log(`📱 Joining order room: ${orderId}`)
-        socket.emit('join-order-room', orderId)
-      })
+    if (!userId) return
 
-      // Confirmation handler
-      socket.on('joined-order-room', (data) => {
-        console.log(`✅ Successfully joined order room:`, data)
-      })
+    // Initial fetch
+    fetchUserOrders()
 
-      return () => {
-        if (socket) {
-          activeOrderIds.forEach(orderId => {
-            console.log(`📱 Leaving order room: ${orderId}`)
-            socket.emit('leave-order-room', orderId)
-          })
-          socket.off('joined-order-room')
-        }
-      }
-    }
-  }, [socket, isConnected, activeOrderIds])
+    // Set up polling interval
+    const interval = setInterval(fetchUserOrders, 5000)
 
-  // Handle real-time order updates
-  useEffect(() => {
-    if (!socket || !isConnected) return
+    // Cleanup interval on unmount
+    return () => clearInterval(interval)
+  }, [userId, fetchUserOrders])
 
-    console.log('🎧 Setting up user order event listeners')
-
-    // Order status updated for specific vendor
-    socket.on('order-status-updated', (data: OrderUpdate) => {
-      console.log('🔄 Order status updated:', data)
-      
-      // Update the specific vendor order in order summaries
-      setOrderSummaries(prev => prev.map(summary => {
-        if (summary.parentOrderId === data.parentOrderId) {
-          const updatedVendors = summary.vendors.map(vendor => 
-            vendor.id === data.vendorOrder.id ? data.vendorOrder : vendor
-          )
-          
-          // Recalculate overall status
-          const completedCount = updatedVendors.filter(v => v.status === 'completed').length
-          const rejectedCount = updatedVendors.filter(v => v.status === 'rejected').length
-          const readyCount = updatedVendors.filter(v => v.status === 'ready').length
-          const totalVendors = updatedVendors.length
-          
-          let overallStatus = 'pending'
-          if (completedCount === totalVendors) {
-            overallStatus = 'completed'
-          } else if (rejectedCount === totalVendors) {
-            overallStatus = 'rejected'
-          } else if (readyCount + completedCount === totalVendors) {
-            overallStatus = 'ready'
-          } else if (readyCount > 0 || completedCount > 0) {
-            overallStatus = 'partial'
-          }
-          
-          return {
-            ...summary,
-            vendors: updatedVendors,
-            overallStatus,
-            completedVendors: completedCount,
-            rejectedVendors: rejectedCount
-          }
-        }
-        return summary
-      }))
-      
-      setOrderUpdates(prev => [...prev, data])
-      setLastUpdate(new Date())
-    })
-
-    // New order created
-    socket.on('new-order-created', (data: { orderSummary: OrderSummary }) => {
-      console.log('📥 New order created:', data)
-      setOrderSummaries(prev => [data.orderSummary, ...prev])
-      setLastUpdate(new Date())
-    })
-
-    // Order completed
-    socket.on('order-completed', (data: OrderUpdate) => {
-      console.log('✅ Order completed:', data)
-      
-      if (data.orderSummary) {
-        setOrderSummaries(prev => prev.map(summary => 
-          summary.parentOrderId === data.parentOrderId 
-            ? data.orderSummary! 
-            : summary
-        ))
-      }
-      
-      setOrderUpdates(prev => [...prev, data])
-      setLastUpdate(new Date())
-    })
-
-    // Vendor order rejected
-    socket.on('vendor-order-rejected', (data: OrderUpdate & { reason: string }) => {
-      console.log('❌ Vendor order rejected:', data)
-      
-      setOrderSummaries(prev => prev.map(summary => {
-        if (summary.parentOrderId === data.parentOrderId) {
-          const updatedVendors = summary.vendors.map(vendor => 
-            vendor.id === data.vendorOrder.id 
-              ? { ...data.vendorOrder, rejectionReason: data.reason }
-              : vendor
-          )
-          
-          const rejectedCount = updatedVendors.filter(v => v.status === 'rejected').length
-          
-          return {
-            ...summary,
-            vendors: updatedVendors,
-            rejectedVendors: rejectedCount
-          }
-        }
-        return summary
-      }))
-      
-      setOrderUpdates(prev => [...prev, data])
-      setLastUpdate(new Date())
-    })
-
-    // Test message handler for debugging
-    socket.on('test-message', (data) => {
-      console.log('🧪 Test message received:', data)
-    })
-
-    return () => {
-      console.log('🔌 Cleaning up user order event listeners')
-      socket.off('order-status-updated')
-      socket.off('new-order-created')
-      socket.off('order-completed')
-      socket.off('vendor-order-rejected')
-      socket.off('test-message')
-    }
-  }, [socket, isConnected])
-
-  // Update order summaries manually (fallback)
-  const updateOrderSummaries = useCallback((newSummaries: OrderSummary[]) => {
-    setOrderSummaries(newSummaries)
+  // Update orders manually (for initial fetch or external updates)
+  const updateOrderSummaries = useCallback((newOrderSummaries: OrderSummary[]) => {
+    setOrderSummaries(newOrderSummaries)
+    setLastUpdate(new Date())
   }, [])
 
-  // Get active order IDs (orders that are not completed or rejected)
-  const getActiveOrderIds = useCallback(() => {
-    return orderSummaries
-      .filter(summary => !['completed', 'rejected'].includes(summary.overallStatus))
-      .map(summary => summary.parentOrderId)
-  }, [orderSummaries])
+  // Add order update
+  const addOrderUpdate = useCallback((update: OrderUpdate) => {
+    setOrderUpdates(prev => [...prev, update])
+    setLastUpdate(new Date())
+  }, [])
 
-  // Clear old order updates
+  // Clear order updates
   const clearOrderUpdates = useCallback(() => {
     setOrderUpdates([])
   }, [])
 
-  // Cancel order function
-  const cancelOrder = useCallback(async (courtId: string, orderId: string, reason: string, token: string) => {
-    try {
-      const response = await fetch(`/api/app/${courtId}/orders/${orderId}/cancel`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ reason })
-      })
-
-      const data = await response.json()
-      
-      if (data.success) {
-        // Update local state to reflect cancellation immediately
-        setOrderSummaries(prevSummaries => 
-          prevSummaries.map(summary => ({
-            ...summary,
-            vendors: summary.vendors.map(vendor => 
-              vendor.id === orderId ? { ...vendor, status: 'cancelled' } : vendor
-            )
-          }))
-        )
-        
-        return { success: true, message: data.message }
-      } else {
-        return { success: false, message: data.message }
-      }
-    } catch (error) {
-      console.error('Error cancelling order:', error)
-      return { success: false, message: 'Failed to cancel order' }
-    }
-  }, [])
+  // Get specific order by parent order ID
+  const getOrderByParentId = useCallback((parentOrderId: string) => {
+    return orderSummaries.find(order => order.parentOrderId === parentOrderId)
+  }, [orderSummaries])
 
   return {
     orderSummaries,
     orderUpdates,
     lastUpdate,
     updateOrderSummaries,
-    getActiveOrderIds,
+    addOrderUpdate,
     clearOrderUpdates,
-    cancelOrder,
-    isConnected,
-    connectionError: error,
-    socket
+    getOrderByParentId,
+    isLoading,
+    error,
+    refetch: fetchUserOrders
   }
 }

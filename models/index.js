@@ -29,6 +29,7 @@ const CourtSettings = require("./CourtSettings")(sequelize, Sequelize.DataTypes)
 const Cart = require("./Cart")(sequelize, Sequelize.DataTypes)
 const CartItem = require("./CartItem")(sequelize, Sequelize.DataTypes)
 const OTP = require("./OTP")(sequelize, Sequelize.DataTypes)
+const PaymentRequest = require("./PaymentRequest")(sequelize, Sequelize.DataTypes)
 
 // Define associations
 Court.hasMany(User, { foreignKey: "courtId", sourceKey: "courtId", as: "users" })
@@ -93,6 +94,13 @@ CartItem.belongsTo(MenuItem, { foreignKey: "menuItemId", as: "menuItem" })
 User.hasMany(OTP, { foreignKey: "userId", as: "otps" })
 OTP.belongsTo(User, { foreignKey: "userId", as: "user" })
 
+// Payment Request associations
+Vendor.hasMany(PaymentRequest, { foreignKey: "vendorId", as: "paymentRequests" })
+PaymentRequest.belongsTo(Vendor, { foreignKey: "vendorId", as: "vendor" })
+
+Court.hasMany(PaymentRequest, { foreignKey: "courtId", sourceKey: "courtId", as: "paymentRequests" })
+PaymentRequest.belongsTo(Court, { foreignKey: "courtId", targetKey: "courtId", as: "court" })
+
 module.exports = {
   sequelize,
   Court,
@@ -108,4 +116,5 @@ module.exports = {
   Cart,
   CartItem,
   OTP,
+  PaymentRequest,
 }

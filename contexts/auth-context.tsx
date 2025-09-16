@@ -38,9 +38,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [token, setToken] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [mounted, setMounted] = useState(false)
   const router = useRouter()
 
   useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  useEffect(() => {
+    if (!mounted) return
+
     // Check for stored auth data on mount
     const storedToken = localStorage.getItem("auth_token")
     const storedUser = localStorage.getItem("auth_user")
@@ -86,7 +93,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     setLoading(false)
-  }, [])
+  }, [mounted])
 
   const login = (newToken: string, newUser: User) => {
     console.log('🔐 [AuthContext] Logging in user:', { userId: newUser.id, hasToken: !!newToken })

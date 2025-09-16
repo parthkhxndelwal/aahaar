@@ -24,7 +24,6 @@ import { Textarea } from "@/components/ui/textarea"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useVendorAuth } from "@/contexts/vendor-auth-context"
-import { useSocketConnection } from "@/contexts/socket-connection-context"
 import { useRouter } from "next/navigation"
 import Image from "next/image"
 import { useVendorOrders } from "@/hooks/use-vendor-orders"
@@ -70,16 +69,21 @@ interface QueueData {
 export default function VendorQueuePage({ params }: { params: Promise<{ courtId: string }> }) {
   const { courtId } = use(params)
   const { user, token } = useVendorAuth()
-  const { isConnected, error: socketError, retryConnection } = useSocketConnection()
   const router = useRouter()
   
   const [vendorId, setVendorId] = useState<string>("")
   const [activeTab, setActiveTab] = useState("upcoming")
-  const [queueData, setQueueData] = useState<QueueData>({
-    orders: [],
-    sectionCounts: { upcoming: 0, queue: 0, ready: 0 }
+  const [sectionsData, setSectionsData] = useState<{
+    upcoming: { orders: Order[], count: number, lastFetched: Date | null }
+    queue: { orders: Order[], count: number, lastFetched: Date | null }
+    ready: { orders: Order[], count: number, lastFetched: Date | null }
+  }>({
+    upcoming: { orders: [], count: 0, lastFetched: null },
+    queue: { orders: [], count: 0, lastFetched: null },
+    ready: { orders: [], count: 0, lastFetched: null }
   })
-  const [loading, setLoading] = useState(true)
+  const [initialLoading, setInitialLoading] = useState(true)
+  const [tabLoading, setTabLoading] = useState(false)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   
   // Dialogs
@@ -106,7 +110,7 @@ export default function VendorQueuePage({ params }: { params: Promise<{ courtId:
 
   useEffect(() => {
     if (vendorId) {
-      fetchQueueData()
+      fetchQueueData(activeTab, false) // Don't show loading for tab switches
     }
   }, [vendorId, activeTab])
 
@@ -129,12 +133,17 @@ export default function VendorQueuePage({ params }: { params: Promise<{ courtId:
     }
   }
 
-  const fetchQueueData = async () => {
+  const fetchQueueData = async (section: string, showLoading: boolean = true) => {
     if (!vendorId) return
 
     try {
-      setLoading(true)
-      const response = await fetch(`/api/vendors/${vendorId}/queue?section=${activeTab}`, {
+      if (showLoading) {
+        setInitialLoading(true)
+      } else {
+        setTabLoading(true)
+      }
+
+      const response = await fetch(`/api/vendors/${vendorId}/queue?section=${section}`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -143,13 +152,61 @@ export default function VendorQueuePage({ params }: { params: Promise<{ courtId:
       if (response.ok) {
         const data = await response.json()
         if (data.success) {
-          setQueueData(data.data)
+          setSectionsData(prev => {
+            const existingOrders = prev[section as keyof typeof prev].orders
+            const newOrders: Order[] = data.data.orders
+            
+            // Create a map of existing orders for quick lookup
+            const existingOrderMap = new Map(existingOrders.map((order: Order) => [order.id, order]))
+            
+            // Merge new orders with existing ones
+            // Keep existing orders that are still in the new data, update them if changed
+            // Add new orders that weren't in existing data
+            const mergedOrders = newOrders.map((newOrder: Order) => {
+              const existingOrder = existingOrderMap.get(newOrder.id)
+              if (existingOrder) {
+                // Update existing order with new data
+                return { ...existingOrder, ...newOrder }
+              }
+              return newOrder
+            })
+            
+            // Remove orders that are no longer in the new data (they might have been moved to another section)
+            const newOrderIds = new Set(newOrders.map((order: Order) => order.id))
+            const filteredExistingOrders = existingOrders.filter((order: Order) => newOrderIds.has(order.id))
+            
+            // Combine filtered existing orders with new/updated orders
+            const finalOrders = [...filteredExistingOrders]
+            
+            // Update or add new orders
+            mergedOrders.forEach((newOrder: Order) => {
+              const existingIndex = finalOrders.findIndex((order: Order) => order.id === newOrder.id)
+              if (existingIndex >= 0) {
+                finalOrders[existingIndex] = newOrder
+              } else {
+                finalOrders.push(newOrder)
+              }
+            })
+
+            return {
+              ...prev,
+              [section]: {
+                orders: finalOrders,
+                count: finalOrders.length,
+                lastFetched: new Date()
+              }
+            } as typeof prev
+          })
         }
       }
     } catch (error) {
       console.error("Error fetching queue data:", error)
     } finally {
-      setLoading(false)
+      if (showLoading) {
+        setInitialLoading(false)
+      } else {
+        setTabLoading(false)
+      }
     }
   }
 
@@ -175,8 +232,8 @@ export default function VendorQueuePage({ params }: { params: Promise<{ courtId:
         if (response.ok) {
           const data = await response.json()
           if (data.success) {
-            // Refresh queue data
-            await fetchQueueData()
+            // Refresh queue data for current active tab
+            await fetchQueueData(activeTab, false)
             
             if (action === "reject") {
               setRejectDialog({ open: false, orderId: null })
@@ -201,8 +258,8 @@ export default function VendorQueuePage({ params }: { params: Promise<{ courtId:
         if (response.ok) {
           const data = await response.json()
           if (data.success) {
-            // Refresh queue data
-            await fetchQueueData()
+            // Refresh queue data for current active tab
+            await fetchQueueData(activeTab, false)
             
             if (action === "complete") {
               setOtpDialog({ open: false, orderId: null })
@@ -314,7 +371,10 @@ export default function VendorQueuePage({ params }: { params: Promise<{ courtId:
 
       {/* Order Total */}
       <div className="flex items-center justify-between pt-2 border-t border-neutral-200 dark:border-neutral-600">
-        <div className="text-lg font-bold">Total: ₹{Number(order.totalAmount || 0).toFixed(2)}</div>
+        <div>
+          <div className="text-lg font-bold">Total: ₹{Number(order.totalAmount || 0).toFixed(2)}</div>
+          <div className="text-xs text-neutral-500">Inclusive of all taxes</div>
+        </div>
         <div className="text-sm text-neutral-500">
           {new Date(order.createdAt).toLocaleString()}
         </div>
@@ -390,7 +450,7 @@ export default function VendorQueuePage({ params }: { params: Promise<{ courtId:
     </motion.div>
   )
 
-  if (loading && !vendorId) {
+  if (initialLoading && !vendorId) {
     return (
       <div className="min-h-screen bg-neutral-50 dark:bg-neutral-950 flex items-center justify-center">
         <div className="text-center">
@@ -414,34 +474,12 @@ export default function VendorQueuePage({ params }: { params: Promise<{ courtId:
               </p>
             </div>
             
-            {/* Socket Connection Status */}
+            {/* Polling Status */}
             <div className="flex items-center gap-2">
-              {isConnected ? (
-                <div className="flex items-center gap-2 text-green-600 bg-green-50 dark:bg-green-900/20 px-3 py-1 rounded-full">
-                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                  <span className="text-sm font-medium">Real-time Connected</span>
-                </div>
-              ) : socketError ? (
-                <div className="flex items-center gap-2">
-                  <div className="flex items-center gap-2 text-red-600 bg-red-50 dark:bg-red-900/20 px-3 py-1 rounded-full">
-                    <div className="w-2 h-2 bg-red-500 rounded-full"></div>
-                    <span className="text-sm font-medium">Connection Failed</span>
-                  </div>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={retryConnection}
-                    className="text-xs"
-                  >
-                    Retry
-                  </Button>
-                </div>
-              ) : (
-                <div className="flex items-center gap-2 text-yellow-600 bg-yellow-50 dark:bg-yellow-900/20 px-3 py-1 rounded-full">
-                  <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></div>
-                  <span className="text-sm font-medium">Connecting...</span>
-                </div>
-              )}
+              <div className="flex items-center gap-2 text-green-600 bg-green-50 dark:bg-green-900/20 px-3 py-1 rounded-full">
+                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                <span className="text-sm font-medium">Auto-refresh Active</span>
+              </div>
             </div>
           </div>
         </div>
@@ -451,25 +489,25 @@ export default function VendorQueuePage({ params }: { params: Promise<{ courtId:
           <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="upcoming" className="relative">
               Upcoming Orders
-              {queueData.sectionCounts.upcoming > 0 && (
+              {sectionsData.upcoming.count > 0 && (
                 <Badge className="ml-2 bg-yellow-500 text-white">
-                  {queueData.sectionCounts.upcoming}
+                  {sectionsData.upcoming.count}
                 </Badge>
               )}
             </TabsTrigger>
             <TabsTrigger value="queue" className="relative">
               In Queue
-              {queueData.sectionCounts.queue > 0 && (
+              {sectionsData.queue.count > 0 && (
                 <Badge className="ml-2 bg-blue-500 text-white">
-                  {queueData.sectionCounts.queue}
+                  {sectionsData.queue.count}
                 </Badge>
               )}
             </TabsTrigger>
             <TabsTrigger value="ready" className="relative">
               Ready for Pickup
-              {queueData.sectionCounts.ready > 0 && (
+              {sectionsData.ready.count > 0 && (
                 <Badge className="ml-2 bg-green-500 text-white">
-                  {queueData.sectionCounts.ready}
+                  {sectionsData.ready.count}
                 </Badge>
               )}
             </TabsTrigger>
@@ -479,18 +517,18 @@ export default function VendorQueuePage({ params }: { params: Promise<{ courtId:
           <TabsContent value="upcoming" className="space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-semibold">Upcoming Orders</h2>
-              <Button onClick={fetchQueueData} variant="outline" size="sm">
+              <Button onClick={() => fetchQueueData("upcoming", false)} variant="outline" size="sm">
                 <RefreshCw className="h-4 w-4 mr-2" />
                 Refresh
               </Button>
             </div>
             
-            {loading ? (
+            {initialLoading && !vendorId ? (
               <div className="text-center py-8">
                 <RefreshCw className="h-6 w-6 animate-spin mx-auto mb-2" />
                 <div>Loading orders...</div>
               </div>
-            ) : queueData.orders.length === 0 ? (
+            ) : sectionsData.upcoming.orders.length === 0 ? (
               <div className="text-center py-12">
                 <Clock className="h-12 w-12 mx-auto mb-4 text-neutral-400" />
                 <div className="text-lg font-medium">No upcoming orders</div>
@@ -499,7 +537,7 @@ export default function VendorQueuePage({ params }: { params: Promise<{ courtId:
             ) : (
               <div className="space-y-4">
                 <AnimatePresence mode="popLayout">
-                  {queueData.orders.map((order) => renderOrderCard(order))}
+                  {sectionsData.upcoming.orders.map((order) => renderOrderCard(order))}
                 </AnimatePresence>
               </div>
             )}
@@ -508,18 +546,18 @@ export default function VendorQueuePage({ params }: { params: Promise<{ courtId:
           <TabsContent value="queue" className="space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-semibold">Orders in Queue</h2>
-              <Button onClick={fetchQueueData} variant="outline" size="sm">
+              <Button onClick={() => fetchQueueData("queue", false)} variant="outline" size="sm">
                 <RefreshCw className="h-4 w-4 mr-2" />
                 Refresh
               </Button>
             </div>
             
-            {loading ? (
+            {initialLoading && !vendorId ? (
               <div className="text-center py-8">
                 <RefreshCw className="h-6 w-6 animate-spin mx-auto mb-2" />
                 <div>Loading orders...</div>
               </div>
-            ) : queueData.orders.length === 0 ? (
+            ) : sectionsData.queue.orders.length === 0 ? (
               <div className="text-center py-12">
                 <Package className="h-12 w-12 mx-auto mb-4 text-neutral-400" />
                 <div className="text-lg font-medium">No orders in queue</div>
@@ -528,7 +566,7 @@ export default function VendorQueuePage({ params }: { params: Promise<{ courtId:
             ) : (
               <div className="space-y-4">
                 <AnimatePresence mode="popLayout">
-                  {queueData.orders.map((order) => renderOrderCard(order))}
+                  {sectionsData.queue.orders.map((order) => renderOrderCard(order))}
                 </AnimatePresence>
               </div>
             )}
@@ -537,18 +575,18 @@ export default function VendorQueuePage({ params }: { params: Promise<{ courtId:
           <TabsContent value="ready" className="space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-semibold">Ready for Pickup</h2>
-              <Button onClick={fetchQueueData} variant="outline" size="sm">
+              <Button onClick={() => fetchQueueData("ready", false)} variant="outline" size="sm">
                 <RefreshCw className="h-4 w-4 mr-2" />
                 Refresh
               </Button>
             </div>
             
-            {loading ? (
+            {initialLoading && !vendorId ? (
               <div className="text-center py-8">
                 <RefreshCw className="h-6 w-6 animate-spin mx-auto mb-2" />
                 <div>Loading orders...</div>
               </div>
-            ) : queueData.orders.length === 0 ? (
+            ) : sectionsData.ready.orders.length === 0 ? (
               <div className="text-center py-12">
                 <CheckCircle className="h-12 w-12 mx-auto mb-4 text-neutral-400" />
                 <div className="text-lg font-medium">No orders ready</div>
@@ -557,7 +595,7 @@ export default function VendorQueuePage({ params }: { params: Promise<{ courtId:
             ) : (
               <div className="space-y-4">
                 <AnimatePresence mode="popLayout">
-                  {queueData.orders.map((order) => renderOrderCard(order))}
+                  {sectionsData.ready.orders.map((order) => renderOrderCard(order))}
                 </AnimatePresence>
               </div>
             )}

@@ -59,20 +59,21 @@ export default function VendorOrdersPage({ params }: { params: Promise<{ courtId
   const [otpInput, setOtpInput] = useState("")
   const [actionLoading, setActionLoading] = useState(false)
 
-  // Use the socket hook for real-time updates
+  // Use the polling hook for real-time updates
   const { 
-    orders: socketOrders, 
+    orders: pollingOrders, 
     sectionCounts, 
     lastUpdate, 
     updateOrdersForSection,
-    isConnected: socketConnected,
-    connectionError: socketError 
+    isLoading: pollingLoading,
+    error: pollingError,
+    refetch
   } = useVendorOrders(vendorId && vendorId.trim() ? vendorId : null)
 
-  // Extract orders from socket hook
-  const upcomingOrders = socketOrders.upcoming
-  const queueOrders = socketOrders.queue
-  const readyOrders = socketOrders.ready
+  // Extract orders from polling hook
+  const upcomingOrders = pollingOrders.upcoming
+  const queueOrders = pollingOrders.queue
+  const readyOrders = pollingOrders.ready
 
   useEffect(() => {
     if (!user || !token) {
@@ -86,86 +87,43 @@ export default function VendorOrdersPage({ params }: { params: Promise<{ courtId
 
   useEffect(() => {
     if (vendorId) {
-      // Initial fetch, socket will handle real-time updates after this
-      console.log(`🏪 VendorId available: ${vendorId}, starting initial fetch`)
-      fetchOrders()
+      // Polling hook will handle fetching automatically
+      console.log(`🏪 VendorId available: ${vendorId}, polling will start`)
     }
   }, [vendorId])
 
-  // Debug effect to track vendorId and socket connection
+  // Debug effect to track vendorId and polling connection
   useEffect(() => {
-    console.log(`🔍 Debug - vendorId: "${vendorId}", socketConnected: ${socketConnected}, hasOrders: ${upcomingOrders.length + queueOrders.length + readyOrders.length}`)
-  }, [vendorId, socketConnected, upcomingOrders.length, queueOrders.length, readyOrders.length])
+    console.log(`🔍 Debug - vendorId: "${vendorId}", loading: ${loading}, pollingActive: ${!pollingError}, hasOrders: ${upcomingOrders.length + queueOrders.length + readyOrders.length}`)
+  }, [vendorId, loading, pollingError, upcomingOrders.length, queueOrders.length, readyOrders.length])
 
   const fetchVendorInfo = async () => {
     try {
+      console.log("🔍 Fetching vendor info...")
       const response = await fetch('/api/vendors/me', {
         headers: { Authorization: `Bearer ${token}` }
       })
       
+      console.log("🔍 Vendor info response status:", response.status)
+      
       if (response.ok) {
         const data = await response.json()
+        console.log("🔍 Vendor info response data:", data)
         if (data.success) {
+          console.log("🔍 Setting vendorId to:", data.data.vendor.id)
           setVendorId(data.data.vendor.id)
+          setLoading(false) // Set loading to false once vendor info is fetched
+        } else {
+          console.log("🔍 Vendor info response not successful")
+          setLoading(false)
         }
+      } else {
+        console.log("🔍 Vendor info response not ok:", response.status)
+        setLoading(false)
       }
     } catch (error) {
-      console.error("Error fetching vendor info:", error)
-    }
-  }
-
-  const fetchOrders = async (isRefresh = false) => {
-    if (!vendorId) return
-
-    if (isRefresh) {
-      setRefreshing(true)
-    } else if (!upcomingOrders.length && !queueOrders.length && !readyOrders.length) {
-      setLoading(true)
-    }
-
-    try {
-      // Initial data fetch - socket will handle updates after this
-      const [upcomingRes, queueRes, readyRes] = await Promise.all([
-        fetch(`/api/vendors/${vendorId}/queue?section=upcoming`, {
-          headers: { Authorization: `Bearer ${token}` }
-        }),
-        fetch(`/api/vendors/${vendorId}/queue?section=queue`, {
-          headers: { Authorization: `Bearer ${token}` }
-        }),
-        fetch(`/api/vendors/${vendorId}/queue?section=ready`, {
-          headers: { Authorization: `Bearer ${token}` }
-        })
-      ])
-
-      const [upcomingData, queueData, readyData] = await Promise.all([
-        upcomingRes.json(),
-        queueRes.json(),
-        readyRes.json()
-      ])
-
-      // Update socket hook state with fetched data
-      if (upcomingData.success && updateOrdersForSection) {
-        updateOrdersForSection('upcoming', upcomingData.data.orders)
-      }
-      if (queueData.success && updateOrdersForSection) {
-        updateOrdersForSection('queue', queueData.data.orders)
-      }
-      if (readyData.success && updateOrdersForSection) {
-        updateOrdersForSection('ready', readyData.data.orders)
-      }
-
-      console.log('📊 Initial vendor orders fetched and updated in socket hook:', {
-        upcoming: upcomingData.success ? upcomingData.data.orders.length : 0,
-        queue: queueData.success ? queueData.data.orders.length : 0,
-        ready: readyData.success ? readyData.data.orders.length : 0,
-        socketConnected
-      })
-
-    } catch (error) {
-      console.error("Error fetching orders:", error)
-    } finally {
-      setLoading(false)
-      setRefreshing(false)
+      console.error("❌ Error fetching vendor info:", error)
+      setLoading(false) // Set loading to false even on error to prevent infinite loading
     }
   }
 
@@ -204,7 +162,7 @@ export default function VendorOrdersPage({ params }: { params: Promise<{ courtId
       
       if (data.success) {
         // Refresh orders after successful action
-        fetchOrders()
+        refetch()
         closeDialog()
       } else {
         console.error("Action failed:", data.message)
@@ -258,6 +216,7 @@ export default function VendorOrdersPage({ params }: { params: Promise<{ courtId
                 <p className="font-semibold text-neutral-900 dark:text-white">
                   ₹{Number(order.totalAmount || 0).toFixed(2)}
                 </p>
+                <p className="text-xs text-neutral-500">Incl. taxes</p>
                 {order.queuePosition && (
                   <Badge variant="outline" className="mt-1">
                     Queue #{order.queuePosition}
@@ -350,7 +309,7 @@ export default function VendorOrdersPage({ params }: { params: Promise<{ courtId
           <p className="text-neutral-600 dark:text-neutral-400">Loading orders...</p>
           {vendorId && (
             <p className="text-xs text-neutral-500 mt-2">
-              Socket: {socketConnected ? '🟢 Connected' : '🔴 Disconnected'} | Vendor: {vendorId}
+              Polling: {!pollingError ? '🟢 Active' : '🔴 Error'} | Vendor: {vendorId}
             </p>
           )}
         </div>
@@ -368,18 +327,18 @@ export default function VendorOrdersPage({ params }: { params: Promise<{ courtId
             <p className="text-sm text-neutral-600 dark:text-neutral-400">
               Manage your incoming orders
             </p>
-            {/* Socket Debug Info */}
+            {/* Polling Debug Info */}
             <div className="text-xs text-neutral-500 mt-1 flex items-center gap-4">
-              <span>Socket: {socketConnected ? '🟢 Connected' : '🔴 Disconnected'}</span>
+              <span>Polling: {!pollingError ? '🟢 Active' : '🔴 Error'}</span>
               {vendorId && <span>Vendor: {vendorId}</span>}
               {lastUpdate && <span>Last Update: {lastUpdate.toLocaleTimeString()}</span>}
-              {socketError && <span className="text-red-500">Error: {socketError}</span>}
+              {pollingError && <span className="text-red-500">Error: {pollingError}</span>}
             </div>
           </div>
           <Button
             variant="outline"
             size="sm"
-            onClick={() => fetchOrders(true)}
+            onClick={() => refetch()}
             disabled={refreshing}
           >
             <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />

@@ -32,9 +32,16 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AdminUser | null>(null)
   const [token, setToken] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [mounted, setMounted] = useState(false)
   const router = useRouter()
 
   useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  useEffect(() => {
+    if (!mounted) return
+
     // Check for stored auth data on mount with admin-specific keys
     const storedToken = localStorage.getItem("admin_auth_token")
     const storedUser = localStorage.getItem("admin_auth_user")
@@ -58,7 +65,7 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     setLoading(false)
-  }, [])
+  }, [mounted])
 
   const login = (newToken: string, newUser: AdminUser) => {
     if (newUser.role !== "admin") {

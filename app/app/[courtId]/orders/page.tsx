@@ -18,19 +18,21 @@ export default function OrdersPage({ params }: { params: Promise<{ courtId: stri
   const [activeOrderIds, setActiveOrderIds] = useState<string[]>([])
   const [cancellingOrders, setCancellingOrders] = useState<Set<string>>(new Set())
 
-  // Use the socket hook for real-time updates
+  // Use the polling hook for real-time updates
   const { 
-    orderSummaries: socketOrderSummaries, 
+    orderSummaries, 
+    orderUpdates,
     lastUpdate, 
     updateOrderSummaries,
-    getActiveOrderIds,
-    cancelOrder,
-    isConnected: socketConnected,
-    connectionError: socketError 
-  } = useUserOrders(user?.id || null, activeOrderIds)
+    addOrderUpdate,
+    clearOrderUpdates,
+    getOrderByParentId,
+    isLoading: ordersLoading,
+    error: ordersError,
+    refetch
+  } = useUserOrders(user?.id || null, courtId, activeOrderIds)
 
-  // Use socket data as primary source
-  const orderSummaries = socketOrderSummaries
+
 
   // Update active order IDs when order summaries change
   useEffect(() => {
@@ -67,13 +69,13 @@ export default function OrdersPage({ params }: { params: Promise<{ courtId: stri
     fetchOrders()
   }, [user, token, courtId, authLoading])
 
-  // Debug effect to track socket connection and updates
+  // Debug effect to track connection and updates
   useEffect(() => {
-    console.log(`🔍 [UserOrders] Debug - userId: "${user?.id}", socketConnected: ${socketConnected}, hasOrders: ${orderSummaries.length}`)
+    console.log(`🔍 [UserOrders] Debug - userId: "${user?.id}", hasOrders: ${orderSummaries.length}`)
     if (lastUpdate) {
       console.log(`⏰ [UserOrders] Last update: ${lastUpdate.toLocaleTimeString()}`)
     }
-  }, [user?.id, socketConnected, orderSummaries.length, lastUpdate])
+  }, [user?.id, orderSummaries.length, lastUpdate])
 
   const fetchOrders = async (isRefresh = false) => {
     if (isRefresh) {
@@ -92,11 +94,10 @@ export default function OrdersPage({ params }: { params: Promise<{ courtId: stri
       if (response.ok) {
         const data = await response.json()
         if (data.success && updateOrderSummaries) {
-          // Update socket hook state with fetched data
+          // Update polling hook state with fetched data
           updateOrderSummaries(data.data.orderSummaries)
-          console.log('📊 [UserOrders] Initial orders fetched and updated in socket hook:', {
-            count: data.data.orderSummaries.length,
-            socketConnected
+          console.log('📊 [UserOrders] Initial orders fetched and updated in polling hook:', {
+            count: data.data.orderSummaries.length
           })
         }
       }
@@ -148,7 +149,20 @@ export default function OrdersPage({ params }: { params: Promise<{ courtId: stri
     setCancellingOrders(prev => new Set(prev).add(orderId))
 
     try {
-      const result = await cancelOrder(courtId, orderId, "Cancelled by customer", token)
+      const response = await fetch('/api/orders/cancel', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          courtId,
+          orderId,
+          cancelReason: "Cancelled by customer"
+        })
+      })
+
+      const result = await response.json()
       
       if (result.success) {
         // Refresh orders to get updated data
@@ -185,12 +199,12 @@ export default function OrdersPage({ params }: { params: Promise<{ courtId: stri
           </p>
           {user?.id && (
             <p className="text-xs text-neutral-500 mt-2">
-              Socket: {socketConnected ? '🟢 Connected' : '🔴 Disconnected'} | User: {user.id}
+              Polling: {!ordersError ? '🟢 Active' : '🔴 Error'} | User: {user.id}
             </p>
           )}
-          {socketError && (
+          {ordersError && (
             <p className="text-xs text-red-500 mt-1">
-              Socket Error: {socketError}
+              Polling Error: {ordersError}
             </p>
           )}
         </div>
@@ -229,12 +243,12 @@ export default function OrdersPage({ params }: { params: Promise<{ courtId: stri
               <p className="text-sm text-neutral-600 dark:text-neutral-400">
                 {orderSummaries.length} orders found
               </p>
-              {/* Socket Debug Info */}
+              {/* Polling Debug Info */}
               <div className="text-xs text-neutral-500 mt-1 flex items-center gap-4">
-                <span>{socketConnected ? '🟢 Online' : '🔴 Offline'}</span>
+                <span>{!ordersError ? '🟢 Online' : '🔴 Offline'}</span>
                 {user?.id && <span>User: {user.id}</span>}
                 {lastUpdate && <span>Last Update: {lastUpdate.toLocaleTimeString()}</span>}
-                {socketError && <span className="text-red-500">Error: {socketError}</span>}
+                {ordersError && <span className="text-red-500">Error: {ordersError}</span>}
               </div>
             </div>
           </div>

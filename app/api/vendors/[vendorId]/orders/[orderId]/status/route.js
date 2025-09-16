@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server"
 import { Order, User, Payment, OrderItem, MenuItem, Vendor } from "@/models"
 import { authenticateToken } from "@/middleware/auth"
-import { emitToVendor, emitToUser, emitToOrder } from "@/lib/socket"
 import { Op } from "sequelize"
 
 export async function PATCH(request, { params }) {
@@ -107,7 +106,7 @@ export async function PATCH(request, { params }) {
       Order.count({ where: { vendorId, status: "ready" } }),
     ])
 
-    // Fetch updated order with items for socket emission
+    // Fetch updated order with items
     const updatedOrder = await Order.findOne({
       where: { id: orderId },
       include: [
@@ -118,7 +117,7 @@ export async function PATCH(request, { params }) {
       ],
     })
 
-    // Prepare order data for socket emission
+    // Prepare order data
     const orderData = {
       id: updatedOrder.id,
       orderNumber: updatedOrder.orderNumber,
@@ -145,48 +144,10 @@ export async function PATCH(request, { params }) {
       targetSection = null // Order will be removed from all sections
     }
 
-    // Emit socket events
-    if (targetSection) {
-      // Emit order status update to vendor
-      emitToVendor(vendorId, 'order-status-updated', {
-        section: targetSection,
-        order: orderData,
-        action: 'status_update',
-        sectionCounts: {
-          upcoming: sectionCounts[0],
-          queue: sectionCounts[1],
-          ready: sectionCounts[2],
-        }
-      })
-    } else if (newStatus === "completed") {
-      // Order completed - remove from vendor sections
-      emitToVendor(vendorId, 'order-removed', {
-        orderId: updatedOrder.id,
-        sectionCounts: {
-          upcoming: sectionCounts[0],
-          queue: sectionCounts[1],
-          ready: sectionCounts[2],
-        }
-      })
-    }
-
-    // Notify user of order status update
-    if (updatedOrder.userId) {
-      emitToUser(updatedOrder.userId, 'order-status-updated', {
-        parentOrderId: updatedOrder.parentOrderId,
-        vendorOrder: orderData,
-        action: 'status_update'
-      })
-
-      // Also emit to the specific order room
-      emitToOrder(updatedOrder.parentOrderId, 'order-status-updated', {
-        parentOrderId: updatedOrder.parentOrderId,
-        vendorOrder: orderData,
-        action: 'status_update'
-      })
-    }
-
-    console.log(`📡 Socket events emitted for order status update: ${orderId} -> ${newStatus}`)
+    // Note: Status changes will be automatically detected by polling systems
+    // - Vendor polling will detect queue/ready status changes  
+    // - User polling will detect order status updates
+    console.log(`� Order status updated: ${orderId} -> ${newStatus} (will be picked up by polling)`)
 
     return NextResponse.json({
       success: true,

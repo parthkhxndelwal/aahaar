@@ -1,7 +1,7 @@
 "use client";
 import { cn } from "@/lib/utils";
 import React from "react";
-import { motion, AnimatePresence, useAnimate } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { Spinner } from "@/components/ui/spinner";
  
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
@@ -11,106 +11,46 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
 }
  
 export const AnimatedButton = ({ className, children, onAsyncClick, ...props }: ButtonProps) => {
-  const [scope, animate] = useAnimate();
   const [animationKey, setAnimationKey] = React.useState(0);
- 
+  const [isLoading, setIsLoading] = React.useState(false);
+  const [showSuccess, setShowSuccess] = React.useState(false);
+  const [showError, setShowError] = React.useState(false);
+
   const animateLoading = async () => {
-    await animate(
-      ".loader",
-      {
-        width: "20px",
-        scale: 1,
-        display: "flex",
-      },
-      {
-        duration: 0.2,
-      },
-    );
+    setIsLoading(true);
+    setShowSuccess(false);
+    setShowError(false);
   };
- 
+
   const animateSuccess = async () => {
-    await animate(
-      ".loader",
-      {
-        width: "0px",
-        scale: 0,
-        display: "none",
-      },
-      {
-        duration: 0.2,
-      },
-    );
-    await animate(
-      ".check",
-      {
-        width: "20px",
-        scale: 1,
-        display: "flex",
-      },
-      {
-        duration: 0.2,
-      },
-    );
- 
-    await animate(
-      ".check",
-      {
-        width: "0px",
-        scale: 0,
-        display: "none",
-      },
-      {
-        delay: 2,
-        duration: 0.2,
-      },
-    );
+    setIsLoading(false);
+    setShowSuccess(true);
+    setShowError(false);
+
+    // Hide success after delay
+    setTimeout(() => {
+      setShowSuccess(false);
+    }, 2000);
   };
 
   const animateFailure = async () => {
-    // Trigger shake animation by changing the key
+    // Trigger shake animation
     setAnimationKey(prev => prev + 1);
-    
+
     // Wait for shake to complete
     await new Promise(resolve => setTimeout(resolve, 600));
 
-    // Then hide loader and show cross
-    await animate(
-      ".loader",
-      {
-        width: "0px",
-        scale: 0,
-        display: "none",
-      },
-      {
-        duration: 0.2,
-      },
-    );
-    await animate(
-      ".cross",
-      {
-        width: "20px",
-        scale: 1,
-        display: "flex",
-      },
-      {
-        duration: 0.2,
-      },
-    );
- 
-    await animate(
-      ".cross",
-      {
-        width: "0px",
-        scale: 0,
-        display: "none",
-      },
-      {
-        delay: 2,
-        duration: 0.2,
-      },
-    );
+    // Show error state
+    setIsLoading(false);
+    setShowSuccess(false);
+    setShowError(true);
+
+    // Hide error after delay
+    setTimeout(() => {
+      setShowError(false);
+    }, 2000);
   };
- 
+
   const handleClick = async (event: React.MouseEvent<HTMLButtonElement>) => {
     if (onAsyncClick) {
       await animateLoading();
@@ -144,7 +84,6 @@ export const AnimatedButton = ({ className, children, onAsyncClick, ...props }: 
       key={`button-${animationKey}`}
       layout
       layoutId="button"
-      ref={scope}
       initial={{ x: 0 }}
       animate={{ x: animationKey > 0 ? [0, 10, -10, 10, -10, 0] : 0 }}
       transition={{ 
@@ -159,16 +98,16 @@ export const AnimatedButton = ({ className, children, onAsyncClick, ...props }: 
       onClick={handleClick}
     >
       <motion.div layout className="flex items-center gap-2">
-        <Loader />
-        <CheckIcon />
-        <CrossIcon />
+        <Loader isVisible={isLoading} />
+        <CheckIcon isVisible={showSuccess} />
+        <CrossIcon isVisible={showError} />
         <motion.span layout>{children}</motion.span>
       </motion.div>
     </motion.button>
   );
 };
  
-const Loader = () => {
+const Loader = ({ isVisible }: { isVisible: boolean }) => {
   return (
     <motion.div
       initial={{
@@ -176,18 +115,20 @@ const Loader = () => {
         width: 0,
         display: "none",
       }}
-      style={{
-        scale: 1,
-        display: "none",
+      animate={{
+        scale: isVisible ? 1 : 0,
+        width: isVisible ? "20px" : 0,
+        display: isVisible ? "flex" : "none",
       }}
-      className="loader flex items-center justify-center"
+      transition={{ duration: 0.2 }}
+      className="flex items-center justify-center"
     >
       <Spinner size={20} variant="dark" />
     </motion.div>
   );
 };
- 
-const CheckIcon = () => {
+
+const CheckIcon = ({ isVisible }: { isVisible: boolean }) => {
   return (
     <motion.svg
       initial={{
@@ -195,10 +136,12 @@ const CheckIcon = () => {
         width: 0,
         display: "none",
       }}
-      style={{
-        scale: 1,
-        display: "none",
+      animate={{
+        scale: isVisible ? 1 : 0,
+        width: isVisible ? "20px" : 0,
+        display: isVisible ? "flex" : "none",
       }}
+      transition={{ duration: 0.2 }}
       xmlns="http://www.w3.org/2000/svg"
       width="20"
       height="20"
@@ -208,7 +151,7 @@ const CheckIcon = () => {
       strokeWidth="2"
       strokeLinecap="round"
       strokeLinejoin="round"
-      className="check text-current flex items-center justify-center"
+      className="text-current flex items-center justify-center"
     >
       <path stroke="none" d="M0 0h24v24H0z" fill="none" />
       <path d="M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0 -18 0" />
@@ -217,7 +160,7 @@ const CheckIcon = () => {
   );
 };
 
-const CrossIcon = () => {
+const CrossIcon = ({ isVisible }: { isVisible: boolean }) => {
   return (
     <motion.svg
       initial={{
@@ -225,10 +168,12 @@ const CrossIcon = () => {
         width: 0,
         display: "none",
       }}
-      style={{
-        scale: 1,
-        display: "none",
+      animate={{
+        scale: isVisible ? 1 : 0,
+        width: isVisible ? "20px" : 0,
+        display: isVisible ? "flex" : "none",
       }}
+      transition={{ duration: 0.2 }}
       xmlns="http://www.w3.org/2000/svg"
       width="20"
       height="20"
@@ -238,7 +183,7 @@ const CrossIcon = () => {
       strokeWidth="2"
       strokeLinecap="round"
       strokeLinejoin="round"
-      className="cross text-current flex items-center justify-center"
+      className="text-current flex items-center justify-center"
     >
       <path stroke="none" d="M0 0h24v24H0z" fill="none" />
       <path d="M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0 -18 0" />

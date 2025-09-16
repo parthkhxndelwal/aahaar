@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Button } from "@/components/ui/button"
 import { AnimatedButton } from "@/components/ui/animated-button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { FloatingInput } from "@/components/ui/floating-input"
@@ -39,7 +38,7 @@ export default function AdminOnboardingPage() {
     pincode: ""
   })
   const { toast } = useToast()
-  const { user, token } = useAdminAuth()
+  const { user, token, logout } = useAdminAuth()
   const router = useRouter()
 
   // Check if user has existing courts on component mount
@@ -281,7 +280,39 @@ export default function AdminOnboardingPage() {
   }
 
   return (
-    <div className="min-h-screen bg-neutral-950 flex items-center justify-center py-12 px-4 relative overflow-hidden">
+    <div className="min-h-screen bg-neutral-950 flex flex-col relative overflow-hidden">
+      {/* Header */}
+      <header className="relative z-30 w-full bg-transparent">
+        <div className="px-4 sm:px-6">
+          <div className="flex justify-between items-center h-16">
+            {/* Logo */}
+            <div className="flex items-center">
+              <img
+                src="/icons/icon-144x144.png"
+                alt="Aahaar"
+                className="h-10 w-10"
+              />
+            </div>
+            
+            {/* User Info & Logout */}
+            <div className="flex items-center space-x-4">
+              <span className="text-sm text-neutral-300">
+                Logged in as <span className="text-white font-medium">{user?.fullName}</span>
+              </span>
+              <span className="text-neutral-500">•</span>
+              <button
+                onClick={() => logout()}
+                className="text-sm text-blue-400 hover:text-blue-300 transition-colors"
+              >
+                Not you? Logout
+              </button>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      {/* Main Content */}
+      <div className="flex-1 flex items-center justify-center py-12 px-4 relative overflow-hidden">
       {/* Background Video */}
       <video
         autoPlay
@@ -309,11 +340,43 @@ export default function AdminOnboardingPage() {
         >
           <Card className="w-full overflow-hidden rounded-3xl bg-neutral-950/90">
             <CardHeader>
-              <div className="flex items-center gap-2 mb-2">
-                <Building2 className="h-6 w-6 text-blue-400" />
-                <CardTitle className="text-white">Create Your First Court</CardTitle>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 mb-2">
+                  <Building2 className="h-6 w-6 text-blue-400" />
+                  <CardTitle className="text-white">
+                    {hasExistingCourts ? "Add New Court" : "Create Your First Court"}
+                  </CardTitle>
+                </div>
+                {hasExistingCourts && (
+                  <button
+                    onClick={() => {
+                      // Fetch courts and redirect to the first available court
+                      fetch("/api/admin/courts", {
+                        headers: { "Authorization": `Bearer ${token}` }
+                      })
+                      .then(res => res.json())
+                      .then(data => {
+                        if (data.success && data.data.length > 0) {
+                          router.push(`/admin/${data.data[0].courtId}`)
+                        } else {
+                          router.push("/admin/auth")
+                        }
+                      })
+                      .catch(() => router.push("/admin/auth"))
+                    }}
+                    className="p-2 hover:bg-neutral-800 rounded-full transition-colors text-neutral-400 hover:text-white"
+                    aria-label="Close and return to dashboard"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                )}
               </div>
-              <CardDescription>Set up your food court to start managing orders and vendors</CardDescription>
+              <CardDescription>
+                {hasExistingCourts 
+                  ? "Add another court to expand your food court management system"
+                  : "Set up your food court to start managing orders and vendors"
+                }
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <AnimatePresence mode="wait">
@@ -477,56 +540,30 @@ export default function AdminOnboardingPage() {
                   />
                 </div>
 
-                <Button
+                <AnimatedButton
                   type="button"
                   className="w-full"
-                  onClick={async (e) => {
-                    e.preventDefault()
+                  onAsyncClick={async (e) => {
                     console.log("Create Court button clicked")
                     console.log("Court data:", courtData)
                     try {
                       const result = await handleSubmit(e as any)
                       console.log("Submit result:", result)
+                      return result
                     } catch (error) {
                       console.error("Submit error:", error)
+                      return false
                     }
                   }}
                 >
-                  Create Court
-                </Button>
+                  {hasExistingCourts ? "Add Court" : "Create Court"}
+                </AnimatedButton>
               </form>
-
-              {hasExistingCourts && (
-                <div className="mt-4 text-center">
-                  <p className="text-sm text-gray-400">
-                    Already managing courts?{" "}
-                    <button
-                      onClick={() => {
-                        // Fetch courts and redirect to the first available court
-                        fetch("/api/admin/courts", {
-                          headers: { "Authorization": `Bearer ${token}` }
-                        })
-                        .then(res => res.json())
-                        .then(data => {
-                          if (data.success && data.data.length > 0) {
-                            router.push(`/admin/${data.data[0].courtId}`)
-                          } else {
-                            router.push("/admin/auth")
-                          }
-                        })
-                        .catch(() => router.push("/admin/auth"))
-                      }}
-                      className="text-blue-400 hover:underline transition-colors cursor-pointer"
-                    >
-                      Return to Dashboard
-                    </button>
-                  </p>
-                </div>
-              )}
 
             </CardContent>
           </Card>
         </motion.div>
+      </div>
       </div>
     </div>
   )

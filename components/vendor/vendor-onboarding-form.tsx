@@ -351,15 +351,27 @@ export function VendorOnboardingForm({ courtId, onSubmit, onCancel }: VendorOnbo
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!validateForm()) return
+    console.log("🚀 Form submission started")
+    console.log("📋 Form data:", formData)
 
+    if (!validateForm()) {
+      console.log("❌ Form validation failed")
+      return
+    }
+
+    console.log("✅ Form validation passed")
     setIsSubmitting(true)
     setServerError(null)
     try {
+      console.log("📤 Calling onSubmit with data:", {
+        ...formData,
+        status: formData.setAsActive ? "active" : "inactive",
+      })
+
       await onSubmit({
         ...formData,
         status: formData.setAsActive ? "active" : "inactive",
-        metadata: { 
+        metadata: {
           businessType: formData.businessType,
           ...(formData.businessType !== "individual" && formData.businessType !== "proprietorship" && {
             stakeholder: {
@@ -381,7 +393,10 @@ export function VendorOnboardingForm({ courtId, onSubmit, onCancel }: VendorOnbo
         acceptSettlementTerms: formData.acceptSettlementTerms,
         confirmAccuracy: formData.confirmAccuracy,
       })
+
+      console.log("✅ Form submission successful")
     } catch (error: any) {
+      console.error("❌ Form submission failed:", error)
       // Bubble up error text to inline display
       const message = error?.message || 'An error occurred during onboarding'
       setServerError(message)

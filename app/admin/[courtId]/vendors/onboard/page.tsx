@@ -29,23 +29,30 @@ export default function AdminVendorOnboardPage() {
   }
 
   const handleFormSubmit = async (formData: any) => {
+    console.log("📨 Page handleFormSubmit called with:", formData)
     // Keep inline, do not show spinner/progress page. Surface server errors back to form.
     try {
+      console.log("🌐 Making API request to /api/admin/vendors")
       const response = await fetch("/api/admin/vendors", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...formData, courtId }),
       })
 
+      console.log("📥 API response status:", response.status)
       const payload = await response.json()
+      console.log("📦 API response payload:", payload)
+
       if (!response.ok || !payload.success) {
         // Throw with server-provided message so form can show it inline
         throw new Error(payload.message || "Failed to create vendor")
       }
 
       const vendorId = payload?.data?.vendor?.id
+      console.log("✅ Vendor created successfully, redirecting...")
       router.push(`/admin/${courtId}/vendors?success=true${vendorId ? `&vendorId=${vendorId}` : ''}`)
     } catch (error) {
+      console.error("❌ Page handleFormSubmit error:", error)
       // Re-throw to let the form show inline error
       throw error
     }

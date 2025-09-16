@@ -43,6 +43,17 @@ interface Vendor {
       name: string
       pan: string
     }
+    paymentStatus?: 'not_requested' | 'requested' | 'approved' | 'rejected'
+    paymentRequestId?: string
+    paymentRejectionReason?: string
+    registeredAddress?: {
+      addressStreet1?: string
+      addressStreet2?: string
+      addressCity?: string
+      addressState?: string
+      addressPostalCode?: string
+      addressCountry?: string
+    }
   }
   createdAt: string
   updatedAt: string
@@ -227,7 +238,7 @@ export default function VendorsPage() {
                 className="gap-2 dark:border-neutral-600 dark:text-neutral-300 dark:hover:bg-neutral-800"
               >
                 {buttonLoading === viewButtonId ? (
-                  <Spinner size={16} variant="dark" />
+                  <Spinner size={16} variant="light" />
                 ) : (
                   <Eye className="h-4 w-4" />
                 )}

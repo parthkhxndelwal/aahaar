@@ -23,18 +23,16 @@ export default function OrderSuccessPage({
   const [loading, setLoading] = useState(true)
   const [otpCopied, setOtpCopied] = useState(false)
 
-  // Use the socket hook for real-time updates
+  // Use the polling hook for real-time updates
   const { 
-    orderDetails: socketOrderDetails, 
+    orderDetails, 
     lastUpdate, 
     statusUpdates,
     updateOrderDetails,
-    isConnected: socketConnected,
-    connectionError: socketError 
-  } = useOrderDetails(user?.id || null, parentOrderId || null)
-
-  // Use socket data as primary source
-  const orderDetails = socketOrderDetails
+    isLoading: orderDetailsLoading,
+    error: orderDetailsError,
+    refetch
+  } = useOrderDetails(user?.id || null, parentOrderId || null, courtId)
 
   const pageVariants = {
     initial: { opacity: 0, y: 20 },
@@ -62,16 +60,16 @@ export default function OrderSuccessPage({
     fetchOrderDetails()
   }, [user, token, parentOrderId, courtId, authLoading])
 
-  // Debug effect to track socket connection and updates
+  // Debug effect to track polling connection and updates
   useEffect(() => {
-    console.log(`🔍 [OrderSuccess] Debug - userId: "${user?.id}", parentOrderId: "${parentOrderId}", socketConnected: ${socketConnected}`)
+    console.log(`🔍 [OrderSuccess] Debug - userId: "${user?.id}", parentOrderId: "${parentOrderId}", polling: ${!orderDetailsError}`)
     if (lastUpdate) {
       console.log(`⏰ [OrderSuccess] Last update: ${lastUpdate.toLocaleTimeString()}`)
     }
     if (statusUpdates.length > 0) {
       console.log(`📊 [OrderSuccess] Status updates count: ${statusUpdates.length}`)
     }
-  }, [user?.id, parentOrderId, socketConnected, lastUpdate, statusUpdates.length])
+  }, [user?.id, parentOrderId, orderDetailsError, lastUpdate, statusUpdates.length])
 
   const fetchOrderDetails = async () => {
     try {
@@ -87,12 +85,11 @@ export default function OrderSuccessPage({
       if (response.ok) {
         const data = await response.json()
         if (data.success && updateOrderDetails) {
-          // Update socket hook state with fetched data
+          // Update polling hook state with fetched data
           updateOrderDetails(data.data)
-          console.log('📊 [OrderSuccess] Initial order details fetched and updated in socket hook:', {
+          console.log('📊 [OrderSuccess] Initial order details fetched and updated in polling hook:', {
             parentOrderId: data.data.parentOrderId,
-            vendorsCount: data.data.summary.totalVendors,
-            socketConnected
+            vendorsCount: data.data.summary.totalVendors
           })
         }
       }
@@ -152,12 +149,12 @@ export default function OrderSuccessPage({
           </p>
           {user?.id && parentOrderId && (
             <p className="text-xs text-neutral-500 mt-2">
-              Socket: {socketConnected ? '🟢 Connected' : '🔴 Disconnected'} | User: {user.id} | Order: {parentOrderId}
+              Polling: {!orderDetailsError ? '🟢 Active' : '🔴 Error'} | User: {user.id} | Order: {parentOrderId}
             </p>
           )}
-          {socketError && (
+          {orderDetailsError && (
             <p className="text-xs text-red-500 mt-1">
-              Socket Error: {socketError}
+              Polling Error: {orderDetailsError}
             </p>
           )}
         </div>
@@ -192,14 +189,14 @@ export default function OrderSuccessPage({
           </motion.button>
           <div>
             <h1 className="text-xl font-semibold text-neutral-900 dark:text-white">Order Confirmed</h1>
-            {/* Socket Debug Info */}
+            {/* Polling Debug Info */}
             <div className="text-xs text-neutral-500 mt-1 flex items-center gap-4">
-              <span>Socket: {socketConnected ? '🟢 Connected' : '🔴 Disconnected'}</span>
+              <span>Polling: {!orderDetailsError ? '🟢 Active' : '🔴 Error'}</span>
               {user?.id && <span>User: {user.id}</span>}
               {parentOrderId && <span>Order: {parentOrderId}</span>}
               {lastUpdate && <span>Last Update: {lastUpdate.toLocaleTimeString()}</span>}
               {statusUpdates.length > 0 && <span>Updates: {statusUpdates.length}</span>}
-              {socketError && <span className="text-red-500">Error: {socketError}</span>}
+              {orderDetailsError && <span className="text-red-500">Error: {orderDetailsError}</span>}
             </div>
           </div>
         </div>
@@ -230,7 +227,7 @@ export default function OrderSuccessPage({
               animate={{ opacity: 1, y: 0 }}
               className="mt-2 text-xs text-neutral-500 flex items-center justify-center gap-2"
             >
-              <div className={`w-2 h-2 rounded-full ${socketConnected ? 'bg-green-500' : 'bg-red-500'}`}></div>
+              <div className={`w-2 h-2 rounded-full ${!orderDetailsError ? 'bg-green-500' : 'bg-red-500'}`}></div>
               <span>Live updates • Last: {lastUpdate.toLocaleTimeString()}</span>
             </motion.div>
           )}

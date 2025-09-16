@@ -1,11 +1,44 @@
 import { NextResponse } from "next/server"
 import bcrypt from "bcryptjs"
 import jwt from "jsonwebtoken"
-import { User, Court, Vendor } from "@/models"
+import { User, Court, Vendor, AuditLog } from "@/models"
+
+// Ensure environment variables are loaded
+if (typeof window === 'undefined') {
+  require('dotenv').config()
+}
 
 export async function POST(request) {
   try {
-    const { email, password, courtId, phone, otp, loginType = "password" } = await request.json()
+    // Check if request has body
+    const contentLength = request.headers.get('content-length')
+    if (!contentLength || contentLength === '0') {
+      console.log("❌ Empty request body")
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Request body is empty",
+        },
+        { status: 400 },
+      )
+    }
+
+    // Parse JSON with error handling
+    let requestData
+    try {
+      requestData = await request.json()
+    } catch (parseError) {
+      console.error("❌ JSON parse error:", parseError)
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Invalid JSON in request body",
+        },
+        { status: 400 },
+      )
+    }
+
+    const { email, password, courtId, phone, otp, loginType = "password" } = requestData
 
     if (loginType === "otp") {
       // OTP-based login for users
@@ -21,6 +54,35 @@ export async function POST(request) {
         // In development, accept any 6-digit number as valid OTP
         if (!/^\d{6}$/.test(otp)) {
           console.log("❌ Invalid OTP format:", otp)
+          
+          // Create audit log for failed OTP attempt
+          try {
+            await AuditLog.create({
+              courtId: courtId,
+              action: "USER_LOGIN_OTP_FAILED",
+              entityType: "user",
+              entityId: phone,
+              metadata: {
+                loginMethod: "otp",
+                failureReason: "invalid_format",
+                attemptedPhone: phone,
+                userAgent: request.headers.get("user-agent") || "unknown",
+                ipAddress: request.headers.get("x-forwarded-for") || 
+                          request.headers.get("x-real-ip") || 
+                          request.headers.get("x-client-ip") || 
+                          "unknown"
+              },
+              ipAddress: request.headers.get("x-forwarded-for") || 
+                        request.headers.get("x-real-ip") || 
+                        request.headers.get("x-client-ip") || 
+                        "unknown",
+              userAgent: request.headers.get("user-agent") || "unknown"
+            })
+            console.log("⚠️ Audit log created for failed OTP attempt (invalid format):", phone)
+          } catch (auditError) {
+            console.error("❌ Failed to create audit log for failed OTP:", auditError)
+          }
+          
           return NextResponse.json({ success: false, message: "Invalid OTP format" }, { status: 401 })
         }
         console.log("✅ OTP format valid in development mode")
@@ -28,6 +90,35 @@ export async function POST(request) {
         // In production, you should verify against stored OTP
         if (otp !== "123456") {
           console.log("❌ Invalid OTP in production:", otp)
+          
+          // Create audit log for failed OTP attempt
+          try {
+            await AuditLog.create({
+              courtId: courtId,
+              action: "USER_LOGIN_OTP_FAILED",
+              entityType: "user",
+              entityId: phone,
+              metadata: {
+                loginMethod: "otp",
+                failureReason: "invalid_otp",
+                attemptedPhone: phone,
+                userAgent: request.headers.get("user-agent") || "unknown",
+                ipAddress: request.headers.get("x-forwarded-for") || 
+                          request.headers.get("x-real-ip") || 
+                          request.headers.get("x-client-ip") || 
+                          "unknown"
+              },
+              ipAddress: request.headers.get("x-forwarded-for") || 
+                        request.headers.get("x-real-ip") || 
+                        request.headers.get("x-client-ip") || 
+                        "unknown",
+              userAgent: request.headers.get("user-agent") || "unknown"
+            })
+            console.log("⚠️ Audit log created for failed OTP attempt (invalid OTP):", phone)
+          } catch (auditError) {
+            console.error("❌ Failed to create audit log for failed OTP:", auditError)
+          }
+          
           return NextResponse.json({ success: false, message: "Invalid OTP" }, { status: 401 })
         }
         console.log("✅ OTP valid in production mode")
@@ -61,6 +152,35 @@ export async function POST(request) {
         expiresIn: process.env.JWT_EXPIRES_IN || "7d",
       })
 
+      // Create audit log for successful OTP login
+      try {
+        await AuditLog.create({
+          courtId: user.courtId,
+          userId: user.id,
+          action: "USER_LOGIN_OTP",
+          entityType: "user",
+          entityId: user.id,
+          metadata: {
+            loginMethod: "otp",
+            phone: phone,
+            isNewUser: !user.createdAt || (new Date() - user.createdAt) < 60000, // Created within last minute
+            userAgent: request.headers.get("user-agent") || "unknown",
+            ipAddress: request.headers.get("x-forwarded-for") || 
+                      request.headers.get("x-real-ip") || 
+                      request.headers.get("x-client-ip") || 
+                      "unknown"
+          },
+          ipAddress: request.headers.get("x-forwarded-for") || 
+                    request.headers.get("x-real-ip") || 
+                    request.headers.get("x-client-ip") || 
+                    "unknown",
+          userAgent: request.headers.get("user-agent") || "unknown"
+        })
+        console.log("✅ Audit log created for OTP login:", phone)
+      } catch (auditError) {
+        console.error("❌ Failed to create audit log for OTP login:", auditError)
+      }
+
       return NextResponse.json({
         success: true,
         message: "OTP login successful",
@@ -90,9 +210,9 @@ export async function POST(request) {
       )
     }
 
-    console.log("🔐 Admin login attempt:", { email, courtId })
+    console.log("🔐 Login attempt:", { email, courtId, hasPassword: !!password })
 
-    // For admin login, find user without court restriction
+    // For vendor login, find user without court restriction (email is unique)
     // For regular users, court ID is still required
     let user
     if (courtId) {
@@ -112,22 +232,27 @@ export async function POST(request) {
         {
           model: Vendor,
           as: "vendorProfile",
-          attributes: ["id", "stallName", "stallLocation", "isOnline"],
+          attributes: ["id", "stallName", "stallLocation", "isOnline", "status"],
         },
       ],
     })
     } else {
-      console.log("👑 Admin login without court restriction")
-      // Admin login without court restriction
+      console.log("�‍🍳 Vendor login without court restriction")
+      // Vendor login without court restriction (email is unique)
       user = await User.findOne({
         where: {
           email: email.toLowerCase(),
         },
         include: [
           {
+            model: Court,
+            as: "court",
+            attributes: ["courtId", "instituteName", "status"],
+          },
+          {
             model: Vendor,
             as: "vendorProfile",
-            attributes: ["id", "stallName", "stallLocation", "isOnline"],
+            attributes: ["id", "stallName", "stallLocation", "isOnline", "status"],
           },
         ],
       })
@@ -142,6 +267,35 @@ export async function POST(request) {
 
     if (!user) {
       console.log("❌ No user found with email:", email)
+      
+      // Create audit log for failed login attempt (user not found)
+      try {
+        await AuditLog.create({
+          courtId: courtId || "system",
+          action: "USER_LOGIN_FAILED",
+          entityType: "user",
+          entityId: email, // Use email as entityId since user doesn't exist
+          metadata: {
+            loginMethod: "password",
+            failureReason: "user_not_found",
+            attemptedEmail: email,
+            userAgent: request.headers.get("user-agent") || "unknown",
+            ipAddress: request.headers.get("x-forwarded-for") || 
+                      request.headers.get("x-real-ip") || 
+                      request.headers.get("x-client-ip") || 
+                      "unknown"
+          },
+          ipAddress: request.headers.get("x-forwarded-for") || 
+                    request.headers.get("x-real-ip") || 
+                    request.headers.get("x-client-ip") || 
+                    "unknown",
+          userAgent: request.headers.get("user-agent") || "unknown"
+        })
+        console.log("⚠️ Audit log created for failed login attempt (user not found):", email)
+      } catch (auditError) {
+        console.error("❌ Failed to create audit log for failed login:", auditError)
+      }
+      
       return NextResponse.json(
         {
           success: false,
@@ -159,6 +313,19 @@ export async function POST(request) {
         },
         { status: 401 },
       )
+    }
+
+    // For vendor users, also check vendor status
+    if (user.role === "vendor" && user.vendorProfile) {
+      if (user.vendorProfile.status !== "active") {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "Vendor account is not active. Please contact your admin.",
+          },
+          { status: 401 },
+        )
+      }
     }
 
     // Only check court status if user has a court (not for super admins)
@@ -179,6 +346,35 @@ export async function POST(request) {
     
     if (!isValidPassword) {
       console.log("❌ Invalid password for user:", email)
+      
+      // Create audit log for failed login attempt
+      try {
+        await AuditLog.create({
+          courtId: user.courtId || "system",
+          userId: user.id,
+          action: "USER_LOGIN_FAILED",
+          entityType: "user",
+          entityId: user.id,
+          metadata: {
+            loginMethod: "password",
+            failureReason: "invalid_password",
+            userAgent: request.headers.get("user-agent") || "unknown",
+            ipAddress: request.headers.get("x-forwarded-for") || 
+                      request.headers.get("x-real-ip") || 
+                      request.headers.get("x-client-ip") || 
+                      "unknown"
+          },
+          ipAddress: request.headers.get("x-forwarded-for") || 
+                    request.headers.get("x-real-ip") || 
+                    request.headers.get("x-client-ip") || 
+                    "unknown",
+          userAgent: request.headers.get("user-agent") || "unknown"
+        })
+        console.log("⚠️ Audit log created for failed login attempt:", email)
+      } catch (auditError) {
+        console.error("❌ Failed to create audit log for failed login:", auditError)
+      }
+      
       return NextResponse.json(
         {
           success: false,
@@ -196,6 +392,11 @@ export async function POST(request) {
       email: user.email 
     })
     
+    const jwtSecret = process.env.JWT_SECRET || 'fallback-secret-for-dev'
+    if (!process.env.JWT_SECRET) {
+      console.log("⚠️ Using fallback JWT secret - this should not happen in production!")
+    }
+    
     const token = jwt.sign(
       {
         userId: user.id,
@@ -203,12 +404,40 @@ export async function POST(request) {
         role: user.role,
         email: user.email,
       },
-      process.env.JWT_SECRET,
+      jwtSecret,
       { expiresIn: process.env.JWT_EXPIRES_IN || "7d" },
     )
 
     // Update last login
     await user.update({ lastLoginAt: new Date() })
+
+    // Create audit log for successful login
+    try {
+      await AuditLog.create({
+        courtId: user.courtId || "system", // Use "system" for admin logins without court
+        userId: user.id,
+        action: "USER_LOGIN",
+        entityType: "user",
+        entityId: user.id,
+        metadata: {
+          loginMethod: "password",
+          userAgent: request.headers.get("user-agent") || "unknown",
+          ipAddress: request.headers.get("x-forwarded-for") || 
+                    request.headers.get("x-real-ip") || 
+                    request.headers.get("x-client-ip") || 
+                    "unknown"
+        },
+        ipAddress: request.headers.get("x-forwarded-for") || 
+                  request.headers.get("x-real-ip") || 
+                  request.headers.get("x-client-ip") || 
+                  "unknown",
+        userAgent: request.headers.get("user-agent") || "unknown"
+      })
+      console.log("✅ Audit log created for user login:", user.email)
+    } catch (auditError) {
+      console.error("❌ Failed to create audit log for login:", auditError)
+      // Don't fail the login if audit log creation fails
+    }
 
     // Prepare user data for response
     const userData = {

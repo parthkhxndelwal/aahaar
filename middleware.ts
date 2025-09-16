@@ -5,13 +5,13 @@ export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
   // Check if the request is for a protected app route
-  if (pathname.startsWith('/app/') && !pathname.includes('/login')) {
+  if (pathname.startsWith('/app/') && !pathname.includes('/login') && !pathname.includes('/auth')) {
     // Extract court ID from the path
     const pathParts = pathname.split('/')
     const courtId = pathParts[2]
     
-    // Skip if it's already a login page or if no courtId
-    if (!courtId || pathname.includes('/login')) {
+    // Skip if it's already a login/auth page or if no courtId
+    if (!courtId || pathname.includes('/login') || pathname.includes('/auth')) {
       return NextResponse.next()
     }
 
@@ -26,11 +26,11 @@ export function middleware(request: NextRequest) {
     })
     
     if (!token) {
-      console.log(`🚪 [Middleware] No app token found, redirecting to login`)
-      // Redirect to login with return URL
-      const loginUrl = new URL(`/app/${courtId}/login`, request.url)
-      loginUrl.searchParams.set('returnTo', pathname)
-      return NextResponse.redirect(loginUrl)
+      console.log(`🚪 [Middleware] No app token found, redirecting to auth`)
+      // Redirect to auth with return URL
+      const authUrl = new URL(`/app/${courtId}/auth`, request.url)
+      authUrl.searchParams.set('returnTo', pathname)
+      return NextResponse.redirect(authUrl)
     } else {
       console.log(`✅ [Middleware] App token found, allowing access to ${pathname}`)
     }

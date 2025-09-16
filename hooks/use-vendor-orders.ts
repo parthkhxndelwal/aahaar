@@ -1,18 +1,19 @@
 import { useEffect, useState, useCallback } from 'react'
-import { useSocket } from './use-socket'
+
+interface OrderItem {
+  name: string
+  quantity: number
+  price: number
+  subtotal: number
+  imageUrl?: string
+}
 
 interface Order {
   id: string
   orderNumber: string
   customerName: string
   customerPhone: string
-  items: Array<{
-    name: string
-    quantity: number
-    price: number
-    subtotal: number
-    imageUrl?: string
-  }>
+  items: OrderItem[]
   totalAmount: number
   status: string
   estimatedPreparationTime: number
@@ -22,19 +23,7 @@ interface Order {
   acceptedAt?: string
 }
 
-interface VendorQueueUpdate {
-  section: 'upcoming' | 'queue' | 'ready'
-  order: Order
-  action: 'new_order' | 'status_update' | 'queue_update' | 'order_removed'
-  sectionCounts: {
-    upcoming: number
-    queue: number
-    ready: number
-  }
-}
-
 export const useVendorOrders = (vendorId: string | null) => {
-  const { socket, isConnected, error } = useSocket('/vendor')
   const [orders, setOrders] = useState<{
     upcoming: Order[]
     queue: Order[]
@@ -50,106 +39,82 @@ export const useVendorOrders = (vendorId: string | null) => {
     ready: 0
   })
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
-  // Join vendor room when connected and vendorId is available
-  useEffect(() => {
-    if (socket && isConnected && vendorId) {
-      console.log(`🏪 Joining vendor room: ${vendorId}`)
-      socket.emit('join-vendor-room', vendorId)
+  // Fetch orders from API
+  const fetchOrders = useCallback(async () => {
+    if (!vendorId) {
+      console.log("⚠️ No vendorId provided to useVendorOrders")
+      return
+    }
 
-      // Confirmation handler
-      socket.on('joined-vendor-room', (data) => {
-        console.log(`✅ Successfully joined vendor room:`, data)
+    console.log("📡 Fetching orders for vendor:", vendorId)
+
+    try {
+      setIsLoading(true)
+      setError(null)
+      
+      const token = localStorage.getItem('vendor_auth_token')
+      console.log("🔑 Token exists:", !!token)
+      console.log("🔑 Token value:", token)
+
+      const response = await fetch(`/api/vendors/${vendorId}/orders`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
       })
 
-      return () => {
-        if (socket && vendorId) {
-          console.log(`🏪 Leaving vendor room: ${vendorId}`)
-          socket.emit('leave-vendor-room', vendorId)
-          socket.off('joined-vendor-room')
-        }
+      console.log("📥 Response status:", response.status)
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.log("❌ Response error:", errorText)
+        throw new Error(`Failed to fetch orders: ${response.status} ${response.statusText}`)
       }
-    }
-  }, [socket, isConnected, vendorId])
 
-  // Handle real-time order updates
+      const data = await response.json()
+      console.log("📦 Response data:", data)
+      
+      if (data.success) {
+        // Group orders by status
+        const upcoming = data.data.orders.filter((order: Order) => order.status === 'pending')
+        const queue = data.data.orders.filter((order: Order) => 
+          order.status === 'accepted' || order.status === 'preparing'
+        )
+        const ready = data.data.orders.filter((order: Order) => order.status === 'ready')
+
+        setOrders({ upcoming, queue, ready })
+        setSectionCounts({
+          upcoming: upcoming.length,
+          queue: queue.length,
+          ready: ready.length
+        })
+        setLastUpdate(new Date())
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to fetch orders')
+      console.error('Failed to fetch vendor orders:', err)
+    } finally {
+      setIsLoading(false)
+    }
+  }, [vendorId])
+
+  // Set up polling every 5 seconds
   useEffect(() => {
-    if (!socket || !isConnected) return
+    if (!vendorId) return
 
-    console.log('🎧 Setting up vendor order event listeners')
+    // Initial fetch
+    fetchOrders()
 
-    // New order received
-    socket.on('new-order', (data: VendorQueueUpdate) => {
-      console.log('📥 New order received:', data)
-      setOrders(prev => ({
-        ...prev,
-        [data.section]: [...prev[data.section], data.order]
-      }))
-      setSectionCounts(data.sectionCounts)
-      setLastUpdate(new Date())
-    })
+    // Set up polling interval
+    const interval = setInterval(fetchOrders, 5000)
 
-    // Order status updated
-    socket.on('order-status-updated', (data: VendorQueueUpdate) => {
-      console.log('🔄 Order status updated:', data)
-      
-      // Remove order from all sections first
-      setOrders(prev => {
-        const newOrders = {
-          upcoming: prev.upcoming.filter(o => o.id !== data.order.id),
-          queue: prev.queue.filter(o => o.id !== data.order.id),
-          ready: prev.ready.filter(o => o.id !== data.order.id)
-        }
-        
-        // Add to appropriate section based on new status
-        if (data.section) {
-          newOrders[data.section] = [...newOrders[data.section], data.order]
-        }
-        
-        return newOrders
-      })
-      
-      setSectionCounts(data.sectionCounts)
-      setLastUpdate(new Date())
-    })
-
-    // Order removed (completed, cancelled, etc.)
-    socket.on('order-removed', (data: { orderId: string, sectionCounts: any }) => {
-      console.log('🗑️ Order removed:', data)
-      setOrders(prev => ({
-        upcoming: prev.upcoming.filter(o => o.id !== data.orderId),
-        queue: prev.queue.filter(o => o.id !== data.orderId),
-        ready: prev.ready.filter(o => o.id !== data.orderId)
-      }))
-      setSectionCounts(data.sectionCounts)
-      setLastUpdate(new Date())
-    })
-
-    // Queue position updated
-    socket.on('queue-updated', (data: { orders: Order[], section: string, sectionCounts: any }) => {
-      console.log('📊 Queue updated:', data)
-      setOrders(prev => ({
-        ...prev,
-        [data.section]: data.orders
-      }))
-      setSectionCounts(data.sectionCounts)
-      setLastUpdate(new Date())
-    })
-
-    // Test message handler for debugging
-    socket.on('test-message', (data) => {
-      console.log('🧪 Test message received:', data)
-    })
-
-    return () => {
-      console.log('🔌 Cleaning up vendor order event listeners')
-      socket.off('new-order')
-      socket.off('order-status-updated')
-      socket.off('order-removed')
-      socket.off('queue-updated')
-      socket.off('test-message')
-    }
-  }, [socket, isConnected])
+    // Cleanup interval on unmount
+    return () => clearInterval(interval)
+  }, [vendorId, fetchOrders])
 
   // Update order counts for a specific section
   const updateOrdersForSection = useCallback((section: 'upcoming' | 'queue' | 'ready', newOrders: Order[]) => {
@@ -170,8 +135,8 @@ export const useVendorOrders = (vendorId: string | null) => {
     lastUpdate,
     updateOrdersForSection,
     getOrdersForSection,
-    isConnected,
-    connectionError: error,
-    socket
+    isLoading,
+    error,
+    refetch: fetchOrders
   }
 }

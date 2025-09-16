@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server"
 import { Order, Vendor, User } from "@/models"
 import { authenticateTokenNextJS } from "@/middleware/auth"
-import { emitToVendor } from "@/lib/socket"
 
 export async function POST(request, { params }) {
   try {
@@ -84,20 +83,8 @@ export async function POST(request, { params }) {
 
     console.log(`✅ [OrderCancel] Order ${order.orderNumber} cancelled by customer ${user.id}`)
 
-    // Emit real-time notification to vendor
-    try {
-      await emitToVendor(order.vendorId, 'orderCancelled', {
-        orderId: order.id,
-        orderNumber: order.orderNumber,
-        customerName: order.customerName,
-        reason: reason,
-        timestamp: new Date().toISOString()
-      })
-      console.log(`📡 [OrderCancel] Notification sent to vendor ${order.vendorId}`)
-    } catch (socketError) {
-      console.error(`❌ [OrderCancel] Failed to notify vendor:`, socketError)
-      // Don't fail the request if socket notification fails
-    }
+    // Note: Vendor will detect the cancellation through their polling mechanism
+    console.log(`� [OrderCancel] Cancellation will be detected by vendor ${order.vendorId} through polling`)
 
     return NextResponse.json({
       success: true,

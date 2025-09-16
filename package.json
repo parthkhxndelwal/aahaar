@@ -4,9 +4,14 @@
   "private": true,
   "scripts": {
     "build": "next build",
-    "dev": "next dev --turbopack",
+    "dev": "next dev -H 0.0.0.0",
+    "dev:turbo": "next dev --turbopack -H 0.0.0.0",
+    "dev:https": "node server.js",
     "lint": "next lint",
-    "start": "next start"
+    "start": "next start",
+    "db:wipe": "node scripts/wipe-database.js",
+    "db:wipe:advanced": "node scripts/wipe-database-advanced.js",
+    "db:wipe:dry-run": "node scripts/wipe-database-advanced.js --dry-run"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",
@@ -39,6 +44,7 @@
     "@radix-ui/react-tooltip": "1.1.6",
     "@tailwindcss/line-clamp": "^0.4.4",
     "@types/canvas-confetti": "^1.9.0",
+    "@zxing/library": "^0.21.3",
     "autoprefixer": "^10.4.20",
     "bcryptjs": "latest",
     "canvas-confetti": "^1.9.3",
@@ -67,8 +73,6 @@
     "react-resizable-panels": "^2.1.7",
     "recharts": "2.15.0",
     "sequelize": "latest",
-    "socket.io": "^4.8.1",
-    "socket.io-client": "^4.8.1",
     "sonner": "^1.7.1",
     "tailwind-merge": "^2.5.5",
     "tailwindcss-animate": "^1.0.7",
@@ -81,6 +85,7 @@
     "@types/node": "^22",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "mkcert": "^3.2.0",
     "postcss": "^8.5",
     "tailwindcss": "^3.4.17",
     "typescript": "^5"

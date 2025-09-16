@@ -9,6 +9,10 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
+  // Allow network access from different origins
+  experimental: {
+    allowedDevOrigins: ['192.168.56.1', '192.168.1.2', '127.0.0.1', 'localhost'],
+  },
   webpack: (config, { isServer }) => {
     if (isServer) {
       // Add mysql2 as an external dependency for server-side rendering
@@ -16,7 +20,10 @@ const nextConfig = {
     }
     return config;
   },
-  serverExternalPackages: ['sequelize', 'mysql2'],
+  serverExternalPackages: [
+    'sequelize',
+    'mysql2'
+  ],
 }
 
 export default nextConfig

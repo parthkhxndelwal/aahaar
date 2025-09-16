@@ -73,6 +73,7 @@ export default function VendorMenuPage({ params }: { params: Promise<{ courtId: 
   const [searchQuery, setSearchQuery] = useState("")
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [isCategoryDialogOpen, setIsCategoryDialogOpen] = useState(false)
+  const [isManageCategoriesOpen, setIsManageCategoriesOpen] = useState(false)
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null)
   const [editingCategory, setEditingCategory] = useState<MenuCategory | null>(null)
   const [isCustomizeDrawerOpen, setIsCustomizeDrawerOpen] = useState(false)
@@ -317,7 +318,7 @@ export default function VendorMenuPage({ params }: { params: Promise<{ courtId: 
         }
       } else {
         const errorData = await response.json()
-        throw new Error(errorData.error || 'Failed to save menu item')
+        throw new Error(errorData.message || errorData.error || 'Failed to save menu item')
       }
     } catch (error) {
       console.error("Error saving menu item:", error)
@@ -459,7 +460,7 @@ export default function VendorMenuPage({ params }: { params: Promise<{ courtId: 
         fetchMenuData()
       } else {
         const errorData = await response.json()
-        throw new Error(errorData.error || 'Failed to save category')
+        throw new Error(errorData.message || errorData.error || 'Failed to save category')
       }
     } catch (error) {
       console.error("Error saving category:", error)
@@ -488,7 +489,7 @@ export default function VendorMenuPage({ params }: { params: Promise<{ courtId: 
         fetchMenuData()
       } else {
         const errorData = await response.json()
-        throw new Error(errorData.error || 'Failed to delete category')
+        throw new Error(errorData.message || errorData.error || 'Failed to delete category')
       }
     } catch (error) {
       console.error("Error deleting category:", error)
@@ -527,14 +528,14 @@ export default function VendorMenuPage({ params }: { params: Promise<{ courtId: 
           </Button>
 
           {/* Manage Categories Button */}
-          <Drawer>
+          <Drawer open={isManageCategoriesOpen} onOpenChange={setIsManageCategoriesOpen}>
             <DrawerTrigger asChild>
               <Button variant="outline">
                 <Tag className="h-4 w-4 mr-2" />
                 Manage Categories
               </Button>
             </DrawerTrigger>
-            <DrawerContent>
+            <DrawerContent className="max-w-md mx-auto">
               <DrawerHeader>
                 <DrawerTitle>Manage Categories</DrawerTitle>
                 <DrawerDescription>
@@ -542,69 +543,72 @@ export default function VendorMenuPage({ params }: { params: Promise<{ courtId: 
                 </DrawerDescription>
               </DrawerHeader>
               <div className="px-4 pb-4 max-h-[60vh] overflow-y-auto">
-                {/* Add Category Button */}
-                <div className="mb-4">
-                  <Button
-                    onClick={() => {
-                      setEditingCategory(null)
-                      setIsCategoryDialogOpen(true)
-                    }}
-                    className="w-full"
-                    variant="outline"
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add New Category
-                  </Button>
-                </div>
                 
                 {/* Categories List */}
                 <div className="space-y-3">
-                  {categories.map((category, index) => (
-                    <div key={category.id} className="flex items-center gap-3 p-3 border rounded-lg">
-                      <div className="flex items-center gap-2 flex-1">
-                        {category.color && (
-                          <div 
-                            className="w-4 h-4 rounded-full flex-shrink-0" 
-                            style={{ backgroundColor: category.color }}
-                          />
-                        )}
-                        <div className="flex-1 min-w-0">
-                          <h4 className="font-medium truncate">{category.name}</h4>
-                          {category.description && (
-                            <p className="text-sm text-neutral-500 truncate">{category.description}</p>
+                  {categories.length === 0 ? (
+                    <div className="text-center py-8 text-neutral-500">
+                      <Tag className="h-12 w-12 mx-auto mb-3 text-neutral-300" />
+                      <p className="text-sm">No categories yet</p>
+                      <p className="text-xs text-neutral-400 mt-1">Create your first category to organize your menu</p>
+                    </div>
+                  ) : (
+                    categories.map((category, index) => (
+                      <div key={category.id} className="flex items-center gap-3 p-3 border rounded-lg bg-neutral-50 dark:bg-neutral-900">
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                          {category.color && (
+                            <div 
+                              className="w-4 h-4 rounded-full flex-shrink-0"
+                              style={{ backgroundColor: category.color }}
+                            />
                           )}
+                          <div className="flex-1 min-w-0">
+                            <h4 className="font-medium truncate">{category.name}</h4>
+                            {category.description && (
+                              <p className="text-sm text-neutral-500 truncate">{category.description}</p>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          <Badge variant={category.isActive ? "default" : "secondary"} className="text-xs px-2 py-0.5">
+                            {category.isActive ? "Active" : "Inactive"}
+                          </Badge>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-8 w-8 p-0 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                            onClick={() => {
+                              setEditingCategory(category)
+                              setIsCategoryDialogOpen(true)
+                            }}
+                          >
+                            <Edit className="h-3 w-3" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-8 w-8 p-0 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                            onClick={() => handleDeleteCategory(category.id)}
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
                         </div>
                       </div>
-                      <div className="flex items-center gap-1">
-                        <Badge variant={category.isActive ? "default" : "secondary"} className="text-xs">
-                          {category.isActive ? "Active" : "Inactive"}
-                        </Badge>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => {
-                            setEditingCategory(category)
-                            setIsCategoryDialogOpen(true)
-                          }}
-                        >
-                          <Edit className="h-3 w-3" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => handleDeleteCategory(category.id)}
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
+                    ))
+                  )}
                 </div>
               </div>
               <DrawerFooter>
-                <DrawerClose asChild>
-                  <Button variant="outline">Done</Button>
-                </DrawerClose>
+                <Button
+                  onClick={() => {
+                    setEditingCategory(null)
+                    setIsCategoryDialogOpen(true)
+                  }}
+                  className="bg-neutral-50 text-neutral-950 hover:bg-neutral-200"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add New Category
+                </Button>
               </DrawerFooter>
             </DrawerContent>
           </Drawer>
@@ -617,7 +621,7 @@ export default function VendorMenuPage({ params }: { params: Promise<{ courtId: 
                 Add Menu Item
               </Button>
             </DrawerTrigger>
-            <DrawerContent>
+            <DrawerContent className="max-w-2xl mx-auto bg-neut">
               <DrawerHeader>
                 <DrawerTitle>{editingItem ? "Edit Menu Item" : "Add New Menu Item"}</DrawerTitle>
                 <DrawerDescription>
@@ -633,6 +637,7 @@ export default function VendorMenuPage({ params }: { params: Promise<{ courtId: 
                     setEditingItem(null)
                   }}
                   categories={categories}
+                  setIsCategoryDialogOpen={setIsCategoryDialogOpen}
                   isMobile={true}
                 />
               </div>
@@ -643,7 +648,7 @@ export default function VendorMenuPage({ params }: { params: Promise<{ courtId: 
 
       {/* Category Form Drawer */}
       <Drawer open={isCategoryDialogOpen} onOpenChange={setIsCategoryDialogOpen}>
-        <DrawerContent>
+        <DrawerContent className="max-w-lg mx-auto">
           <DrawerHeader>
             <DrawerTitle>{editingCategory ? "Edit Category" : "Add New Category"}</DrawerTitle>
             <DrawerDescription>
@@ -782,6 +787,7 @@ export default function VendorMenuPage({ params }: { params: Promise<{ courtId: 
                             <span className="text-sm text-neutral-500 line-through">₹{item.mrp}</span>
                           )}
                         </div>
+                        <div className="text-xs text-neutral-500">Incl. GST</div>
                         {item.mrp && Number(item.mrp) > Number(item.price) && (
                           <span className="text-xs text-green-600">
                             {Math.round(((Number(item.mrp) - Number(item.price)) / Number(item.mrp)) * 100)}% off
@@ -1085,12 +1091,14 @@ function MenuItemForm({
   onSave, 
   onCancel, 
   categories,
+  setIsCategoryDialogOpen,
   isMobile = false
 }: { 
   item: Partial<MenuItem>
   onSave: (data: Partial<MenuItem>) => Promise<void>
   onCancel: () => void
   categories: MenuCategory[]
+  setIsCategoryDialogOpen: (open: boolean) => void
   isMobile?: boolean
 }) {
   const [formData, setFormData] = useState<Partial<MenuItem>>(item)
@@ -1224,36 +1232,48 @@ function MenuItemForm({
         <div className="grid grid-cols-2 gap-4">
           <div>
             <Label htmlFor="category">Category *</Label>
-            <Select
-              value={formData.categoryId || ""}
-              onValueChange={(value) => {
-                const selectedCategory = categories.find(cat => cat.id === value)
-                setFormData(prev => ({ 
-                  ...prev, 
-                  categoryId: value,
-                  category: selectedCategory?.name || ""
-                }))
-              }}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select a category" />
-              </SelectTrigger>
-              <SelectContent>
-                {categories.map((category) => (
-                  <SelectItem key={category.id} value={category.id}>
-                    <div className="flex items-center gap-2">
-                      {category.color && (
-                        <div 
-                          className="w-3 h-3 rounded-full" 
-                          style={{ backgroundColor: category.color }}
-                        />
-                      )}
-                      {category.name}
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {categories.length > 0 ? (
+              <Select
+                value={formData.categoryId || ""}
+                onValueChange={(value) => {
+                  const selectedCategory = categories.find(cat => cat.id === value)
+                  setFormData(prev => ({
+                    ...prev,
+                    categoryId: value,
+                    category: selectedCategory?.name || ""
+                  }))
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a category" />
+                </SelectTrigger>
+                <SelectContent>
+                  {categories.map((category) => (
+                    <SelectItem key={category.id} value={category.id}>
+                      <div className="flex items-center gap-2">
+                        {category.color && (
+                          <div
+                            className="w-3 h-3 rounded-full"
+                            style={{ backgroundColor: category.color }}
+                          />
+                        )}
+                        {category.name}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full justify-start"
+                onClick={() => setIsCategoryDialogOpen(true)}
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Create a category
+              </Button>
+            )}
           </div>
 
           <div>

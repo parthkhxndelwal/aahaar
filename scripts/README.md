@@ -8,6 +8,133 @@ These scripts can permanently delete data from your database. Always:
 1. Test with `--dry-run` first
 2. Create backups before running cleanup operations
 3. Use these scripts only on development/staging environments unless absolutely necessary
+
+## Database Wipe Scripts
+
+### Complete Database Wipe Scripts
+
+**Use these scripts with extreme caution as they permanently delete ALL data.**
+
+#### 1. Basic Wipe Script (`wipe-database.js`)
+Simple script that deletes all data from all tables in the correct order to handle foreign key constraints.
+
+```bash
+npm run db:wipe
+```
+
+#### 2. Advanced Wipe Script (`wipe-database-advanced.js`)
+Enhanced script with additional safety features, dry-run capability, and detailed logging.
+
+```bash
+npm run db:wipe:advanced
+npm run db:wipe:dry-run  # Safe dry-run mode
+```
+
+##### Advanced Script Options:
+- `--dry-run, -d`: Show what would be deleted without actually deleting
+- `--force, -f`: Skip confirmation prompt (use with caution!)
+- `--quiet, -q`: Reduce output (errors still shown)
+- `--help, -h`: Show help message
+
+##### Examples:
+```bash
+# Safe dry run to see what would be deleted
+npm run db:wipe:advanced -- --dry-run
+
+# Force delete without confirmation (dangerous!)
+npm run db:wipe:advanced -- --force
+
+# Quiet mode with minimal output
+npm run db:wipe:advanced -- --quiet
+
+# Show help
+npm run db:wipe:advanced -- --help
+```
+
+### Database Tables (Deletion Order)
+
+The wipe scripts delete tables in this order to respect foreign key constraints:
+
+#### Child Tables (Deleted First):
+1. **audit_logs** - System audit logs
+2. **otps** - One-time passwords for verification
+3. **cart_items** - Individual items in shopping carts
+4. **order_items** - Individual items in orders
+5. **payments** - Payment records
+6. **orders** - Customer orders
+7. **menu_items** - Vendor menu items
+8. **menu_categories** - Menu categories
+9. **carts** - Shopping carts
+
+#### Parent Tables (Deleted After Dependencies):
+10. **vendors** - Vendor/stall information
+11. **users** - User accounts (customers, vendors, admins)
+12. **court_settings** - Court-specific settings
+13. **courts** - Court/institution information
+
+### Safety Features
+
+#### Basic Wipe Script:
+- ✅ Interactive confirmation prompt
+- ✅ Connection verification
+- ✅ Foreign key constraint handling
+- ✅ Post-deletion verification
+- ✅ Graceful error handling
+- ✅ Auto-increment reset (MySQL)
+
+#### Advanced Wipe Script:
+- ✅ All basic script features
+- ✅ **Dry-run mode** for safe testing
+- ✅ Detailed logging with timestamps
+- ✅ Pre-deletion database analysis
+- ✅ Backup information generation
+- ✅ Command-line options
+- ✅ Force mode for automation
+- ✅ Quiet mode for scripts
+- ✅ Progress tracking
+
+### Environment Safety
+
+The wipe scripts respect your `NODE_ENV` setting:
+- **development**: Uses development database
+- **production**: Uses production database
+- **test**: Uses test database
+
+⚠️ **Always double-check your environment before running these scripts!**
+
+### Usage Examples
+
+#### Safe Testing (Recommended):
+```bash
+# 1. First, see what would be deleted
+npm run db:wipe:dry-run
+
+# 2. If satisfied, run the actual wipe
+npm run db:wipe:advanced
+```
+
+#### Automated Scripts:
+```bash
+# For CI/CD or automated testing
+npm run db:wipe:advanced -- --force --quiet
+```
+
+#### Manual Verification:
+```bash
+# Basic wipe with manual confirmation
+npm run db:wipe
+```
+
+### WARNING ⚠️
+
+**The wipe scripts permanently delete ALL data from your database.**
+
+- ❌ No built-in backup creation
+- ❌ No data recovery mechanism
+- ❌ No partial deletion options
+- ❌ No rollback capability
+
+**Always ensure you have proper backups before running these scripts!**
 4. Double-check your command line arguments
 
 ## Scripts Overview

@@ -6,7 +6,7 @@ import { CartProvider } from "@/contexts/cart-context"
 import { PWAInstallPrompt } from "@/components/app/pwa-install-prompt"
 import { PWAUpdatePrompt } from "@/components/app/pwa-update-prompt"
 import { useAppAuth } from "@/contexts/app-auth-context"
-import { use, useEffect } from "react"
+import { use, useEffect, useState } from "react"
 import { usePathname, useRouter } from "next/navigation"
 import { Loader2 } from "lucide-react"
 
@@ -23,6 +23,12 @@ export default function AppLayout({
   const { user, token, loading: authLoading } = useAppAuth()
   const isLoginPage = pathname.endsWith("/login")
   const isCartPage = pathname.endsWith("/cart")
+  const [isHydrated, setIsHydrated] = useState(false)
+
+  // Mark as hydrated after first render
+  useEffect(() => {
+    setIsHydrated(true)
+  }, [])
 
   // Redirect to login if not authenticated (except on login page)
   useEffect(() => {
@@ -79,6 +85,18 @@ export default function AppLayout({
       document.removeEventListener('touchend', preventDoubleTapZoom)
     }
   }, [])
+
+  // Show loading while checking authentication (only after hydration to prevent mismatch)
+  if (!isLoginPage && !isHydrated) {
+    return (
+      <div className="min-h-screen dark bg-neutral-950 flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin text-white mx-auto mb-4" />
+          <p className="text-neutral-400">Loading...</p>
+        </div>
+      </div>
+    )
+  }
 
   // Show loading while checking authentication
   if (!isLoginPage && authLoading) {
