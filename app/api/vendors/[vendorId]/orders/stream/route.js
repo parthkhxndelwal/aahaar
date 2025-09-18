@@ -59,7 +59,7 @@ export async function GET(request, { params }) {
                 },
                 {
                   model: OrderItem,
-                  as: "items",
+                  as: "orderItems",
                   include: [
                     {
                       model: MenuItem,
@@ -78,7 +78,7 @@ export async function GET(request, { params }) {
               orderNumber: order.orderNumber,
               customerName: order.user?.fullName || "Unknown",
               customerPhone: order.user?.phone,
-              items: order.items?.map((item) => ({
+              items: order.orderItems?.map((item) => ({
                 name: item.menuItem?.name || "Unknown Item",
                 quantity: item.quantity,
                 price: item.unitPrice,

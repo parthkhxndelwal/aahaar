@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { Order, OrderItem, User, Vendor, MenuItem, Payment, Cart, CartItem } from "@/models"
+import { Order, OrderItem, User, Vendor, MenuItem, Payment, Cart, CartItem, sequelize } from "@/models"
 import { authenticateTokenNextJS } from "@/middleware/auth"
 import { Op } from "sequelize"
 
@@ -116,112 +116,136 @@ export async function POST(request, { params }) {
     const createdOrders = []
     const createdPayments = []
 
-    // Create sub-orders for each vendor
-    for (const [vendorId, group] of Object.entries(vendorGroups)) {
-      // Calculate vendor-specific charges proportionally (no GST since it's already included)
-      const vendorSubtotal = group.subtotal
-      const vendorProportion = vendorSubtotal / grandTotal
-      const vendorServiceCharge = serviceCharge * vendorProportion
-      const vendorPlatformCharge = platformCharge * vendorProportion
-      const vendorTotal = vendorSubtotal + vendorServiceCharge + vendorPlatformCharge
+    // Use transaction for atomic order creation
+    const transaction = await sequelize.transaction()
 
-      // Generate unique order number for this vendor
-      const orderNumber = `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`
+    try {
+      // Create sub-orders for each vendor
+      for (const [vendorId, group] of Object.entries(vendorGroups)) {
+        // Calculate vendor-specific charges proportionally (no GST since it's already included)
+        const vendorSubtotal = group.subtotal
+        const vendorProportion = vendorSubtotal / grandTotal
+        const vendorServiceCharge = serviceCharge * vendorProportion
+        const vendorPlatformCharge = platformCharge * vendorProportion
+        const vendorTotal = vendorSubtotal + vendorServiceCharge + vendorPlatformCharge
 
-      // Create order for this vendor
-      const order = await Order.create({
-        orderNumber,
-        courtId,
-        userId: user.id,
-        vendorId,
-        customerName: user.fullName,
-        customerPhone: user.phone,
-        customerEmail: user.email,
-        type: "user_initiated",
-        paymentMethod,
-        subtotal: vendorSubtotal,
-        taxAmount: 0, // GST is already included in menu item prices
-        discountAmount: 0,
-        totalAmount: vendorTotal,
-        specialInstructions,
-        estimatedPreparationTime: 15,
-        status: "pending", // Initial status - awaiting vendor action
-        paymentStatus: "pending",
-        orderOtp,
-        parentOrderId,
-        isSubOrder: true,
-        statusHistory: [
-          {
-            status: "pending",
-            timestamp: new Date(),
-            note: "Order created, awaiting vendor acceptance",
+        // Generate unique order number for this vendor
+        const orderNumber = `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`
+
+        // Create order for this vendor
+        const order = await Order.create({
+          orderNumber,
+          courtId,
+          userId: user.id,
+          vendorId,
+          customerName: user.fullName,
+          customerPhone: user.phone,
+          customerEmail: user.email,
+          type: "user_initiated",
+          paymentMethod,
+          subtotal: vendorSubtotal,
+          taxAmount: 0, // GST is already included in menu item prices
+          discountAmount: 0,
+          totalAmount: vendorTotal,
+          specialInstructions,
+          estimatedPreparationTime: 15,
+          status: "pending", // Initial status - awaiting vendor action
+          paymentStatus: "pending",
+          orderOtp,
+          parentOrderId,
+          isSubOrder: true,
+          statusHistory: [
+            {
+              status: "pending",
+              timestamp: new Date(),
+              note: "Order created, awaiting vendor acceptance",
+            },
+          ],
+          metadata: {
+            vendorProportion,
+            originalGrandTotal: grandTotal,
+            charges: {
+              serviceCharge: vendorServiceCharge,
+              platformCharge: vendorPlatformCharge,
+            },
           },
-        ],
-        metadata: {
-          vendorProportion,
-          originalGrandTotal: grandTotal,
-          charges: {
-            serviceCharge: vendorServiceCharge,
-            platformCharge: vendorPlatformCharge,
+          // Populate JSON fields for multi-vendor structure
+          vendors: {
+            [vendorId]: {
+              accountId: group.vendor.accountId || "default_acc",
+              name: group.vendor.stallName || group.vendor.vendorName,
+            },
           },
-        },
-      })
+          items: group.items.map((item, index) => ({
+            itemId: `item_${index + 1}`,
+            vendorId: vendorId,
+            itemName: item.name,
+            price: Math.round(item.price * 100), // Convert to paise
+            quantity: item.quantity,
+          })),
+          platformCommission: Math.round(vendorTotal * 0.1 * 100), // 10% commission in paise
+        }, { transaction })
 
-      // Create order items for this vendor
-      for (const item of group.items) {
-        await OrderItem.create({
+        console.log(`✅ Order created: ${order.id} for vendor ${vendorId}`)
+
+        // Create order items for this vendor
+        for (const item of group.items) {
+          console.log(`📦 Creating order item for order ${order.id}, menuItem ${item.menuItemId}`)
+          await OrderItem.create({
+            orderId: order.id,
+            menuItemId: item.menuItemId,
+            itemName: item.name,
+            itemPrice: item.price,
+            quantity: item.quantity,
+            subtotal: item.subtotal,
+            customizations: item.customizations,
+            specialInstructions: null,
+          }, { transaction })
+        }
+
+        // Create payment record for this vendor's order
+        console.log(`💳 Creating payment for order ${order.id}`)
+        const payment = await Payment.create({
           orderId: order.id,
-          menuItemId: item.menuItemId,
-          itemName: item.name,
-          itemPrice: item.price,
-          quantity: item.quantity,
-          subtotal: item.subtotal,
-          customizations: item.customizations,
-          specialInstructions: null,
+          paymentMethod,
+          amount: vendorTotal,
+          status: "pending",
+        }, { transaction })
+
+        createdOrders.push({
+          ...order.toJSON(),
+          vendor: group.vendor,
+          items: group.items,
         })
+        createdPayments.push(payment)
+
+        console.log(`📦 New order created: ${order.id} for vendor: ${vendorId} (will be picked up by vendor polling)`)
       }
 
-      // Create payment record for this vendor's order
-      const payment = await Payment.create({
-        orderId: order.id,
-        paymentMethod,
-        amount: vendorTotal,
-        status: "pending",
+      // Commit the transaction
+      await transaction.commit()
+
+      // Clear the user's cart after successful order creation
+      await CartItem.destroy({
+        where: { cartId: cart.id },
       })
 
-      createdOrders.push({
-        ...order.toJSON(),
-        vendor: group.vendor,
-        items: group.items,
-      })
-      createdPayments.push(payment)
+      // Update cart total
+      await cart.update({ total: 0 })
 
-      // Note: Vendor will receive this order through their polling mechanism
-      // The vendor's useVendorOrders hook will detect this new order automatically
-      console.log(`📦 New order created: ${order.id} for vendor: ${vendorId} (will be picked up by vendor polling)`)
-    }
-
-    // Clear the user's cart after successful order creation
-    await CartItem.destroy({
-      where: { cartId: cart.id },
-    })
-
-    // Update cart total
-    await cart.update({ total: 0 })
-
-    return NextResponse.json(
-      {
-        success: true,
-        message: "Order placed successfully",
-        data: {
-          parentOrderId,
-          orderOtp,
-          orders: createdOrders,
-          totalAmount,
-          grandTotal,
-          charges: {
-            serviceCharge,
-            platformCharge,
+      return NextResponse.json(
+        {
+          success: true,
+          message: "Order placed successfully",
+          data: {
+            parentOrderId,
+            orderOtp,
+            orders: createdOrders,
+            totalAmount,
+            grandTotal,
+            charges: {
+              serviceCharge,
+              platformCharge,
           },
           summary: {
             vendorsCount: Object.keys(vendorGroups).length,
@@ -231,6 +255,12 @@ export async function POST(request, { params }) {
       },
       { status: 201 }
     )
+    } catch (error) {
+      // Rollback transaction on error
+      await transaction.rollback()
+      console.error("Checkout transaction error:", error)
+      throw error // Re-throw to be caught by outer catch
+    }
   } catch (error) {
     console.error("Create multi-vendor order error:", error)
     return NextResponse.json(

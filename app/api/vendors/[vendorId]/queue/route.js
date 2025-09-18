@@ -76,7 +76,7 @@ export async function GET(request, { params }) {
         },
         {
           model: OrderItem,
-          as: "items",
+          as: "orderItems",
           include: [
             {
               model: MenuItem,
@@ -102,7 +102,7 @@ export async function GET(request, { params }) {
       customerName: order.user?.fullName || "Unknown",
       customerPhone: order.user?.phone,
       customerEmail: order.user?.email,
-      items: order.items?.map((item) => ({
+      items: order.orderItems?.map((item) => ({
         name: item.menuItem?.name || "Unknown Item",
         quantity: item.quantity,
         price: item.itemPrice,
@@ -197,7 +197,7 @@ export async function PATCH(request, { params }) {
       include: [
         {
           model: OrderItem,
-          as: "items",
+          as: "orderItems",
         },
       ],
     })
@@ -252,7 +252,7 @@ export async function PATCH(request, { params }) {
         orderNumber: order.orderNumber,
         customerName: order.customerName,
         customerPhone: order.customerPhone,
-        items: order.items,
+        items: order.orderItems,
         totalAmount: order.totalAmount,
         status: "preparing",
         estimatedPreparationTime: order.estimatedPreparationTime,

@@ -216,6 +216,37 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.DATE,
         allowNull: true,
       },
+      // New JSON columns for multi-vendor structure
+      vendors: {
+        type: DataTypes.JSON,
+        allowNull: true,
+        defaultValue: null,
+        comment: 'Stores vendor info: {vendorId: {accountId, name}}',
+      },
+      items: {
+        type: DataTypes.JSON,
+        allowNull: true,
+        defaultValue: null,
+        comment: 'Stores order items with vendor references',
+      },
+      platformCommission: {
+        type: DataTypes.DECIMAL(10, 2),
+        allowNull: false,
+        defaultValue: 0.00,
+        comment: 'Platform commission amount',
+      },
+      transferData: {
+        type: DataTypes.JSON,
+        allowNull: true,
+        defaultValue: null,
+        comment: 'Razorpay transfer API response data',
+      },
+      vendorSplits: {
+        type: DataTypes.JSON,
+        allowNull: true,
+        defaultValue: null,
+        comment: 'Calculated vendor payment splits',
+      },
       createdAt: {
         type: DataTypes.DATE,
         allowNull: false,
@@ -248,6 +279,10 @@ module.exports = (sequelize, DataTypes) => {
         },
         {
           fields: ["createdAt"],
+        },
+        // Index for new platformCommission field
+        {
+          fields: ["platformCommission"],
         },
       ],
     },

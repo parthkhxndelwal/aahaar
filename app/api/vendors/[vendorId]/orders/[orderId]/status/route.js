@@ -112,7 +112,7 @@ export async function PATCH(request, { params }) {
       include: [
         {
           model: OrderItem,
-          as: "items",
+          as: "orderItems",
         },
       ],
     })
@@ -123,7 +123,7 @@ export async function PATCH(request, { params }) {
       orderNumber: updatedOrder.orderNumber,
       customerName: updatedOrder.customerName,
       customerPhone: updatedOrder.customerPhone,
-      items: updatedOrder.items,
+      items: updatedOrder.orderItems,
       totalAmount: updatedOrder.totalAmount,
       status: newStatus,
       estimatedPreparationTime: updatedOrder.estimatedPreparationTime,

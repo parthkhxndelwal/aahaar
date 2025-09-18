@@ -59,7 +59,7 @@ Order.belongsTo(User, { foreignKey: "userId", as: "user" })
 Vendor.hasMany(Order, { foreignKey: "vendorId", as: "orders" })
 Order.belongsTo(Vendor, { foreignKey: "vendorId", as: "vendor" })
 
-Order.hasMany(OrderItem, { foreignKey: "orderId", as: "items" })
+Order.hasMany(OrderItem, { foreignKey: "orderId", as: "orderItems" })
 OrderItem.belongsTo(Order, { foreignKey: "orderId", as: "order" })
 
 MenuItem.hasMany(OrderItem, { foreignKey: "menuItemId", as: "orderItems" })

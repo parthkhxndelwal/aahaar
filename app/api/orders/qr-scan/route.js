@@ -34,7 +34,7 @@ export async function POST(request) {
         },
         {
           model: OrderItem,
-          as: "items",
+          as: "orderItems",
           include: [
             {
               model: MenuItem,

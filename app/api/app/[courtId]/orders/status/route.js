@@ -52,7 +52,7 @@ export async function GET(request, { params }) {
         },
         {
           model: OrderItem,
-          as: "items",
+          as: "orderItems",
           include: [
             {
               model: MenuItem,
@@ -98,7 +98,7 @@ export async function GET(request, { params }) {
         id: order.id,
         orderNumber: order.orderNumber,
         vendor: order.vendor,
-        items: order.items?.map((item) => ({
+        items: order.orderItems?.map((item) => ({
           id: item.id,
           name: item.menuItem?.name || "Unknown Item",
           quantity: item.quantity,
@@ -225,7 +225,7 @@ export async function POST(request, { params }) {
         },
         {
           model: OrderItem,
-          as: "items",
+          as: "orderItems",
           include: [
             {
               model: MenuItem,
@@ -256,7 +256,7 @@ export async function POST(request, { params }) {
         id: order.id,
         orderNumber: order.orderNumber,
         vendor: order.vendor,
-        items: order.items?.map((item) => ({
+        items: order.orderItems?.map((item) => ({
           id: item.id,
           name: item.menuItem?.name || "Unknown Item",
           description: item.menuItem?.description,

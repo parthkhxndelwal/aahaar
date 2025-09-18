@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { Order, OrderItem, User, Vendor, MenuItem, Payment } from "@/models"
+import { Order, OrderItem, User, Vendor, MenuItem, Payment, sequelize } from "@/models"
 import { authenticateToken } from "@/middleware/auth"
 import { Op } from "sequelize"
 
@@ -59,7 +59,7 @@ export async function GET(request, { params }) {
         },
         {
           model: OrderItem,
-          as: "items",
+          as: "orderItems",
           include: [
             {
               model: MenuItem,
@@ -197,57 +197,79 @@ export async function POST(request, { params }) {
     const orderNumber = `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`
 
     // Create order
-    const order = await Order.create({
-      orderNumber,
-      courtId,
-      userId: authResult.user?.id || null,
-      vendorId,
-      customerName,
-      customerPhone,
-      customerEmail,
-      type,
-      paymentMethod,
-      subtotal,
-      taxAmount,
-      discountAmount,
-      totalAmount,
-      specialInstructions,
-      estimatedPreparationTime: vendor.averagePreparationTime,
-      statusHistory: [
-        {
-          status: "pending",
-          timestamp: new Date(),
-          note: "Order created",
+    // Use transaction for atomic order creation
+    const transaction = await sequelize.transaction()
+
+    try {
+      const order = await Order.create({
+        orderNumber,
+        courtId,
+        userId: authResult.user?.id || null,
+        vendorId,
+        customerName,
+        customerPhone,
+        customerEmail,
+        type,
+        paymentMethod,
+        subtotal,
+        taxAmount,
+        discountAmount,
+        totalAmount,
+        specialInstructions,
+        estimatedPreparationTime: vendor.averagePreparationTime,
+        statusHistory: [
+          {
+            status: "pending",
+            timestamp: new Date(),
+            note: "Order created",
+          },
+        ],
+        // Populate JSON fields for multi-vendor structure
+        vendors: {
+          [vendorId]: {
+            accountId: vendor.accountId || "default_acc",
+            name: vendor.stallName || vendor.vendorName,
+          },
         },
-      ],
-    })
+        items: orderItems.map((item, index) => ({
+          itemId: `item_${index + 1}`,
+          vendorId: vendorId,
+          itemName: item.itemName,
+          price: Math.round(item.itemPrice * 100), // Convert to paise
+          quantity: item.quantity,
+        })),
+        platformCommission: Math.round(totalAmount * 0.1 * 100), // 10% commission in paise
+      }, { transaction })
 
-    // Create order items
-    for (const orderItem of orderItems) {
-      await OrderItem.create({
+      // Create order items
+      for (const orderItem of orderItems) {
+        await OrderItem.create({
+          orderId: order.id,
+          ...orderItem,
+        }, { transaction })
+      }
+
+      // Create payment record
+      const payment = await Payment.create({
         orderId: order.id,
-        ...orderItem,
-      })
-    }
+        paymentMethod,
+        amount: totalAmount,
+        status: paymentMethod === "cod" ? "pending" : "pending",
+      }, { transaction })
 
-    // Create payment record
-    const payment = await Payment.create({
-      orderId: order.id,
-      paymentMethod,
-      amount: totalAmount,
-      status: paymentMethod === "cod" ? "pending" : "pending",
-    })
+      // Commit transaction
+      await transaction.commit()
 
-    // TODO: If online payment, create Razorpay order
-    // TODO: Send notifications to vendor and user
+      // TODO: If online payment, create Razorpay order
+      // TODO: Send notifications to vendor and user
 
-    return NextResponse.json(
-      {
-        success: true,
-        message: "Order created successfully",
-        data: {
-          order: {
-            ...order.toJSON(),
+      return NextResponse.json(
+        {
+          success: true,
+          message: "Order created successfully",
+          data: {
+            order: {
+              ...order.toJSON(),
             items: orderItems,
             payment,
           },
@@ -255,6 +277,12 @@ export async function POST(request, { params }) {
       },
       { status: 201 },
     )
+    } catch (error) {
+      // Rollback transaction on error
+      await transaction.rollback()
+      console.error("Order creation transaction error:", error)
+      throw error // Re-throw to be caught by outer catch
+    }
   } catch (error) {
     console.error("Create order error:", error)
     return NextResponse.json(
