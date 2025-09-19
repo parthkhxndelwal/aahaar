@@ -23,6 +23,8 @@ export async function POST(request) {
       })
       checks.email = {
         available: !existingUserByEmail,
+        exists: !!existingUserByEmail,
+        userType: existingUserByEmail ? existingUserByEmail.role : null,
         message: existingUserByEmail ? "Email is already registered" : "Email is available",
       }
     }

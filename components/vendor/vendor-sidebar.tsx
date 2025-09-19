@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import Image from "next/image"
 import { Home, Package, Menu, Settings, ChevronLeft, ChevronRight, Plus, LogOut, Clock, ShoppingBag } from "lucide-react"
-import { useAuth } from "@/contexts/auth-context"
+import { useVendorAuth } from "@/contexts/vendor-auth-context"
 
 interface VendorSidebarProps {
   courtId: string
@@ -19,7 +19,7 @@ export function VendorSidebar({ courtId }: VendorSidebarProps) {
   const [showTitle, setShowTitle] = useState(true)
   const [showLink, setShowLink] = useState(true)
   const pathname = usePathname()
-  const { logout } = useAuth()
+  const { logout } = useVendorAuth()
 
   const navigation = [
     {

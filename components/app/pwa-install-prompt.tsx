@@ -15,6 +15,9 @@ export function PWAInstallPrompt() {
   const [isIOS, setIsIOS] = useState(false)
 
   useEffect(() => {
+    // Only run on client-side
+    if (typeof window === 'undefined') return
+
     // Check if already installed
     const isStandalone = window.matchMedia('(display-mode: standalone)').matches
     const isInWebAppiOS = (window.navigator as any).standalone === true
@@ -23,6 +26,11 @@ export function PWAInstallPrompt() {
     // Check if iOS
     const iOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
     setIsIOS(iOS)
+
+    // Check if prompt was dismissed this session
+    if (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('pwa-prompt-dismissed') === 'true') {
+      return
+    }
 
     // Listen for beforeinstallprompt event
     const handleBeforeInstallPrompt = (e: Event) => {
@@ -76,12 +84,19 @@ export function PWAInstallPrompt() {
 
   const handleDismiss = () => {
     setShowPrompt(false)
-    // Don't show again for this session
-    sessionStorage.setItem('pwa-prompt-dismissed', 'true')
+    // Don't show again for this session (only on client-side)
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem('pwa-prompt-dismissed', 'true')
+    }
   }
 
-  // Don't show if already installed or dismissed this session
-  if (isInstalled || sessionStorage.getItem('pwa-prompt-dismissed')) {
+  // Don't render on server-side or if already installed
+  if (typeof window === 'undefined' || isInstalled) {
+    return null
+  }
+
+  // Don't show if dismissed this session (client-side check)
+  if (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('pwa-prompt-dismissed')) {
     return null
   }
 

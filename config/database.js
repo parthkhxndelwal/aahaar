@@ -7,7 +7,7 @@ module.exports = {
     database: process.env.TEST_DB_NAME || "aahaar_dev",
     host: process.env.TEST_DB_HOST || "localhost",
     port: process.env.TEST_DB_PORT || 3306,
-    dialect: "mysql",
+    dialect: "mysql", 
     logging: false,
     dialectOptions: {
       ssl: process.env.TEST_DB_HOST && process.env.TEST_DB_HOST.includes('tidbcloud') ? {
@@ -22,7 +22,7 @@ module.exports = {
       idle: 10000,
     },
   },
-  
+
   production: {
     username: process.env.PROD_DB_USERNAME,
     password: process.env.PROD_DB_PASSWORD,

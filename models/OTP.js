@@ -34,6 +34,14 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.BOOLEAN,
       defaultValue: false,
     },
+    courtId: {
+      type: DataTypes.STRING,
+      allowNull: false,
+      references: {
+        model: 'courts',
+        key: 'courtId'
+      }
+    },
     createdAt: {
       type: DataTypes.DATE,
       allowNull: false,
