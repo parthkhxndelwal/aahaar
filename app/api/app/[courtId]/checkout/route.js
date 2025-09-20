@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { Order, OrderItem, User, Vendor, MenuItem, Payment, Cart, CartItem, sequelize } from "@/models"
+import Razorpay from "razorpay"
 import { authenticateTokenNextJS } from "@/middleware/auth"
 import { Op } from "sequelize"
 
@@ -222,8 +223,8 @@ export async function POST(request, { params }) {
         console.log(`📦 New order created: ${order.id} for vendor: ${vendorId} (will be picked up by vendor polling)`)
       }
 
-      // Commit the transaction
-      await transaction.commit()
+  // Commit the transaction
+  await transaction.commit()
 
       // Clear the user's cart after successful order creation
       await CartItem.destroy({
@@ -232,6 +233,80 @@ export async function POST(request, { params }) {
 
       // Update cart total
       await cart.update({ total: 0 })
+
+      // If online payment, create a Razorpay order and include it in the response
+      if (paymentMethod === "online") {
+        try {
+          // Ensure Razorpay credentials are present
+          if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
+            console.error('Razorpay keys missing. Set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET in environment.')
+            return NextResponse.json({ success: false, message: 'Payment gateway not configured (missing keys).' }, { status: 500 })
+          }
+
+          // Diagnostic log: print key prefix (safe) and NODE_ENV to confirm test vs live
+          try {
+            const keyPreview = process.env.RAZORPAY_KEY_ID.slice(0, 8)
+            console.log(`Razorpay init - NODE_ENV=${process.env.NODE_ENV}, keyPreview=${keyPreview}`)
+          } catch (e) {
+            console.log('Razorpay init - NODE_ENV=', process.env.NODE_ENV)
+          }
+
+          const razorpay = new Razorpay({
+            key_id: process.env.RAZORPAY_KEY_ID,
+            key_secret: process.env.RAZORPAY_KEY_SECRET,
+          })
+
+          // amount to collect from customer in paise
+          const amountPaise = Math.round(totalAmount * 100)
+          const receipt = `aahaar_${parentOrderId}`
+
+          const rOrder = await razorpay.orders.create({
+            amount: amountPaise,
+            currency: "INR",
+            receipt,
+            payment_capture: 1,
+            notes: {
+              parentOrderId,
+            },
+          })
+
+          return NextResponse.json(
+            {
+              success: true,
+              message: "Order placed successfully",
+              data: {
+                parentOrderId,
+                orderOtp,
+                orders: createdOrders,
+                totalAmount,
+                grandTotal,
+                charges: {
+                  serviceCharge,
+                  platformCharge,
+                },
+                summary: {
+                  vendorsCount: Object.keys(vendorGroups).length,
+                  itemsCount: cart.items.length,
+                },
+                razorpayOrderId: rOrder.id,
+                razorpayOrderAmount: rOrder.amount,
+              },
+            },
+            { status: 201 }
+          )
+        } catch (err) {
+          console.error("Razorpay order creation failed:", err)
+          // Fall back to returning created orders/payments so client can handle
+          return NextResponse.json(
+            {
+              success: false,
+              message: "Payment initialization failed",
+              error: err.message,
+            },
+            { status: 500 }
+          )
+        }
+      }
 
       return NextResponse.json(
         {
@@ -246,15 +321,15 @@ export async function POST(request, { params }) {
             charges: {
               serviceCharge,
               platformCharge,
-          },
-          summary: {
-            vendorsCount: Object.keys(vendorGroups).length,
-            itemsCount: cart.items.length,
+            },
+            summary: {
+              vendorsCount: Object.keys(vendorGroups).length,
+              itemsCount: cart.items.length,
+            },
           },
         },
-      },
-      { status: 201 }
-    )
+        { status: 201 }
+      )
     } catch (error) {
       // Rollback transaction on error
       await transaction.rollback()

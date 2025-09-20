@@ -1,5 +1,5 @@
 "use client"
-import { use, useEffect, useState } from "react"
+import { use, useEffect, useState, useMemo } from "react"
 import { useCart } from "@/contexts/cart-context"
 import { motion, AnimatePresence } from "framer-motion"
 import { Plus, Minus, Trash2, ArrowRight, MapPin, ArrowLeft } from "lucide-react"
@@ -10,6 +10,147 @@ import Image from "next/image"
 import { useRouter } from "next/navigation"
 import DummyPaymentGateway from "@/components/app/dummy-payment-gateway"
 
+
+// Type definitions
+interface CartItem {
+  menuItemId: string;
+  name: string;
+  price: number;
+  quantity: number;
+  subtotal: number;
+  vendorId: string;
+  vendorName?: string;
+  imageUrl?: string;
+  customizations?: any;
+}
+
+interface VendorGroup {
+  vendorId: string;
+  vendorName: string;
+  items: any[];
+  totalAmount: number;
+}
+
+// Enhanced transformation function using your fee calculation
+function transformOrderWithFeeCalculation(orderItems: CartItem[]) {
+    // Group items by vendor first
+    const vendorGroups: Record<string, VendorGroup> = {};
+    
+    orderItems.forEach((item: CartItem) => {
+        if (!vendorGroups[item.vendorId]) {
+            vendorGroups[item.vendorId] = {
+                vendorId: item.vendorId,
+                vendorName: item.vendorName,
+                items: [],
+                totalAmount: 0
+            };
+        }
+        
+        const itemTotal = item.price * item.quantity;
+        vendorGroups[item.vendorId].items.push({
+            itemId: item.menuItemId,
+            itemName: item.name,
+            price: item.price * 100, // Convert to paise
+            quantity: item.quantity,
+            customizations: item.customizations,
+            imageUrl: item.imageUrl
+        });
+        vendorGroups[item.vendorId].totalAmount += itemTotal;
+    });
+
+    // Calculate vendor amounts for fee calculation
+    const totalAmount = orderItems.reduce((sum: number, item: CartItem) => sum + (item.price * item.quantity), 0);
+    const vendorAmounts = Object.values(vendorGroups).map((group: VendorGroup) => group.totalAmount);
+    
+    // Use your fee calculation logic
+    const feeCalculation = calculateSplit(totalAmount, vendorAmounts);
+    
+    // Create vendors object with account IDs to be populated
+    const vendors: Record<string, any> = {};
+    Object.values(vendorGroups).forEach((group: VendorGroup) => {
+        vendors[group.vendorId] = {
+            name: group.vendorName,
+            accountId: null, // To be populated from database
+            originalAmount: group.totalAmount * 100, // Convert to paise
+            deduction: (group.totalAmount * 0.03) * 100, // 3% deduction in paise
+            finalPayout: (group.totalAmount * 0.97) * 100 // Final payout in paise
+        };
+    });
+
+    // Transform all items for Route compatibility
+    const transformedItems: any[] = [];
+    Object.values(vendorGroups).forEach((group: VendorGroup) => {
+        transformedItems.push(...group.items);
+    });
+
+    return {
+        vendors,
+        items: transformedItems,
+        feeBreakdown: feeCalculation,
+        baseAmount: totalAmount * 100, // in paise
+        customerPayable: parseFloat(feeCalculation.totals.customerPays) * 100, // in paise
+        platformRevenue: parseFloat(feeCalculation.totals.platformKeeps) * 100, // in paise
+        razorpayFee: parseFloat(feeCalculation.totals.razorpayFee) * 100 // in paise
+    };
+}
+
+// Your existing fee calculation function (unchanged)
+const RAZORPAY_FEE_RATE = 0.02;
+const GST_RATE = 0.18;
+const PLATFORM_DEDUCTION_RATE = 0.06;
+
+function calculateSplit(totalAmount: number, vendorAmounts: number[]) {
+    const razorpayFee = totalAmount * RAZORPAY_FEE_RATE;
+    const razorpayFeeWithGST = razorpayFee * (1 + GST_RATE);
+    
+    const totalDeduction = totalAmount * PLATFORM_DEDUCTION_RATE;
+    const customerPay = totalAmount * (1 + PLATFORM_DEDUCTION_RATE / 2);
+    
+    const vendorPayouts = vendorAmounts.map((amount: number) => {
+        const deduction = amount * (PLATFORM_DEDUCTION_RATE / 2);
+        return {
+            vendorAmount: amount,
+            deduction,
+            payout: amount - deduction
+        };
+    });
+    
+    const platformShare = totalDeduction - razorpayFeeWithGST;
+    
+    const customerBill = {
+        baseAmount: totalAmount,
+        platformCharge: totalAmount * (PLATFORM_DEDUCTION_RATE / 2),
+        totalPayable: customerPay
+    };
+    
+    const vendorBills = vendorPayouts.map((bill, i: number) => ({
+        Vendor: `Vendor ${i + 1}`,
+        Item_Value: `₹${bill.vendorAmount.toFixed(2)}`,
+        Deduction: `₹${bill.deduction.toFixed(2)}`,
+        Final_Payout: `₹${bill.payout.toFixed(2)}`
+    }));
+    
+    return {
+        totals: {
+            totalAmount,
+            customerPays: customerPay.toFixed(2),
+            razorpayFee: razorpayFeeWithGST.toFixed(2),
+            platformKeeps: platformShare.toFixed(2)
+        },
+        customerBill: {
+            Base_Price: `₹${customerBill.baseAmount.toFixed(2)}`,
+            Platform_Charge: `₹${customerBill.platformCharge.toFixed(2)}`,
+            Total_Payable: `₹${customerBill.totalPayable.toFixed(2)}`
+        },
+    vendorBills: vendorPayouts.map((bill, i: number) => ({
+      Vendor: `Vendor ${i + 1}`,
+      Item_Value: `₹${bill.vendorAmount.toFixed(2)}`,
+      Deduction: `₹${bill.deduction.toFixed(2)}`,
+      Final_Payout: `₹${bill.payout.toFixed(2)}`
+    }))
+    };
+}
+
 export default function CartPage({ params }: { params: Promise<{ courtId: string }> }) {
   const { courtId } = use(params)
   const { cart, updateQuantity, removeFromCart, isLoading, hasActiveOrder, activeOrderError, checkActiveOrders } = useCart()
@@ -19,6 +160,21 @@ export default function CartPage({ params }: { params: Promise<{ courtId: string
   const [orderData, setOrderData] = useState<any>(null)
   const [checkoutLoading, setCheckoutLoading] = useState(false)
   const router = useRouter()
+
+  // Memoized transformed order preview (used to show accurate to-pay amount)
+  const transformedOrderPreview = useMemo(() => {
+    try {
+      return transformOrderWithFeeCalculation(cart.items || [])
+    } catch (e) {
+      console.error('Error computing transformed order preview', e)
+      return null
+    }
+  }, [cart.items])
+
+  // customerPayable in rupees when available; fallback to undefined so UI can choose totalAmount later
+  const customerPayableRupees = transformedOrderPreview?.customerPayable ? transformedOrderPreview.customerPayable / 100 : undefined
+
+  // Total to pay will be computed after totalAmount is known (see below)
 
   // Page transition variants
   const pageVariants = {
@@ -55,6 +211,11 @@ export default function CartPage({ params }: { params: Promise<{ courtId: string
   // GST is pre-included in menu item prices
   const totalAmount = itemTotal + serviceCharge + platformCharge
 
+  // Total to pay = customerPayable + platform fee + razorpay charge (all stored in paise in preview)
+  const toPayTotalRupees = transformedOrderPreview
+    ? ((transformedOrderPreview.customerPayable || 0) + (transformedOrderPreview.platformRevenue || 0) + (transformedOrderPreview.razorpayFee || 0)) / 100
+    : totalAmount
+
   // Get unique vendor names from cart items
   const uniqueVendorNames = [...new Set(cart.items.map(item => item.vendorName).filter(Boolean))]
   const vendorText = uniqueVendorNames.length > 0 
@@ -80,6 +241,12 @@ export default function CartPage({ params }: { params: Promise<{ courtId: string
   const handleCheckout = async () => {
     if (!user || !token) return
 
+    console.table(cart)
+
+    // Transform cart items with fee calculation
+    const transformedOrder = transformOrderWithFeeCalculation(cart.items)
+    console.table(transformedOrder)
+
     // Check for active orders before proceeding
     if (hasActiveOrder) {
       alert(activeOrderError || "You have an active order. Please wait for it to complete before placing a new order.")
@@ -100,30 +267,117 @@ export default function CartPage({ params }: { params: Promise<{ courtId: string
         }),
       })
 
-      if (response.ok) {
-        const data = await response.json()
-        if (data.success) {
-          setOrderData(data.data)
-          setShowPaymentGateway(true)
-        } else {
-          console.error("Checkout failed:", data.message)
-          alert(data.message || "Checkout failed. Please try again.")
-        }
-      } else {
-        const errorData = await response.json()
-        console.error("Checkout request failed:", response.status, errorData.message)
-        alert(errorData.message || "Checkout failed. Please try again.")
-        
-        // If it's an active order error, refresh the active order check
-        if (response.status === 400 && errorData.message?.includes("active order")) {
+      const data = await response.json()
+      if (!response.ok) {
+        console.error("Checkout request failed:", response.status, data.message)
+        alert(data.message || "Checkout failed. Please try again.")
+        if (response.status === 400 && data.message?.includes("active order")) {
           await checkActiveOrders()
         }
+        return
       }
+
+      if (!data.success) {
+        console.error("Checkout failed:", data.message)
+        alert(data.message || "Checkout failed. Please try again.")
+        return
+      }
+
+      // Save order data locally
+      setOrderData(data.data)
+
+      // If server returned razorpay order info, open Razorpay Checkout
+      if (data.data?.razorpayOrderId) {
+        try {
+          await loadRazorpayScript()
+          await openRazorpayCheckout({
+            razorpayOrderId: data.data.razorpayOrderId,
+            amount: data.data.razorpayOrderAmount,
+            localOrderId: data.data?.orders?.[0]?.id || data.data?.orders?.[0]?.orderNumber || data.data?.parentOrderId,
+          })
+          // On success, navigate to a success page or refresh orders
+          router.push(`/app/${courtId}/orders`)
+        } catch (err) {
+          console.error("Payment failed or cancelled:", err)
+          alert("Payment failed or cancelled")
+        }
+      } else {
+        // Fallback to existing dummy gateway behavior
+        setShowPaymentGateway(true)
+      }
+
     } catch (error) {
       console.error("Checkout error:", error)
+      alert("Checkout error. Please try again.")
     } finally {
       setCheckoutLoading(false)
     }
+  }
+
+  // Load Razorpay SDK script
+  const loadRazorpayScript = () => {
+    return new Promise<void>((resolve, reject) => {
+      if (typeof window === "undefined") return reject(new Error("window is undefined"))
+      if (document.getElementById("razorpay-checkout-script")) return resolve()
+      const script = document.createElement("script")
+      script.id = "razorpay-checkout-script"
+      script.src = "https://checkout.razorpay.com/v1/checkout.js"
+      script.onload = () => resolve()
+      script.onerror = () => reject(new Error("Failed to load Razorpay SDK"))
+      document.body.appendChild(script)
+    })
+  }
+
+  // Open Razorpay Checkout
+  const openRazorpayCheckout = ({ razorpayOrderId, amount, localOrderId }: { razorpayOrderId: string, amount: number, localOrderId: string }) => {
+    return new Promise<void>((resolve, reject) => {
+      if (typeof window === "undefined") return reject(new Error("window is undefined"))
+      const options: any = {
+        key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || (window as any).__RAZORPAY_KEY_ID || "",
+        amount,
+        currency: "INR",
+        name: "Aahaar",
+        description: "Order Payment",
+        order_id: razorpayOrderId,
+        handler: async function (response: any) {
+          try {
+            // Verify payment on server
+            await fetch(`/api/razorpay/verify`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_signature: response.razorpay_signature,
+                localOrderId,
+              }),
+            })
+            resolve()
+          } catch (err) {
+            reject(err)
+          }
+        },
+        prefill: {
+          name: user?.fullName || "",
+          email: user?.email || "",
+          contact: user?.phone || "",
+        },
+        notes: { localOrderId },
+        theme: { color: "#22c55e" },
+      }
+
+      // Diagnostic log: preview the key used by client (first 8 chars) and NODE_ENV
+      try {
+        // eslint-disable-next-line no-console
+        console.log('Razorpay Checkout - client keyPreview=', (options.key || '').toString().slice(0,8), 'NODE_ENV=', process.env.NODE_ENV)
+      } catch (e) {}
+
+      const rzp = new (window as any).Razorpay(options)
+      rzp.on("payment.failed", function (resp: any) {
+        reject(resp)
+      })
+      rzp.open()
+    })
   }
 
   const handlePaymentComplete = (paymentResult: any) => {
@@ -362,7 +616,7 @@ export default function CartPage({ params }: { params: Promise<{ courtId: string
             >
               <span className="font-medium">To Pay</span>
               <div className="w-auto flex flex-row gap-2 font-bold">
-                ₹{Number(totalAmount || 0).toFixed(2)}
+                ₹{Number((toPayTotalRupees !== undefined ? toPayTotalRupees : totalAmount) || 0).toFixed(2)}
                 <motion.div
                 animate={{ x: [0, 5, 0] }}
                 transition={{ repeat: Infinity, duration: 1.5, ease: "easeInOut" }}
@@ -390,16 +644,7 @@ export default function CartPage({ params }: { params: Promise<{ courtId: string
                   transition={{ delay: 0.1 }}
                 >
                   <span className="text-neutral-600 dark:text-neutral-400">Item Total (Incl. GST)</span>
-                  <span className="font-medium text-neutral-900 dark:text-white">₹{Number(itemTotal || 0).toFixed(2)}</span>
-                </motion.div>
-                <motion.div 
-                  className="flex justify-between"
-                  initial={{ x: -20, opacity: 0 }}
-                  animate={{ x: 0, opacity: 1 }}
-                  transition={{ delay: 0.15 }}
-                >
-                  <span className="text-neutral-600 dark:text-neutral-400">Service Charge (5%)</span>
-                  <span className="font-medium text-neutral-900 dark:text-white">₹{serviceCharge.toFixed(2)}</span>
+                  <span className="font-medium text-neutral-900 dark:text-white">{transformedOrderPreview ? transformedOrderPreview.feeBreakdown?.customerBill?.Base_Price || `₹${(transformedOrderPreview.baseAmount/100).toFixed(2)}` : `₹${Number(itemTotal || 0).toFixed(2)}`}</span>
                 </motion.div>
                 <motion.div 
                   className="flex justify-between"
@@ -407,8 +652,22 @@ export default function CartPage({ params }: { params: Promise<{ courtId: string
                   animate={{ x: 0, opacity: 1 }}
                   transition={{ delay: 0.2 }}
                 >
-                  <span className="text-neutral-600 dark:text-neutral-400">Platform Charge</span>
-                  <span className="font-medium text-neutral-900 dark:text-white">₹{platformCharge.toFixed(2)}</span>
+                  <span className="text-neutral-600 dark:text-neutral-400">Service Charge</span>
+                  <span className="font-medium text-neutral-900 dark:text-white">{transformedOrderPreview ? `₹${(transformedOrderPreview.razorpayFee/100).toFixed(2)}` : `₹0.00`}</span>
+                </motion.div>
+                <motion.div 
+                  className="flex justify-between"
+                  initial={{ x: -20, opacity: 0 }}
+                  animate={{ x: 0, opacity: 1 }}
+                  transition={{ delay: 0.15 }}
+                >
+                  <span className="text-neutral-600 dark:text-neutral-400">Platform charges</span>
+                  <span className="font-medium text-neutral-900 dark:text-white">{(() => {
+                    if (!transformedOrderPreview) return `₹${platformCharge.toFixed(2)}`
+                    const customerPlatform = (transformedOrderPreview.customerPayable - transformedOrderPreview.baseAmount) / 100
+                    const platformRevenue = (transformedOrderPreview.platformRevenue || 0) / 100
+                    return `₹${(customerPlatform + platformRevenue).toFixed(2)}`
+                  })()}</span>
                 </motion.div>
                 <motion.div 
                   className="border-t border-neutral-200 dark:border-neutral-700 pt-3"
@@ -418,7 +677,7 @@ export default function CartPage({ params }: { params: Promise<{ courtId: string
                 >
                   <div className="flex justify-between font-semibold text-lg">
                     <span className="text-neutral-900 dark:text-white">Total Amount</span>
-                    <span className="text-neutral-900 dark:text-white">₹{totalAmount.toFixed(2)}</span>
+                    <span className="text-neutral-900 dark:text-white">₹{(toPayTotalRupees !== undefined ? toPayTotalRupees : totalAmount).toFixed(2)}</span>
                   </div>
                 </motion.div>
               </div>
