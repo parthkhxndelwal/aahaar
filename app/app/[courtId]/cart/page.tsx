@@ -9,6 +9,7 @@ import { useAppAuth } from "@/contexts/app-auth-context"
 import Image from "next/image"
 import { useRouter } from "next/navigation"
 import DummyPaymentGateway from "@/components/app/dummy-payment-gateway"
+import { CartItem } from "@/components/app/cart-item"
 
 
 // Type definitions
@@ -153,12 +154,13 @@ function calculateSplit(totalAmount: number, vendorAmounts: number[]) {
 
 export default function CartPage({ params }: { params: Promise<{ courtId: string }> }) {
   const { courtId } = use(params)
-  const { cart, updateQuantity, removeFromCart, isLoading, hasActiveOrder, activeOrderError, checkActiveOrders } = useCart()
+  const { cart, isLoading, hasActiveOrder, activeOrderError, checkActiveOrders } = useCart()
   const { user, token } = useAppAuth()
   const [isDrawerOpen, setIsDrawerOpen] = useState(false)
   const [showPaymentGateway, setShowPaymentGateway] = useState(false)
   const [orderData, setOrderData] = useState<any>(null)
   const [checkoutLoading, setCheckoutLoading] = useState(false)
+  const [removedItems, setRemovedItems] = useState<Set<string>>(new Set())
   const router = useRouter()
 
   // Memoized transformed order preview (used to show accurate to-pay amount)
@@ -222,16 +224,9 @@ export default function CartPage({ params }: { params: Promise<{ courtId: string
     ? `Picking up at ${uniqueVendorNames.join(', ')}`
     : 'No vendors selected'
 
-  const handleQuantityChange = async (menuItemId: string, newQuantity: number) => {
-    if (newQuantity <= 0) {
-      await removeFromCart(menuItemId)
-    } else {
-      await updateQuantity(menuItemId, newQuantity)
-    }
-  }
-
-  const handleRemoveItem = async (menuItemId: string) => {
-    await removeFromCart(menuItemId)
+  const handleRemoveItem = (menuItemId: string) => {
+    // Add to removed items to hide from UI while backend sync happens
+    setRemovedItems(prev => new Set([...prev, menuItemId]))
   }
 
   const handleBackNavigation = () => {
@@ -483,119 +478,14 @@ export default function CartPage({ params }: { params: Promise<{ courtId: string
         transition={{ delay: 0.2 }}
       >
         <AnimatePresence mode="popLayout">
-          {cart.items.map((item, index) => (
-            <motion.div
+          {cart.items.filter(item => !removedItems.has(item.menuItemId)).map((item, index) => (
+            <CartItem
               key={item.menuItemId}
-              layout
-              initial={{ opacity: 0, y: 20, scale: 0.95 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ 
-                opacity: 0, 
-                x: -100, 
-                scale: 0.95,
-                transition: { duration: 0.2 }
-              }}
-              transition={{ 
-                delay: index * 0.05,
-                type: "spring",
-                stiffness: 300,
-                damping: 30
-              }}
-              className="bg-white dark:bg-neutral-900 rounded-lg shadow-sm border border-neutral-200 dark:border-neutral-800 p-4 w-full hover:shadow-md dark:hover:shadow-neutral-800/50 transition-shadow"
-            >
-              <div className="flex gap-3 w-full min-w-0">
-                {/* Item Image */}
-                <motion.div 
-                  className="relative w-16 h-16 flex-shrink-0"
-                  whileHover={{ scale: 1.05 }}
-                  transition={{ type: "spring", stiffness: 400 }}
-                >
-                  <Image
-                    src={item.imageUrl || "/placeholder.jpg"}
-                    alt={item.name}
-                    fill
-                    className="object-cover rounded-lg"
-                  />
-                </motion.div>
-
-                {/* Item Details */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex justify-between items-start mb-2 min-w-0">
-                    <div className="flex-1 min-w-0 pr-2">
-                      <h3 className="font-medium text-neutral-900 dark:text-white truncate text-sm">{item.name}</h3>
-                      <p className="text-xs text-neutral-600 dark:text-neutral-400 truncate">
-                        {item.vendorName || 'Unknown Vendor'}
-                      </p>
-                    </div>
-                    <motion.div
-                      whileHover={{ scale: 1.1 }}
-                      whileTap={{ scale: 0.9 }}
-                    >
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleRemoveItem(item.menuItemId)}
-                        className="text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 p-1 h-auto flex-shrink-0"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </motion.div>
-                  </div>
-
-                  {/* Quantity Controls and Price */}
-                  <div className="flex justify-between items-center w-full">
-                    <motion.div 
-                      className="flex items-center gap-1 bg-neutral-100 dark:bg-neutral-800 rounded-lg p-1 flex-shrink-0"
-                      whileHover={{ scale: 1.02 }}
-                      transition={{ type: "spring", stiffness: 400 }}
-                    >
-                      <motion.div
-                        whileHover={{ scale: 1.1 }}
-                        whileTap={{ scale: 0.9 }}
-                      >
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleQuantityChange(item.menuItemId, item.quantity - 1)}
-                          disabled={isLoading}
-                          className="h-7 w-7 p-0 hover:bg-neutral-200 dark:hover:bg-neutral-700 text-neutral-700 dark:text-neutral-300"
-                        >
-                          <Minus className="h-3 w-3" />
-                        </Button>
-                      </motion.div>
-                      <motion.span 
-                        className="mx-1 min-w-[20px] text-center font-medium text-sm text-neutral-900 dark:text-white"
-                        key={item.quantity}
-                        initial={{ scale: 1.2 }}
-                        animate={{ scale: 1 }}
-                        transition={{ type: "spring", stiffness: 500 }}
-                      >
-                        {item.quantity}
-                      </motion.span>
-                      <motion.div
-                        whileHover={{ scale: 1.1 }}
-                        whileTap={{ scale: 0.9 }}
-                      >
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleQuantityChange(item.menuItemId, item.quantity + 1)}
-                          disabled={isLoading}
-                          className="h-7 w-7 p-0 hover:bg-neutral-200 dark:hover:bg-neutral-700 text-neutral-700 dark:text-neutral-300"
-                        >
-                          <Plus className="h-3 w-3" />
-                        </Button>
-                      </motion.div>
-                    </motion.div>
-
-                    <div className="text-right flex-shrink-0 ml-2">
-                      <p className="font-semibold text-neutral-900 dark:text-white text-sm">₹{Number(item.subtotal || 0).toFixed(2)}</p>
-                      <p className="text-xs text-neutral-500 dark:text-neutral-400">₹{Number(item.price || 0).toFixed(2)} each</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </motion.div>
+              item={item}
+              index={index}
+              onRemove={handleRemoveItem}
+              isLoading={isLoading}
+            />
           ))}
         </AnimatePresence>
       </motion.div>

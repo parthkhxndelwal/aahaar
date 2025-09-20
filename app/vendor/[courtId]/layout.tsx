@@ -20,6 +20,12 @@ export default function VendorLayout({
   const router = useRouter()
   const { courtId } = use(params)
   const [isMobile, setIsMobile] = useState(false)
+  const [isHydrated, setIsHydrated] = useState(false)
+
+  // Mark as hydrated after first render
+  useEffect(() => {
+    setIsHydrated(true)
+  }, [])
 
   // Check if device is mobile
   useEffect(() => {
@@ -39,7 +45,7 @@ export default function VendorLayout({
     }
   }, [user, loading, courtId, router])
 
-  if (loading) {
+  if (loading || !isHydrated) {
     return <div className="flex items-center justify-center min-h-screen">Loading...</div>
   }
 

@@ -13,8 +13,6 @@ export default function OrdersPage({ params }: { params: Promise<{ courtId: stri
   const { courtId } = use(params)
   const { user, token, loading: authLoading } = useAppAuth()
   const router = useRouter()
-  const [loading, setLoading] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
   const [activeOrderIds, setActiveOrderIds] = useState<string[]>([])
   const [cancellingOrders, setCancellingOrders] = useState<Set<string>>(new Set())
 
@@ -65,8 +63,7 @@ export default function OrdersPage({ params }: { params: Promise<{ courtId: stri
       return
     }
 
-    console.log('✅ [UserOrders] Auth confirmed, fetching orders')
-    fetchOrders()
+    console.log('✅ [UserOrders] Auth confirmed, orders will be fetched by hook')
   }, [user, token, courtId, authLoading])
 
   // Debug effect to track connection and updates
@@ -77,42 +74,11 @@ export default function OrdersPage({ params }: { params: Promise<{ courtId: stri
     }
   }, [user?.id, orderSummaries.length, lastUpdate])
 
-  const fetchOrders = async (isRefresh = false) => {
-    if (isRefresh) {
-      setRefreshing(true)
-    } else {
-      setLoading(true)
-    }
-
-    try {
-      const response = await fetch(`/api/app/${courtId}/orders/status`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        if (data.success && updateOrderSummaries) {
-          // Update polling hook state with fetched data
-          updateOrderSummaries(data.data.orderSummaries)
-          console.log('📊 [UserOrders] Initial orders fetched and updated in polling hook:', {
-            count: data.data.orderSummaries.length
-          })
-        }
-      }
-    } catch (error) {
-      console.error("Error fetching orders:", error)
-    } finally {
-      setLoading(false)
-      setRefreshing(false)
-    }
-  }
-
   const getOverallStatusColor = (status: string) => {
     switch (status) {
       case "pending": return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400"
-      case "partial": return "bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400"
+      case "preparing": return "bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400"
+      case "partial": return "bg-orange-100 text-orange-800 dark:bg-orange-900/20 dark:text-orange-400"
       case "ready": return "bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400"
       case "completed": return "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-400"
       case "cancelled": return "bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-400"
@@ -124,6 +90,7 @@ export default function OrdersPage({ params }: { params: Promise<{ courtId: stri
   const getOverallStatusText = (status: string) => {
     switch (status) {
       case "pending": return "Processing"
+      case "preparing": return "Preparing"
       case "partial": return "Partially Ready"
       case "ready": return "Ready for Pickup"
       case "completed": return "Completed"
@@ -166,7 +133,7 @@ export default function OrdersPage({ params }: { params: Promise<{ courtId: stri
       
       if (result.success) {
         // Refresh orders to get updated data
-        await fetchOrders(true)
+        await refetch()
       } else {
         alert(result.message || "Failed to cancel order. Please try again.")
       }
@@ -182,7 +149,7 @@ export default function OrdersPage({ params }: { params: Promise<{ courtId: stri
     }
   }
 
-  if (authLoading || (loading && !orderSummaries.length)) {
+  if (authLoading || (ordersLoading && !orderSummaries.length)) {
     return (
       <motion.div 
         className="h-screen bg-neutral-50 dark:bg-neutral-950 flex items-center justify-center"
@@ -253,13 +220,13 @@ export default function OrdersPage({ params }: { params: Promise<{ courtId: stri
             </div>
           </div>
           <motion.button
-            onClick={() => fetchOrders(true)}
-            disabled={refreshing}
+            onClick={() => refetch()}
+            disabled={ordersLoading}
             className="p-2 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
           >
-            <RefreshCw className={`h-5 w-5 text-neutral-700 dark:text-neutral-300 ${refreshing ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`h-5 w-5 text-neutral-700 dark:text-neutral-300 ${ordersLoading ? 'animate-spin' : ''}`} />
           </motion.button>
         </div>
       </motion.div>
@@ -286,7 +253,7 @@ export default function OrdersPage({ params }: { params: Promise<{ courtId: stri
             <AnimatePresence mode="popLayout">
               {orderSummaries.map((orderSummary, index) => (
                 <motion.div
-                  key={orderSummary.parentOrderId}
+                  key={`${orderSummary.parentOrderId}-${index}`}
                   layout
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}

@@ -3,6 +3,7 @@ import { use, useEffect, useState } from "react"
 import { useAppAuth } from "@/contexts/app-auth-context"
 import { useRouter } from "next/navigation"
 import { ProductCard } from "@/components/app/product-card"
+import { AnimatedSearch } from "@/components/app/animated-search"
 import { Bell } from "lucide-react"
 import { motion } from "framer-motion"
 
@@ -123,6 +124,15 @@ export default function HomePage({ params }: { params: Promise<{ courtId: string
         </motion.button>
       </motion.div>
 
+      {/* Search Bar */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, delay: 0.1 }}
+      >
+        <AnimatedSearch courtId={courtId} />
+      </motion.div>
+
       {/* Hot Right Now Section */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
@@ -178,6 +188,8 @@ export default function HomePage({ params }: { params: Promise<{ courtId: string
                     stockQuantity={item.stockQuantity}
                     stockUnit={item.stockUnit}
                     status={item.status as 'active' | 'inactive' | 'out_of_stock'}
+                    vendorId={item.vendorId}
+                    vendorName={item.vendor?.stallName || 'Unknown Vendor'}
                     className="h-full"
                   />
                 </motion.div>

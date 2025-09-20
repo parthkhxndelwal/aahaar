@@ -1,7 +1,7 @@
 "use client"
 import { use, useState, useEffect, useRef, type SyntheticEvent } from "react"
 import Link from "next/link"
-import { ArrowLeft, Camera, User, Mail, Phone, Calendar, Users, Check, X, Loader2, CropIcon, Trash2Icon } from "lucide-react"
+import { ArrowLeft, Camera, User, Mail, Phone, Calendar, Users, Check, X, Loader2, CropIcon, Trash2Icon, Save } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
 import { useAppAuth } from "@/contexts/app-auth-context"
 import ReactCrop, {
@@ -19,6 +19,7 @@ import {
   DrawerTitle,
 } from "@/components/ui/drawer"
 import { Button } from "@/components/ui/button"
+import { AnimatedButton } from "@/components/ui/animated-button"
 import "react-image-crop/dist/ReactCrop.css"
 
 interface ProfileData {
@@ -46,7 +47,7 @@ interface CropDrawerProps {
   isOpen: boolean
   onClose: () => void
   imageUrl: string
-  onCrop: (croppedImageBlob: Blob) => void
+  onCrop: (croppedImageBlob: Blob) => Promise<void>
   isLoading: boolean
 }
 
@@ -122,25 +123,27 @@ function CropDrawer({ isOpen, onClose, imageUrl, onCrop, isLoading }: CropDrawer
     return canvas.toDataURL("image/jpeg", 0.9)
   }
 
-  async function handleCrop() {
+  async function handleCrop(): Promise<boolean> {
     try {
-      if (!croppedImageUrl) return
+      if (!croppedImageUrl) return false
       
       // Convert data URL to blob
       const response = await fetch(croppedImageUrl)
       const blob = await response.blob()
       
-      onCrop(blob)
+      // Wait for the complete upload and save process
+      await onCrop(blob)
+      return true
     } catch (error) {
       console.error("Crop error:", error)
-      alert("Failed to crop image. Please try again.")
+      return false
     }
   }
 
   return (
     <Drawer open={isOpen} onOpenChange={onClose}>
       <DrawerContent 
-        className="bg-neutral-900 border-neutral-700 max-h-[90vh]"
+        className="bg-neutral-900 border-neutral-700 max-h-[90vh] z-[70]"
         onPointerDownOutside={(e) => e.preventDefault()}
         onInteractOutside={(e) => e.preventDefault()}
       >
@@ -155,7 +158,18 @@ function CropDrawer({ isOpen, onClose, imageUrl, onCrop, isLoading }: CropDrawer
 
         <div className="px-4 flex-1 flex flex-col items-center">
           {/* React Image Crop */}
-          <div className="w-full max-w-md mb-4">
+          <div 
+            className="w-full max-w-md mb-4"
+            onPointerDown={(e) => e.stopPropagation()}
+            onPointerUp={(e) => e.stopPropagation()}
+            onPointerMove={(e) => e.stopPropagation()}
+            onTouchStart={(e) => e.stopPropagation()}
+            onTouchMove={(e) => e.stopPropagation()}
+            onTouchEnd={(e) => e.stopPropagation()}
+            onMouseDown={(e) => e.stopPropagation()}
+            onMouseMove={(e) => e.stopPropagation()}
+            onMouseUp={(e) => e.stopPropagation()}
+          >
             <ReactCrop
               crop={crop}
               onChange={(_, percentCrop) => setCrop(percentCrop)}
@@ -183,27 +197,13 @@ function CropDrawer({ isOpen, onClose, imageUrl, onCrop, isLoading }: CropDrawer
 
         <DrawerFooter>
           <div className="flex space-x-3">
-            <Button
-              variant="outline"
-              onClick={onClose}
-              disabled={isLoading}
-              className="flex-1 bg-neutral-700 text-white border-neutral-600 hover:bg-neutral-600"
-            >
-              <Trash2Icon className="h-4 w-4 mr-2" />
-              Cancel
-            </Button>
-            <Button
-              onClick={handleCrop}
+            <AnimatedButton
+              onAsyncClick={handleCrop}
               disabled={isLoading || !croppedImageUrl}
-              className="flex-1 bg-blue-600 hover:bg-blue-700"
+              className="flex-1"
             >
-              {isLoading ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              ) : (
-                <CropIcon className="h-4 w-4 mr-2" />
-              )}
-              {isLoading ? 'Processing...' : 'Crop & Save'}
-            </Button>
+              Crop & Save
+            </AnimatedButton>
           </div>
         </DrawerFooter>
       </DrawerContent>
@@ -365,7 +365,7 @@ function OTPDrawer({ isOpen, onClose, emailOTP, phoneOTP, newEmail, newPhone, on
 
   return (
     <Drawer open={isOpen} onOpenChange={onClose}>
-      <DrawerContent className="bg-neutral-900 border-neutral-700">
+      <DrawerContent className="bg-neutral-900 border-neutral-700 z-[70]">
         <DrawerHeader className="text-center">
           <DrawerTitle className="text-white">
             Verify Your Changes
@@ -402,7 +402,7 @@ function OTPDrawer({ isOpen, onClose, emailOTP, phoneOTP, newEmail, newPhone, on
                     setError("")
                   }}
                   placeholder="Enter 6-digit code"
-                  className="w-full px-4 py-3 bg-neutral-800 border border-neutral-700 rounded-lg text-white placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-4 py-3 bg-neutral-800 border border-neutral-700 rounded-lg text-white placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-neutral-500 focus:border-transparent"
                   maxLength={6}
                   disabled={verifying || isLoading}
                 />
@@ -436,7 +436,7 @@ function OTPDrawer({ isOpen, onClose, emailOTP, phoneOTP, newEmail, newPhone, on
                     setError("")
                   }}
                   placeholder="Enter 6-digit code"
-                  className="w-full px-4 py-3 bg-neutral-800 border border-neutral-700 rounded-lg text-white placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-4 py-3 bg-neutral-800 border border-neutral-700 rounded-lg text-white placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-neutral-500 focus:border-transparent"
                   maxLength={6}
                   disabled={verifying || isLoading}
                 />
@@ -455,7 +455,7 @@ function OTPDrawer({ isOpen, onClose, emailOTP, phoneOTP, newEmail, newPhone, on
               variant="outline"
               onClick={onClose}
               disabled={verifying || isLoading}
-              className="flex-1 bg-neutral-700 text-white border-neutral-600 hover:bg-neutral-600"
+              className="flex-1 bg-neutral-800 text-neutral-300 border-neutral-600 hover:bg-neutral-700 hover:text-white hover:border-neutral-500"
             >
               <X className="h-4 w-4 mr-2" />
               Cancel
@@ -463,7 +463,7 @@ function OTPDrawer({ isOpen, onClose, emailOTP, phoneOTP, newEmail, newPhone, on
             <Button
               onClick={handleVerify}
               disabled={!isFormValid() || verifying || isLoading}
-              className="flex-1 bg-blue-600 hover:bg-blue-700"
+              className="flex-1 bg-green-600 hover:bg-green-700 text-white disabled:bg-neutral-700 disabled:text-neutral-400"
             >
               {verifying ? (
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -493,7 +493,6 @@ export default function ProfileSettingsPage({ params }: { params: Promise<{ cour
   })
 
   const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
   const [cropDrawer, setCropDrawer] = useState({
     isOpen: false,
     imageUrl: '',
@@ -667,8 +666,10 @@ export default function ProfileSettingsPage({ params }: { params: Promise<{ cour
     document.body.removeChild(fileInput)
   }
 
-  const handleCropComplete = async (croppedImageBlob: Blob) => {
-    if (!token) return
+  const handleCropComplete = async (croppedImageBlob: Blob): Promise<void> => {
+    if (!token) {
+      throw new Error('Authentication required')
+    }
 
     try {
       setCropDrawer(prev => ({ ...prev, isLoading: true }))
@@ -705,14 +706,14 @@ export default function ProfileSettingsPage({ params }: { params: Promise<{ cour
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify(updatedProfileData)
+          body: JSON.stringify({ profilePicture: profileImageUrl })
         })
 
         const saveData = await saveResponse.json()
 
         if (saveData.success) {
-          // Update original data to reflect the new saved state
-          setOriginalData(updatedProfileData)
+          // Update original data to reflect ONLY the new profile picture
+          setOriginalData(prev => ({ ...prev, profilePicture: profileImageUrl }))
           
           // Refresh user data in auth context
           await refreshUser()
@@ -723,19 +724,18 @@ export default function ProfileSettingsPage({ params }: { params: Promise<{ cour
           console.log('✅ Profile picture saved and user context refreshed')
         } else {
           console.error('Failed to save profile picture:', saveData.message)
-          alert('Failed to save profile picture. Please try again.')
           // Revert the profile data change
           setProfileData(prev => ({ ...prev, profilePicture: originalData.profilePicture }))
+          throw new Error('Failed to save profile picture. Please try again.')
         }
       } else {
         console.error('Failed to upload image:', data.message)
-        alert('Failed to upload image. Please try again.')
+        throw new Error('Failed to upload image. Please try again.')
       }
     } catch (error) {
       console.error('Image upload error:', error)
-      alert('Failed to upload image. Please try again.')
-    } finally {
       setCropDrawer(prev => ({ ...prev, isLoading: false }))
+      throw error instanceof Error ? error : new Error('Failed to upload image. Please try again.')
     }
   }
 
@@ -743,14 +743,12 @@ export default function ProfileSettingsPage({ params }: { params: Promise<{ cour
     setCropDrawer({ isOpen: false, imageUrl: '', isLoading: false })
   }
 
-  const handleSave = async () => {
+  const handleSave = async (): Promise<boolean> => {
     if (!token) {
-      return
+      return false
     }
 
     try {
-      setSaving(true)
-      
       // Check if email or phone changed and need OTP verification
       const emailChanged = profileData.email !== originalData.email
       const phoneChanged = profileData.phone !== originalData.phone
@@ -779,20 +777,21 @@ export default function ProfileSettingsPage({ params }: { params: Promise<{ cour
           newPhone: phoneChanged ? profileData.phone : '',
           isLoading: false
         })
+        return true // OTP process initiated successfully
       } else {
         // No sensitive fields changed, save directly
         await saveProfile()
+        return true
       }
     } catch (error) {
       console.error('Failed to initiate save:', error)
-    } finally {
-      setSaving(false)
+      return false
     }
   }
 
-  const saveProfile = async () => {
+  const saveProfile = async (): Promise<void> => {
     if (!token) {
-      return
+      throw new Error('Authentication required')
     }
 
     try {
@@ -815,11 +814,16 @@ export default function ProfileSettingsPage({ params }: { params: Promise<{ cour
         await refreshUser()
         
         console.log('✅ Profile saved and user context refreshed')
+        
+        // Add a small delay to show the success state before button disappears
+        await new Promise(resolve => setTimeout(resolve, 1000))
       } else {
         console.error('Failed to save profile:', data.message)
+        throw new Error('Failed to save profile. Please try again.')
       }
     } catch (error) {
       console.error('Failed to save profile:', error)
+      throw error instanceof Error ? error : new Error('Failed to save profile. Please try again.')
     }
   }
 
@@ -838,7 +842,7 @@ export default function ProfileSettingsPage({ params }: { params: Promise<{ cour
       <div className="min-h-screen bg-neutral-950 p-4 pb-24 flex items-center justify-center">
         <div className="text-center">
           <p className="text-neutral-400 mb-4">Please log in to view your profile</p>
-          <Link href={`/app/${courtId}/login`} className="text-blue-400 hover:text-blue-300">
+          <Link href={`/app/${courtId}/login`} className="text-neutral-400 hover:text-neutral-300">
             Go to Login
           </Link>
         </div>
@@ -940,7 +944,7 @@ export default function ProfileSettingsPage({ params }: { params: Promise<{ cour
                   type="text"
                   value={profileData.fullName}
                   onChange={(e) => handleInputChange('fullName', e.target.value)}
-                  className="w-full px-4 py-3 bg-neutral-800 border border-neutral-700 rounded-lg text-white placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-4 py-3 bg-neutral-800 border border-neutral-700 rounded-lg text-white placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-neutral-500 focus:border-transparent"
                 />
               </div>
 
@@ -955,7 +959,7 @@ export default function ProfileSettingsPage({ params }: { params: Promise<{ cour
                     type="email"
                     value={profileData.email}
                     onChange={(e) => handleInputChange('email', e.target.value)}
-                    className="w-full pl-11 pr-4 py-3 bg-neutral-800 border border-neutral-700 rounded-lg text-white placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full pl-11 pr-4 py-3 bg-neutral-800 border border-neutral-700 rounded-lg text-white placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-neutral-500 focus:border-transparent"
                   />
                 </div>
                 <p className="text-xs text-neutral-400 mt-1">
@@ -974,7 +978,7 @@ export default function ProfileSettingsPage({ params }: { params: Promise<{ cour
                     type="tel"
                     value={profileData.phone}
                     onChange={(e) => handleInputChange('phone', e.target.value)}
-                    className="w-full pl-11 pr-4 py-3 bg-neutral-800 border border-neutral-700 rounded-lg text-white placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full pl-11 pr-4 py-3 bg-neutral-800 border border-neutral-700 rounded-lg text-white placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-neutral-500 focus:border-transparent"
                   />
                 </div>
                 <p className="text-xs text-neutral-400 mt-1">
@@ -993,7 +997,7 @@ export default function ProfileSettingsPage({ params }: { params: Promise<{ cour
                     type="date"
                     value={profileData.dateOfBirth}
                     onChange={(e) => handleInputChange('dateOfBirth', e.target.value)}
-                    className="w-full pl-11 pr-4 py-3 bg-neutral-800 border border-neutral-700 rounded-lg text-white placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full pl-11 pr-4 py-3 bg-neutral-800 border border-neutral-700 rounded-lg text-white placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-neutral-500 focus:border-transparent"
                   />
                 </div>
               </div>
@@ -1008,7 +1012,7 @@ export default function ProfileSettingsPage({ params }: { params: Promise<{ cour
                   <select
                     value={profileData.gender}
                     onChange={(e) => handleInputChange('gender', e.target.value)}
-                    className="w-full pl-11 pr-4 py-3 bg-neutral-800 border border-neutral-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none"
+                    className="w-full pl-11 pr-4 py-3 bg-neutral-800 border border-neutral-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-neutral-500 focus:border-transparent appearance-none"
                   >
                     <option value="">Select Gender</option>
                     <option value="male">Male</option>
@@ -1031,18 +1035,12 @@ export default function ProfileSettingsPage({ params }: { params: Promise<{ cour
                 exit={{ scale: 0, opacity: 0 }}
                 transition={{ type: "spring", stiffness: 400, damping: 25 }}
               >
-                <Button
-                  onClick={handleSave}
-                  disabled={saving}
-                  className="w-14 h-14 rounded-full bg-blue-600 hover:bg-blue-700 disabled:bg-neutral-700 shadow-2xl border-2 border-white/20"
-                  size="lg"
+                <AnimatedButton
+                  onAsyncClick={handleSave}
+                  className="w-14 h-14 rounded-full shadow-2xl border-2 border-white/20"
                 >
-                  {saving ? (
-                    <Loader2 className="h-6 w-6 animate-spin" />
-                  ) : (
-                    <Check className="h-6 w-6" />
-                  )}
-                </Button>
+                  Save
+                </AnimatedButton>
               </motion.div>
             )}
           </AnimatePresence>

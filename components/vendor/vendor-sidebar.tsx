@@ -28,11 +28,6 @@ export function VendorSidebar({ courtId }: VendorSidebarProps) {
       icon: Home,
     },
     {
-      name: "Orders",
-      href: `/vendor/${courtId}/orders`,
-      icon: ShoppingBag,
-    },
-    {
       name: "Queue",
       href: `/vendor/${courtId}/queue`,
       icon: Clock,

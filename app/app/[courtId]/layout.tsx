@@ -86,8 +86,8 @@ export default function AppLayout({
     }
   }, [])
 
-  // Show loading while checking authentication (only after hydration to prevent mismatch)
-  if (!isLoginPage && !isHydrated) {
+  // Show loading while checking authentication (prevent hydration mismatch)
+  if (!isHydrated) {
     return (
       <div className="min-h-screen dark bg-neutral-950 flex items-center justify-center">
         <div className="text-center">

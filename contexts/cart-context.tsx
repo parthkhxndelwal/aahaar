@@ -32,6 +32,10 @@ interface CartContextType {
   refreshCart: () => Promise<void>
   checkActiveOrders: () => Promise<void>
   getTotalItems: () => number
+  // New optimistic update methods
+  addToCartOptimistic: (menuItemId: string, name: string, price: number, vendorId: string, vendorName?: string, imageUrl?: string, quantity?: number, customizations?: Record<string, any>) => Promise<boolean>
+  updateQuantityOptimistic: (menuItemId: string, quantity: number) => Promise<boolean>
+  removeFromCartOptimistic: (menuItemId: string) => Promise<boolean>
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined)
@@ -264,6 +268,143 @@ export function CartProvider({ children }: { children: ReactNode }) {
     return cart.items.reduce((total, item) => total + item.quantity, 0)
   }
 
+  // Optimistic update methods
+  const addToCartOptimistic = async (
+    menuItemId: string, 
+    name: string, 
+    price: number, 
+    vendorId: string, 
+    vendorName?: string, 
+    imageUrl?: string, 
+    quantity = 1, 
+    customizations = {}
+  ) => {
+    if (!user || !token || !isCustomerApp) return false
+
+    // Update local state immediately
+    const existingItemIndex = cart.items.findIndex(item => item.menuItemId === menuItemId)
+    
+    if (existingItemIndex >= 0) {
+      // Update existing item
+      const updatedItems = [...cart.items]
+      const existingItem = updatedItems[existingItemIndex]
+      updatedItems[existingItemIndex] = {
+        ...existingItem,
+        quantity: existingItem.quantity + quantity,
+        subtotal: (existingItem.quantity + quantity) * price
+      }
+      
+      const newTotal = updatedItems.reduce((sum, item) => sum + item.subtotal, 0)
+      setCart({ items: updatedItems, total: newTotal })
+    } else {
+      // Add new item
+      const newItem: CartItem = {
+        menuItemId,
+        name,
+        price,
+        quantity,
+        subtotal: quantity * price,
+        customizations,
+        vendorId,
+        vendorName,
+        imageUrl
+      }
+      
+      const updatedItems = [...cart.items, newItem]
+      const newTotal = updatedItems.reduce((sum, item) => sum + item.subtotal, 0)
+      setCart({ items: updatedItems, total: newTotal })
+    }
+
+    // Sync with server in background
+    try {
+      const success = await addToCart(menuItemId, quantity, customizations)
+      if (!success) {
+        // Rollback on server error
+        await refreshCart()
+      }
+      return success
+    } catch (error) {
+      // Rollback on error
+      await refreshCart()
+      return false
+    }
+  }
+
+  const updateQuantityOptimistic = async (menuItemId: string, quantity: number) => {
+    if (!user || !token || !isCustomerApp) return false
+
+    // Store original cart for potential rollback
+    const originalCart = { ...cart, items: [...cart.items] }
+
+    if (quantity <= 0) {
+      return removeFromCartOptimistic(menuItemId)
+    }
+
+    // Update local state immediately
+    const existingItemIndex = cart.items.findIndex(item => item.menuItemId === menuItemId)
+    
+    if (existingItemIndex >= 0) {
+      const updatedItems = [...cart.items]
+      const existingItem = updatedItems[existingItemIndex]
+      updatedItems[existingItemIndex] = {
+        ...existingItem,
+        quantity,
+        subtotal: quantity * existingItem.price
+      }
+      
+      const newTotal = updatedItems.reduce((sum, item) => sum + item.subtotal, 0)
+      setCart({ items: updatedItems, total: newTotal })
+
+      // Sync with server in background
+      try {
+        const success = await updateQuantity(menuItemId, quantity)
+        if (!success) {
+          // Rollback on server error
+          setCart(originalCart)
+          await refreshCart()
+        }
+        return success
+      } catch (error) {
+        // Rollback on error
+        setCart(originalCart)
+        await refreshCart()
+        return false
+      }
+    } else {
+      // Item not found, this shouldn't happen but refresh cart just in case
+      await refreshCart()
+      return false
+    }
+  }
+
+  const removeFromCartOptimistic = async (menuItemId: string) => {
+    if (!user || !token || !isCustomerApp) return false
+
+    // Store original cart for potential rollback
+    const originalCart = { ...cart, items: [...cart.items] }
+
+    // Update local state immediately
+    const updatedItems = cart.items.filter(item => item.menuItemId !== menuItemId)
+    const newTotal = updatedItems.reduce((sum, item) => sum + item.subtotal, 0)
+    setCart({ items: updatedItems, total: newTotal })
+
+    // Sync with server in background
+    try {
+      const success = await removeFromCart(menuItemId)
+      if (!success) {
+        // Rollback on server error
+        setCart(originalCart)
+        await refreshCart()
+      }
+      return success
+    } catch (error) {
+      // Rollback on error
+      setCart(originalCart)
+      await refreshCart()
+      return false
+    }
+  }
+
   useEffect(() => {
     refreshCart()
     checkActiveOrders()
@@ -283,6 +424,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
         refreshCart,
         checkActiveOrders,
         getTotalItems,
+        addToCartOptimistic,
+        updateQuantityOptimistic,
+        removeFromCartOptimistic,
       }}
     >
       {children}

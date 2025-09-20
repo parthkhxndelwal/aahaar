@@ -143,27 +143,54 @@ export async function GET(request, { params }) {
       const group = groupedOrders[parentId]
       const activeOrders = group.vendorsCount - group.rejectedVendors - group.cancelledVendors
       
+      console.log(`🔍 [API] Status calculation for ${parentId}:`, {
+        totalVendors: group.vendorsCount,
+        completed: group.completedVendors,
+        rejected: group.rejectedVendors,
+        cancelled: group.cancelledVendors,
+        active: activeOrders,
+        orderStatuses: group.orders.map(o => o.status)
+      })
+      
       // If all orders are cancelled, mark as cancelled
       if (group.cancelledVendors === group.vendorsCount) {
         group.overallStatus = 'cancelled'
       }
-      // If all non-cancelled orders are completed, mark as completed
+      // If all orders are rejected, mark as rejected
+      else if (group.rejectedVendors === group.vendorsCount) {
+        group.overallStatus = 'rejected'
+      }
+      // If all orders are either cancelled or rejected (no active orders), determine status
+      else if (activeOrders === 0) {
+        // If there are both cancelled and rejected, show rejected (more severe)
+        if (group.rejectedVendors > 0) {
+          group.overallStatus = 'rejected'
+        } else {
+          group.overallStatus = 'cancelled'
+        }
+      }
+      // If all non-cancelled/rejected orders are completed, mark as completed
       else if (group.completedVendors === activeOrders && activeOrders > 0) {
         group.overallStatus = 'completed'
       } 
+      // If any orders are ready for pickup, mark as ready (highest priority for active orders)
+      else if (group.orders.some(o => o.status === 'ready' && o.status !== 'cancelled' && o.status !== 'rejected')) {
+        group.overallStatus = 'ready'
+      }
       // If some orders are completed but not all, mark as partial
-      else if (group.completedVendors > 0) {
+      else if (group.completedVendors > 0 && activeOrders > group.completedVendors) {
         group.overallStatus = 'partial'
       } 
-      // If any orders are ready, mark as ready
-      else if (group.orders.some(o => o.status === 'ready')) {
-        group.overallStatus = 'ready'
-      } 
-      // Default to pending
+      // If any orders are preparing, mark as preparing
+      else if (group.orders.some(o => o.status === 'preparing' || o.status === 'accepted')) {
+        group.overallStatus = 'preparing'
+      }
+      // Default to pending for new orders
       else {
         group.overallStatus = 'pending'
       }
 
+      console.log(`✅ [API] Final status for ${parentId}: ${group.overallStatus}`)
       orderSummaries.push(group)
     }
 

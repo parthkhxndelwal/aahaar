@@ -73,7 +73,7 @@ export const useUserOrders = (userId: string | null, courtId: string | null, act
         throw new Error('No authentication token found. Please log in again.')
       }
 
-      const response = await fetch(`/api/users/orders?courtId=${encodeURIComponent(courtId)}`, {
+      const response = await fetch(`/api/app/${encodeURIComponent(courtId)}/orders/status`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -103,9 +103,9 @@ export const useUserOrders = (userId: string | null, courtId: string | null, act
       console.log('✅ [useUserOrders] Response data:', data)
 
       if (data.success) {
-        setOrderSummaries(data.data.orders || [])
+        setOrderSummaries(data.data.orderSummaries || [])
         setLastUpdate(new Date())
-        console.log('✅ [useUserOrders] Successfully updated order summaries:', data.data.orders?.length || 0, 'orders')
+        console.log('✅ [useUserOrders] Successfully updated order summaries:', data.data.orderSummaries?.length || 0, 'orders')
       } else {
         throw new Error(data.message || 'Failed to fetch user orders')
       }

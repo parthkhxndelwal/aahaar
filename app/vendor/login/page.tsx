@@ -6,6 +6,7 @@ import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { AnimatedButton } from "@/components/ui/animated-button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -16,7 +17,6 @@ export default function VendorLogin() {
   const router = useRouter()
   const { login, isAuthenticated, loading: authLoading, user } = useVendorAuth()
 
-  const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
@@ -46,14 +46,12 @@ export default function VendorLogin() {
     return null
   }
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleLogin = async (e: React.MouseEvent<HTMLButtonElement>): Promise<boolean> => {
     if (!email || !password) {
       setError("Please fill in all fields")
-      return
+      return false
     }
 
-    setLoading(true)
     setError("")
 
     try {
@@ -73,13 +71,15 @@ export default function VendorLogin() {
         const userData = response.data.user
         if (userData.role !== "vendor") {
           setError("Access denied. Vendor account required.")
-          return
+          return false
         }
 
         login(response.data.token, userData)
         router.push(`/vendor/${userData.courtId}`)
+        return true
       } else {
         setError(response.message || "Invalid credentials")
+        return false
       }
     } catch (error: any) {
       console.error("❌ Login error:", error)
@@ -91,8 +91,7 @@ export default function VendorLogin() {
       } else {
         setError("Login failed. Please check your credentials and try again.")
       }
-    } finally {
-      setLoading(false)
+      return false
     }
   }
 
@@ -119,7 +118,7 @@ export default function VendorLogin() {
             <CardDescription>Sign in to manage your stall and orders</CardDescription>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleLogin} className="space-y-4">
+            <div className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
                 <Input
@@ -138,13 +137,22 @@ export default function VendorLogin() {
                   placeholder="Enter your password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      const button = document.getElementById('login-button') as HTMLButtonElement
+                      button?.click()
+                    }
+                  }}
                 />
               </div>
-              <Button type="submit" className="w-full" disabled={loading}>
-                {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              <AnimatedButton 
+                id="login-button"
+                onAsyncClick={handleLogin} 
+                className="w-full"
+              >
                 Sign In
-              </Button>
-            </form>
+              </AnimatedButton>
+            </div>
 
             {error && (
               <Alert className="mt-4" variant="destructive">
