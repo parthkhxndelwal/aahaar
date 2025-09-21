@@ -221,9 +221,6 @@ export async function GET(
         }
       }
       
-      // Debug logging for price/mrp transformation
-      console.log(`💰 [HotItems] Item "${item.name}": price ${item.price} (${typeof item.price}) → ${transformedItem.price} (${typeof transformedItem.price}), mrp ${item.mrp} (${typeof item.mrp}) → ${transformedItem.mrp} (${typeof transformedItem.mrp})`)
-      
       return transformedItem
     })
 

@@ -10,8 +10,6 @@ if (typeof window === 'undefined') {
 const authenticateToken = async (request) => {
   try {
     const authHeader = request.headers.get("authorization")
-    console.log("🔑 Auth header:", authHeader ? "present" : "missing")
-    console.log("🔑 Auth header value:", authHeader)
 
     // Try to extract token - handle both "Bearer <token>" and just "<token>" formats
     let token
@@ -21,40 +19,23 @@ const authenticateToken = async (request) => {
       } else {
         // Fallback: use the entire header as token (in case Bearer prefix is missing)
         token = authHeader
-        console.log("⚠️ Using auth header as token directly (no Bearer prefix)")
       }
     }
 
-    console.log("🎫 Token:", token ? "present" : "missing")
-    console.log("🎫 Token value (first 50 chars):", token ? token.substring(0, 50) + "..." : "null")
-
     if (!token) {
-      console.log("❌ No token provided")
       return NextResponse.json({
         success: false,
         message: "Access token required",
       }, { status: 401 })
     }
 
-    console.log("🔐 Verifying token with secret:", process.env.JWT_SECRET ? "present" : "missing")
-    console.log("🔐 JWT_SECRET length:", process.env.JWT_SECRET ? process.env.JWT_SECRET.length : 0)
-
     // Use JWT_SECRET from env or fallback for development
     const jwtSecret = process.env.JWT_SECRET || 'fallback-secret-for-dev'
-    if (!process.env.JWT_SECRET) {
-      console.log("⚠️ Using fallback JWT secret - this should not happen in production!")
-    }
 
     let decoded
     try {
       decoded = jwt.verify(token, jwtSecret)
-      console.log("✅ Token decoded successfully for user:", decoded.userId)
     } catch (jwtError) {
-      console.error("❌ JWT verification failed:", jwtError.message)
-      console.error("❌ JWT error name:", jwtError.name)
-      console.error("❌ Token length:", token.length)
-      console.error("❌ Token format check - contains dots:", token.split('.').length === 3)
-
       if (jwtError.name === "JsonWebTokenError") {
         return NextResponse.json({
           success: false,
@@ -125,7 +106,6 @@ const authenticateToken = async (request) => {
     // Return user data instead of modifying request object
     return { user, courtId: user.courtId }
   } catch (error) {
-    console.error("Auth middleware error:", error)
     
     if (error.name === "JsonWebTokenError") {
       return NextResponse.json({
@@ -167,7 +147,6 @@ const authenticateTokenNextJS = async (request) => {
       courtId: result.courtId
     }
   } catch (error) {
-    console.error("Auth wrapper error:", error)
     return {
       error: "Authentication error",
       status: 500

@@ -488,29 +488,16 @@ export function ProductCard({
             <motion.button
               onClick={handleAddToCart}
               disabled={!stockStatus.canOrder}
-              className={`relative inline-flex items-center justify-center gap-1 px-3 py-1.5 rounded-xl text-[10px] font-medium w-full overflow-hidden shadow-sm group ${
+              className={`flex items-center justify-center gap-1 px-3 py-1.5 rounded-xl text-[10px] font-medium transition-colors w-full ${
                 !stockStatus.canOrder
                   ? 'bg-neutral-300 dark:bg-neutral-700 text-neutral-500 dark:text-neutral-400 cursor-not-allowed'
-                  : 'bg-neutral-100 dark:bg-neutral-800 text-black dark:text-white'
+                  : 'bg-neutral-100 dark:bg-neutral-100 text-white dark:text-black hover:bg-neutral-200 dark:hover:bg-neutral-700'
               }`}
               whileHover={stockStatus.canOrder ? { scale: 1.05 } : {}}
               whileTap={stockStatus.canOrder ? { scale: 0.95 } : {}}
             >
-              {stockStatus.canOrder && (
-                <>
-                  <span className="absolute inset-0 w-full h-full transition duration-300 ease-out opacity-0 bg-gradient-to-br from-pink-600 via-purple-700 to-blue-400 group-hover:opacity-100"></span>
-                  <span className="absolute top-0 left-0 w-full bg-gradient-to-b from-white to-transparent opacity-0 group-hover:opacity-5 h-1/3"></span>
-                  <span className="absolute bottom-0 left-0 w-full h-1/3 bg-gradient-to-t from-white to-transparent opacity-0 group-hover:opacity-5"></span>
-                  <span className="absolute bottom-0 left-0 w-4 h-full bg-gradient-to-r from-white to-transparent opacity-0 group-hover:opacity-5"></span>
-                  <span className="absolute bottom-0 right-0 w-4 h-full bg-gradient-to-l from-white to-transparent opacity-0 group-hover:opacity-5"></span>
-                  <span className="absolute inset-0 w-full h-full border border-white rounded-xl opacity-0 group-hover:opacity-10"></span>
-                  <span className="absolute w-0 h-0 transition-all duration-300 ease-out bg-white rounded-full group-hover:w-56 group-hover:h-56 opacity-0 group-hover:opacity-5"></span>
-                </>
-              )}
-              <span className="relative flex items-center gap-1 group-hover:text-white transition-colors duration-300">
-                <Plus className="h-3 w-3" />
-                {stockStatus.status === 'out_of_stock' ? 'Out of Stock' : 'Add'}
-              </span>
+              <Plus className="h-3 w-3" />
+              {stockStatus.status === 'out_of_stock' ? 'Out of Stock' : 'Add'}
             </motion.button>
           ) : (
             <div className="flex items-center justify-center gap-2 w-full">
