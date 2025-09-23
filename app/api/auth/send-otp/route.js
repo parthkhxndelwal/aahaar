@@ -24,7 +24,7 @@ export async function POST(request) {
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000) // 15 minutes from now
     
     try {
-      // Find or create a user for this email/phone and court
+      // Find existing user for this email/phone
       let user = await User.findOne({
         where: {
           [type === 'email' ? 'email' : 'phone']: identifier,
@@ -40,31 +40,34 @@ export async function POST(request) {
         }, { status: 403 })
       }
 
-      // If user doesn't exist, create a temporary placeholder user
-      if (!user) {
-        user = await User.create({
-          email: type === 'email' ? identifier : `temp_${Date.now()}@temp.com`,
-          phone: type === 'phone' ? identifier : null,
-          fullName: 'Temporary User',
-          courtId: courtId,
-          role: 'user',
-          status: 'pending' // Mark as pending until profile is completed
+      // If user doesn't exist, we'll create them later during OTP verification
+      // For now, just store the OTP with a temporary identifier
+      let userId = null
+      if (user) {
+        userId = user.id
+        // Delete any existing OTP for this user and type
+        await OTP.destroy({ 
+          where: { 
+            userId: user.id,
+            type: type,
+            value: identifier,
+            courtId: courtId
+          } 
+        })
+      } else {
+        // For new users, delete any OTPs for this identifier
+        await OTP.destroy({ 
+          where: { 
+            type: type,
+            value: identifier,
+            courtId: courtId
+          } 
         })
       }
 
-      // Delete any existing OTP for this user and type
-      await OTP.destroy({ 
-        where: { 
-          userId: user.id,
-          type: type,
-          value: identifier,
-          courtId: courtId
-        } 
-      })
-
-      // Create new OTP record
+      // Create new OTP record (userId can be null for new users)
       await OTP.create({
-        userId: user.id,
+        userId: userId,
         type: type,
         value: identifier,
         otp: otp,
@@ -73,7 +76,7 @@ export async function POST(request) {
         verified: false
       })
 
-      console.log(`✅ OTP stored for ${identifier}: ${otp}`)
+      console.log(`✅ OTP stored for ${identifier}: ${otp} (existing user: ${!!user})`)
     } catch (dbError) {
       console.error("❌ Failed to store OTP in database:", dbError)
       return NextResponse.json({ success: false, message: "Failed to generate OTP" }, { status: 500 })

@@ -2,7 +2,7 @@
 import { use, useEffect, useState, useMemo } from "react"
 import { useCart } from "@/contexts/cart-context"
 import { motion, AnimatePresence } from "framer-motion"
-import { Plus, Minus, Trash2, ArrowRight, MapPin, ArrowLeft } from "lucide-react"
+import { Plus, Minus, Trash2, ArrowRight, MapPin, ArrowLeft, AlertTriangle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerTrigger } from "@/components/ui/drawer"
 import { useAppAuth } from "@/contexts/app-auth-context"
@@ -10,6 +10,7 @@ import Image from "next/image"
 import { useRouter } from "next/navigation"
 import DummyPaymentGateway from "@/components/app/dummy-payment-gateway"
 import { CartItem } from "@/components/app/cart-item"
+import { useCartValidation } from "@/hooks/use-cart-validation"
 
 
 // Type definitions
@@ -41,7 +42,7 @@ function transformOrderWithFeeCalculation(orderItems: CartItem[]) {
         if (!vendorGroups[item.vendorId]) {
             vendorGroups[item.vendorId] = {
                 vendorId: item.vendorId,
-                vendorName: item.vendorName,
+                vendorName: item.vendorName || 'Unknown Vendor',
                 items: [],
                 totalAmount: 0
             };
@@ -156,6 +157,7 @@ export default function CartPage({ params }: { params: Promise<{ courtId: string
   const { courtId } = use(params)
   const { cart, isLoading, hasActiveOrder, activeOrderError, checkActiveOrders } = useCart()
   const { user, token } = useAppAuth()
+  const { isCartValid, hasInvalidItems, validateCart, getItemIssues, isItemValid } = useCartValidation(courtId)
   const [isDrawerOpen, setIsDrawerOpen] = useState(false)
   const [showPaymentGateway, setShowPaymentGateway] = useState(false)
   const [orderData, setOrderData] = useState<any>(null)
@@ -250,6 +252,54 @@ export default function CartPage({ params }: { params: Promise<{ courtId: string
 
     setCheckoutLoading(true)
     try {
+      // Validate cart items before proceeding with checkout
+      console.log("🔍 Validating cart items...")
+      const validationResponse = await fetch(`/api/app/${courtId}/cart/validate`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      const validationData = await validationResponse.json()
+      
+      if (!validationResponse.ok) {
+        console.error("Cart validation failed:", validationData.message)
+        alert(validationData.message || "Failed to validate cart items. Please try again.")
+        return
+      }
+
+      if (!validationData.valid) {
+        console.error("Cart has invalid items:", validationData)
+        
+        // Create detailed error message
+        let errorMessage = "Some items in your cart are no longer available:\n\n"
+        
+        if (validationData.summary.offlineVendors.length > 0) {
+          errorMessage += `🔴 Offline Vendors: ${validationData.summary.offlineVendors.join(", ")}\n`
+        }
+        
+        if (validationData.summary.unavailableItems.length > 0) {
+          errorMessage += `❌ Unavailable Items: ${validationData.summary.unavailableItems.join(", ")}\n`
+        }
+        
+        if (validationData.summary.stockIssues.length > 0) {
+          errorMessage += `📦 Stock Issues:\n`
+          validationData.summary.stockIssues.forEach((issue: any) => {
+            errorMessage += `   • ${issue.name}: Only ${issue.available} available (you requested ${issue.requested})\n`
+          })
+        }
+        
+        errorMessage += "\nPlease remove these items or wait for vendors to come back online."
+        
+        alert(errorMessage)
+        return
+      }
+
+      console.log("✅ Cart validation passed, proceeding with checkout...")
+      
+      // Proceed with checkout if validation passes
       const response = await fetch(`/api/app/${courtId}/checkout`, {
         method: "POST",
         headers: {
@@ -470,6 +520,28 @@ export default function CartPage({ params }: { params: Promise<{ courtId: string
         </div>
       </motion.div>
 
+      {/* Warning Banner for Invalid Items */}
+      {hasInvalidItems && (
+        <motion.div
+          className="mx-4 mt-4 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg"
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+        >
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
+                Cart validation issues detected
+              </p>
+              <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
+                Some items may not be available for checkout. Please review marked items below.
+              </p>
+            </div>
+          </div>
+        </motion.div>
+      )}
+
       {/* Cart Items */}
       <motion.div 
         className="flex-1 px-4 py-4 space-y-4 w-full overflow-y-auto overflow-x-hidden"
@@ -485,6 +557,8 @@ export default function CartPage({ params }: { params: Promise<{ courtId: string
               index={index}
               onRemove={handleRemoveItem}
               isLoading={isLoading}
+              isValid={isItemValid(item.menuItemId)}
+              validationIssues={getItemIssues(item.menuItemId)}
             />
           ))}
         </AnimatePresence>
@@ -638,6 +712,24 @@ export default function CartPage({ params }: { params: Promise<{ courtId: string
                 disabled={true}
               >
                 Checkout Disabled - Active Order
+              </Button>
+            </div>
+          ) : hasInvalidItems ? (
+            <div className="w-full space-y-3">
+              <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
+                <div className="text-amber-800 dark:text-amber-200 text-sm font-medium">
+                  ⚠️ Cart Issues Detected
+                </div>
+                <div className="text-amber-700 dark:text-amber-300 text-xs mt-1">
+                  Some items are no longer available. Please remove invalid items to proceed.
+                </div>
+              </div>
+              <Button
+                className="w-full bg-amber-500 hover:bg-amber-600 text-white font-medium py-3 transition-colors"
+                onClick={() => validateCart()}
+                disabled={checkoutLoading}
+              >
+                Re-validate Cart
               </Button>
             </div>
           ) : (

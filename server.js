@@ -1,32 +1,42 @@
-const { createServer: createHttpsServer } = require('https')
-const { createServer: createHttpServer } = require('http')
-const { parse } = require('url')
-const next = require('next')
-const fs = require('fs')
-const path = require('path')
+const { createServer: createHttpsServer } = require("https");
+const { createServer: createHttpServer } = require("http");
+const { parse } = require("url");
+const next = require("next");
+const fs = require("fs");
+const path = require("path");
 
-const dev = process.env.NODE_ENV !== 'production'
-const app = next({ dev, turbo: true })
-const handle = app.getRequestHandler()
+const dev = process.env.NODE_ENV !== "production";
+const app = next({ dev });
+const handle = app.getRequestHandler();
 
+// SSL certificates (generated with mkcert or similar)
 const httpsOptions = {
-  key: fs.readFileSync(path.join(__dirname, 'cert.key')),
-  cert: fs.readFileSync(path.join(__dirname, 'cert.crt')),
-}
-
-const port = process.env.PORT || 3000
-const hostname = '0.0.0.0'
+  key: fs.readFileSync(path.join(__dirname, "aahaar-key.pem")),
+  cert: fs.readFileSync(path.join(__dirname, "aahaar.pem")),
+};
 
 app.prepare().then(() => {
-  const server = createHttpsServer(httpsOptions, (req, res) => {
-    const parsedUrl = parse(req.url, true)
-    handle(req, res, parsedUrl)
-  })
+  // HTTP server (redirect only)
+  const httpServer = createHttpServer((req, res) => {
+    res.writeHead(301, {
+      Location: "https://" + req.headers.host + req.url,
+    });
+    res.end();
+  });
 
-  server.listen(port, hostname, (err) => {
-    if (err) throw err
-    console.log(`> Ready on https://${hostname}:${port}`)
-    console.log(`> Local: https://localhost:${port}`)
-    console.log(`> Network: https://192.168.1.2:${port}`)
-  })
-})
+  httpServer.listen(80, "0.0.0.0", (err) => {
+    if (err) throw err;
+    console.log("> HTTP Redirecting to HTTPS on: http://aahaar");
+  });
+
+  // HTTPS server (port 443)
+  const httpsServer = createHttpsServer(httpsOptions, (req, res) => {
+    const parsedUrl = parse(req.url, true);
+    handle(req, res, parsedUrl);
+  });
+
+  httpsServer.listen(443, "0.0.0.0", (err) => {
+    if (err) throw err;
+    console.log("> HTTPS Ready on: https://aahaar");
+  });
+});

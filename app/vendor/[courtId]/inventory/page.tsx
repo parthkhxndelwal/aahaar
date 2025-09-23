@@ -443,13 +443,13 @@ export default function VendorInventory({ params }: { params: Promise<{ courtId:
     
     switch (status) {
       case "out-of-stock":
-        return <Badge variant="destructive" className="text-xs">Out of Stock</Badge>
+        return <Badge variant="destructive" className="text-xs bg-red-900/80 text-red-200 border-red-800/50">Out of Stock</Badge>
       case "low-stock":
-        return <Badge variant="secondary" className="text-xs">Low Stock</Badge>
+        return <Badge variant="secondary" className="text-xs bg-yellow-900/80 text-yellow-200 border-yellow-800/50">Low Stock</Badge>
       case "in-stock":
-        return <Badge variant="default" className="text-xs">In Stock</Badge>
+        return <Badge variant="default" className="text-xs bg-green-900/80 text-green-200 border-green-800/50">In Stock</Badge>
       default:
-        return <Badge variant="outline" className="text-xs">No Tracking</Badge>
+        return <Badge variant="outline" className="text-xs bg-neutral-800/80 text-neutral-300 border-neutral-600/50">No Tracking</Badge>
     }
   }
 
@@ -588,10 +588,10 @@ export default function VendorInventory({ params }: { params: Promise<{ courtId:
       </Card>
 
       {/* Inventory Items */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6">
         {filteredItems.map((item) => (
           <Card key={item.id} className="overflow-hidden">
-            <div className="aspect-[4/3] relative bg-neutral-200">
+            <div className="aspect-[3/2] relative bg-neutral-800">
               {item.imageUrl ? (
                 <img
                   src={item.imageUrl}
@@ -599,32 +599,32 @@ export default function VendorInventory({ params }: { params: Promise<{ courtId:
                   className="w-full h-full object-cover"
                 />
               ) : (
-                <div className="w-full h-full flex items-center justify-center bg-neutral-100">
-                  <Package className="h-12 w-12 text-neutral-400" />
+                <div className="w-full h-full flex items-center justify-center bg-neutral-700">
+                  <Package className="h-8 w-8 text-neutral-400" />
                 </div>
               )}
               <div className="absolute top-2 left-2">
                 {getStockStatusBadge(item)}
               </div>
               <div className="absolute top-2 right-2">
-                <Badge variant="outline" className="text-xs bg-white/80">
+                <Badge variant="secondary" className="text-xs bg-neutral-900/80 text-neutral-200 border-neutral-700">
                   {item.category}
                 </Badge>
               </div>
             </div>
             
-            <CardHeader className="pb-2">
-              <CardTitle className="text-lg">{item.name}</CardTitle>
-              <CardDescription className="text-sm line-clamp-2">{item.description}</CardDescription>
+            <CardHeader className="pb-2 px-4 pt-3">
+              <CardTitle className="text-base leading-tight">{item.name}</CardTitle>
+              <CardDescription className="text-xs line-clamp-1">{item.description}</CardDescription>
             </CardHeader>
             
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-3 px-4 pb-4">
               <div className="flex justify-between items-center">
-                <span className="text-lg font-semibold text-green-600">₹{item.price}</span>
+                <span className="text-base font-semibold text-green-400">₹{item.price}</span>
                 <div className="flex items-center gap-2">
-                  <span className="text-sm text-neutral-600">Available</span>
+                  <span className="text-xs text-neutral-400">Available</span>
                   {updatingItems[item.id] ? (
-                    <Loader2 className="h-4 w-4 animate-spin text-neutral-400" />
+                    <Loader2 className="h-3 w-3 animate-spin text-neutral-400" />
                   ) : (
                     <Switch
                       checked={item.isAvailable}
@@ -637,17 +637,17 @@ export default function VendorInventory({ params }: { params: Promise<{ courtId:
               {item.hasStock ? (
                 <div className="space-y-3">
                   <div className="flex justify-between items-center">
-                    <span className="text-sm font-medium">Current Stock</span>
+                    <span className="text-xs font-medium">Current Stock</span>
                     <div className="flex items-center gap-1">
-                      <span className="text-sm">
+                      <span className="text-xs">
                         {getDisplayStockQuantity(item)} {item.stockUnit || 'pcs'}
                       </span>
                       {(updatingItems[item.id] || pendingUpdates[item.id] !== undefined) && (
                         <div className="flex items-center gap-1">
                           {updatingItems[item.id] ? (
-                            <Loader2 className="h-3 w-3 animate-spin text-blue-600" />
+                            <Loader2 className="h-3 w-3 animate-spin text-blue-400" />
                           ) : (
-                            <div className="h-2 w-2 bg-yellow-500 rounded-full animate-pulse" title="Pending update" />
+                            <div className="h-1.5 w-1.5 bg-yellow-400 rounded-full animate-pulse" title="Pending update" />
                           )}
                         </div>
                       )}
@@ -682,19 +682,19 @@ export default function VendorInventory({ params }: { params: Promise<{ courtId:
                   </div>
 
                   {!item.isAvailable && (
-                    <div className="text-xs text-amber-600 bg-amber-50 p-2 rounded">
+                    <div className="text-xs text-amber-400 bg-amber-900/30 border border-amber-800/50 p-1.5 rounded">
                       Stock controls disabled - Item is unavailable
                     </div>
                   )}
 
-                  <div className="text-xs text-neutral-500">
+                  <div className="text-xs text-neutral-400">
                     Min: {item.minStockLevel || 0} | Max: {item.maxStockLevel || 0}
                   </div>
 
                   <Button
                     variant="outline"
                     size="sm"
-                    className="w-full"
+                    className="w-full text-xs h-7"
                     onClick={() => {
                       setEditingItem(item)
                       setIsEditDialogOpen(true)
@@ -705,11 +705,12 @@ export default function VendorInventory({ params }: { params: Promise<{ courtId:
                   </Button>
                 </div>
               ) : (
-                <div className="text-center py-4">
-                  <div className="text-sm text-neutral-500 mb-2">Stock tracking not enabled</div>
+                <div className="text-center py-3">
+                  <div className="text-xs text-neutral-400 mb-2">Stock tracking not enabled</div>
                   <Button
                     variant="outline"
                     size="sm"
+                    className="text-xs h-7"
                     onClick={() => {
                       setEditingItem(item)
                       setIsEditDialogOpen(true)

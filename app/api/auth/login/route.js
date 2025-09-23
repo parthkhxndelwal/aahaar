@@ -51,23 +51,19 @@ export async function POST(request) {
 
       console.log("🔐 Email OTP verification attempt:", { email, otp, courtId })
 
-      // Find the user first
+      // First, find if user already exists
       let user = await User.findOne({
         where: { 
           email: email.toLowerCase()
         }
       })
 
-      if (!user) {
-        console.log("❌ User not found for email:", email)
-        return NextResponse.json({ 
-          success: false, 
-          message: "Invalid email or OTP" 
-        }, { status: 401 })
-      }
+      const isExistingUser = !!user
+
+      console.log("👤 User lookup result:", { email, userExists: isExistingUser, userId: user?.id })
 
       // Check if user has a non-customer role
-      if (user.role !== 'user') {
+      if (user && user.role !== 'user') {
         console.log(`❌ ${user.role} account cannot use customer login:`, email)
         return NextResponse.json({ 
           success: false, 
@@ -75,24 +71,42 @@ export async function POST(request) {
         }, { status: 403 })
       }
 
-      // Find the OTP record using the correct model fields
+      // Look for OTP record - for existing users use userId, for new users search by email
+      let otpQuery = {
+        type: 'email',
+        value: email.toLowerCase(),
+        otp: otp,
+        courtId: courtId,
+        verified: false,
+        expiresAt: {
+          [require('sequelize').Op.gt]: new Date()
+        }
+      }
+
+      if (isExistingUser) {
+        otpQuery.userId = user.id
+      } else {
+        otpQuery.userId = null // For new users, userId should be null
+      }
+
+      console.log("🔍 Looking for OTP record with criteria:", otpQuery)
+
       const otpRecord = await OTP.findOne({
-        where: {
-          userId: user.id,
-          type: 'email',
-          value: email.toLowerCase(),
-          otp: otp,
-          courtId: courtId,
-          verified: false,
-          expiresAt: {
-            [require('sequelize').Op.gt]: new Date()
-          }
-        },
+        where: otpQuery,
         order: [['createdAt', 'DESC']]
       })
 
+      console.log("🔍 Found OTP record:", otpRecord ? {
+        id: otpRecord.id,
+        otp: otpRecord.otp,
+        userId: otpRecord.userId,
+        verified: otpRecord.verified,
+        expiresAt: otpRecord.expiresAt,
+        courtId: otpRecord.courtId
+      } : null)
+
       if (!otpRecord) {
-        console.log("❌ Invalid or expired OTP:", { email, otp })
+        console.log("❌ Invalid or expired OTP:", { email, otp, isExistingUser })
         
         // Create audit log for failed OTP verification
         try {
@@ -130,27 +144,110 @@ export async function POST(request) {
       await otpRecord.update({ verified: true })
       await otpRecord.destroy()
 
-      // Re-fetch user with court info
-      user = await User.findOne({
-        where: { 
-          email: email.toLowerCase()
-        },
-        include: [{ model: Court, as: "court" }],
-      })
-
-      if (!user) {
-        console.log("❌ User not found for email:", email)
-        return NextResponse.json({ 
-          success: false, 
-          message: "Invalid email or OTP" 
-        }, { status: 401 })
-      }
-
-      // Check if this is a temporary user (status: 'pending')
-      if (user.status === 'pending') {
-        console.log("✅ OTP verified for new user, profile completion required")
+      // Handle existing user vs new user
+      if (isExistingUser) {
+        console.log("✅ OTP verified for existing user")
         
-        // Create audit log for OTP verification success
+        // Re-fetch user with court info for existing user
+        user = await User.findOne({
+          where: { 
+            email: email.toLowerCase()
+          },
+          include: [{ model: Court, as: "court" }],
+        })
+
+        // Check if profile is complete
+        if (!user.profileCompleted || !user.fullName || !user.password) {
+          console.log("✅ Existing user needs profile completion")
+          
+          return NextResponse.json({
+            success: true,
+            message: "OTP verified successfully",
+            data: {
+              requiresProfileCompletion: true,
+              isNewUser: false,
+              email: email.toLowerCase(),
+              courtId: courtId,
+              user: {
+                id: user.id,
+                email: user.email,
+                fullName: user.fullName === 'Temporary User' ? null : user.fullName,
+                hasPassword: !!user.password
+              }
+            },
+          })
+        }
+
+        // Existing user with complete profile - generate token and login
+        const token = jwt.sign({ 
+          userId: user.id, 
+          courtId: user.courtId, 
+          role: user.role,
+          email: user.email 
+        }, process.env.JWT_SECRET || 'fallback-secret-for-dev', {
+          expiresIn: process.env.JWT_EXPIRES_IN || "7d",
+        })
+
+        // Update last login
+        await user.update({ lastLoginAt: new Date() })
+
+        // Create audit log for successful OTP login
+        try {
+          await AuditLog.create({
+            courtId: user.courtId,
+            userId: user.id,
+            action: "USER_LOGIN_OTP",
+            entityType: "user",
+            entityId: user.id,
+            metadata: {
+              loginMethod: "email_otp",
+              email: email,
+              userAgent: request.headers.get("user-agent") || "unknown",
+              ipAddress: request.headers.get("x-forwarded-for") || 
+                        request.headers.get("x-real-ip") || 
+                        request.headers.get("x-client-ip") || 
+                        "unknown"
+            },
+            ipAddress: request.headers.get("x-forwarded-for") || 
+                      request.headers.get("x-real-ip") || 
+                      request.headers.get("x-client-ip") || 
+                      "unknown",
+            userAgent: request.headers.get("user-agent") || "unknown"
+          })
+          console.log("✅ Audit log created for existing user OTP login:", email)
+        } catch (auditError) {
+          console.error("❌ Failed to create audit log for OTP login:", auditError)
+        }
+
+        return NextResponse.json({
+          success: true,
+          message: "Login successful",
+          data: {
+            token,
+            user: {
+              id: user.id,
+              email: user.email,
+              fullName: user.fullName,
+              role: user.role,
+              courtId: user.courtId,
+              profileCompleted: user.profileCompleted,
+              court: user.court,
+            },
+          },
+        })
+      } else {
+        console.log("✅ OTP verified for new user, creating account")
+        
+        // Create new user account
+        user = await User.create({
+          email: email.toLowerCase(),
+          fullName: 'Temporary User',
+          courtId: courtId,
+          role: 'user',
+          status: 'pending' // Mark as pending until profile is completed
+        })
+
+        // Create audit log for new user OTP verification
         try {
           await AuditLog.create({
             courtId: courtId,
@@ -173,7 +270,7 @@ export async function POST(request) {
             userAgent: request.headers.get("user-agent") || "unknown"
           })
         } catch (auditError) {
-          console.error("❌ Failed to create audit log for OTP verification:", auditError)
+          console.error("❌ Failed to create audit log for new user OTP verification:", auditError)
         }
 
         return NextResponse.json({
@@ -181,90 +278,18 @@ export async function POST(request) {
           message: "OTP verified successfully",
           data: {
             requiresProfileCompletion: true,
+            isNewUser: true,
             email: email.toLowerCase(),
             courtId: courtId,
             user: {
               id: user.id,
               email: user.email,
-              name: user.fullName === 'Temporary User' ? null : user.fullName,
-              hasPassword: !!user.password
+              fullName: null, // New user needs to set name
+              hasPassword: false // New user needs to set password
             }
           },
         })
       }
-
-      // User exists - check if profile is complete
-      if (!user.profileCompleted || !user.fullName || !user.password) {
-        console.log("✅ OTP verified for existing user, profile completion required")
-        
-        return NextResponse.json({
-          success: true,
-          message: "OTP verified successfully",
-          data: {
-            requiresProfileCompletion: true,
-            email: email.toLowerCase(),
-            courtId: courtId
-          },
-        })
-      }
-
-      // User exists and profile is complete - generate token and login
-      const token = jwt.sign({ 
-        userId: user.id, 
-        courtId: user.courtId, 
-        role: user.role,
-        email: user.email 
-      }, process.env.JWT_SECRET || 'fallback-secret-for-dev', {
-        expiresIn: process.env.JWT_EXPIRES_IN || "7d",
-      })
-
-      // Update last login
-      await user.update({ lastLoginAt: new Date() })
-
-      // Create audit log for successful OTP login
-      try {
-        await AuditLog.create({
-          courtId: user.courtId,
-          userId: user.id,
-          action: "USER_LOGIN_OTP",
-          entityType: "user",
-          entityId: user.id,
-          metadata: {
-            loginMethod: "email_otp",
-            email: email,
-            userAgent: request.headers.get("user-agent") || "unknown",
-            ipAddress: request.headers.get("x-forwarded-for") || 
-                      request.headers.get("x-real-ip") || 
-                      request.headers.get("x-client-ip") || 
-                      "unknown"
-          },
-          ipAddress: request.headers.get("x-forwarded-for") || 
-                    request.headers.get("x-real-ip") || 
-                    request.headers.get("x-client-ip") || 
-                    "unknown",
-          userAgent: request.headers.get("user-agent") || "unknown"
-        })
-        console.log("✅ Audit log created for OTP login:", email)
-      } catch (auditError) {
-        console.error("❌ Failed to create audit log for OTP login:", auditError)
-      }
-
-      return NextResponse.json({
-        success: true,
-        message: "Login successful",
-        data: {
-          token,
-          user: {
-            id: user.id,
-            email: user.email,
-            fullName: user.fullName,
-            role: user.role,
-            courtId: user.courtId,
-            profileCompleted: user.profileCompleted,
-            court: user.court,
-          },
-        },
-      })
     }
 
     // Legacy phone-based OTP login (for backward compatibility)

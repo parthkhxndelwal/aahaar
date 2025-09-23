@@ -23,6 +23,7 @@ interface MenuItem {
   vendor?: {
     stallName: string
     cuisineType: string
+    isOnline: boolean
   }
 }
 
@@ -190,6 +191,7 @@ export default function HomePage({ params }: { params: Promise<{ courtId: string
                     status={item.status as 'active' | 'inactive' | 'out_of_stock'}
                     vendorId={item.vendorId}
                     vendorName={item.vendor?.stallName || 'Unknown Vendor'}
+                    isVendorOnline={item.vendor?.isOnline ?? true}
                     className="h-full"
                   />
                 </motion.div>

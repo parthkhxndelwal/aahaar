@@ -7,7 +7,7 @@ module.exports = (sequelize, DataTypes) => {
     },
     userId: {
       type: DataTypes.UUID,
-      allowNull: false,
+      allowNull: true, // Allow null for new users who don't have accounts yet
       references: {
         model: 'users',
         key: 'id'

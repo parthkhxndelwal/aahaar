@@ -2,10 +2,15 @@
 
 import { useState, useEffect, useRef, useCallback } from "react"
 import { motion } from "framer-motion"
-import { Plus, Minus, Trash2 } from "lucide-react"
+import { Plus, Minus, Trash2, AlertTriangle, Wifi, WifiOff } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import Image from "next/image"
 import { useCart } from "@/contexts/cart-context"
+
+interface ValidationIssue {
+  type: "vendor_offline" | "item_unavailable" | "out_of_stock" | "item_inactive" | "no_stock" | "insufficient_stock"
+  message: string
+}
 
 interface CartItemProps {
   item: {
@@ -22,9 +27,12 @@ interface CartItemProps {
   index: number
   onRemove: (menuItemId: string) => void
   isLoading: boolean
+  // Validation props
+  isValid?: boolean
+  validationIssues?: ValidationIssue[]
 }
 
-export function CartItem({ item, index, onRemove, isLoading }: CartItemProps) {
+export function CartItem({ item, index, onRemove, isLoading, isValid = true, validationIssues = [] }: CartItemProps) {
   const { updateQuantityOptimistic, removeFromCartOptimistic } = useCart()
   
   // Local state for immediate UI updates
@@ -36,6 +44,14 @@ export function CartItem({ item, index, onRemove, isLoading }: CartItemProps) {
   const syncTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const isSyncingRef = useRef<boolean>(false)
   const lastUpdateTimeRef = useRef<number>(0)
+
+  // Check if vendor is offline
+  const isVendorOffline = validationIssues.some(issue => issue.type === "vendor_offline")
+  
+  // Check if item has stock/availability issues
+  const hasStockIssues = validationIssues.some(issue => 
+    ["out_of_stock", "no_stock", "insufficient_stock", "item_unavailable", "item_inactive"].includes(issue.type)
+  )
 
   // Update display when cart item changes (from external updates)
   useEffect(() => {
@@ -204,7 +220,11 @@ export function CartItem({ item, index, onRemove, isLoading }: CartItemProps) {
         stiffness: 300,
         damping: 30
       }}
-      className="bg-white dark:bg-neutral-900 rounded-lg shadow-sm border border-neutral-200 dark:border-neutral-800 p-4 w-full hover:shadow-md dark:hover:shadow-neutral-800/50 transition-shadow"
+      className={`bg-white dark:bg-neutral-900 rounded-lg shadow-sm border transition-all ${
+        isValid 
+          ? 'border-neutral-200 dark:border-neutral-800 hover:shadow-md dark:hover:shadow-neutral-800/50' 
+          : 'border-amber-300 dark:border-amber-600 bg-amber-50/50 dark:bg-amber-900/10 hover:shadow-md hover:shadow-amber-200/50 dark:hover:shadow-amber-800/20'
+      } p-4 w-full`}
     >
       <div className="flex gap-3 h-full">
         {/* Image */}
@@ -229,10 +249,38 @@ export function CartItem({ item, index, onRemove, isLoading }: CartItemProps) {
           {/* Header with Name and Remove Button */}
           <div className="flex items-start justify-between w-full mb-2">
             <div className="flex-1 min-w-0 pr-2">
-              <h3 className="font-medium text-neutral-900 dark:text-white truncate text-sm">{item.name}</h3>
-              <p className="text-xs text-neutral-600 dark:text-neutral-400 truncate">
-                {item.vendorName || 'Unknown Vendor'}
-              </p>
+              <h3 className={`font-medium truncate text-sm ${isValid ? 'text-neutral-900 dark:text-white' : 'text-amber-800 dark:text-amber-200'}`}>
+                {item.name}
+              </h3>
+              <div className="flex items-center gap-2">
+                <p className="text-xs text-neutral-600 dark:text-neutral-400 truncate">
+                  {item.vendorName || 'Unknown Vendor'}
+                </p>
+                {isVendorOffline && (
+                  <div className="flex items-center gap-1">
+                    <WifiOff className="h-3 w-3 text-red-500" />
+                    <span className="text-xs text-red-600 dark:text-red-400">Offline</span>
+                  </div>
+                )}
+                {hasStockIssues && (
+                  <div className="flex items-center gap-1">
+                    <AlertTriangle className="h-3 w-3 text-amber-500" />
+                    <span className="text-xs text-amber-600 dark:text-amber-400">Stock Issue</span>
+                  </div>
+                )}
+              </div>
+              {!isValid && validationIssues.length > 0 && (
+                <div className="mt-1">
+                  <p className="text-xs text-amber-700 dark:text-amber-300 font-medium">
+                    {validationIssues[0].message}
+                  </p>
+                  {validationIssues.length > 1 && (
+                    <p className="text-xs text-amber-600 dark:text-amber-400">
+                      +{validationIssues.length - 1} more issue{validationIssues.length > 2 ? 's' : ''}
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
             <motion.div
               whileHover={{ scale: 1.1 }}

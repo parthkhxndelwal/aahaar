@@ -23,6 +23,8 @@ interface ProductCardProps {
   // Vendor information for optimistic updates
   vendorId?: string
   vendorName?: string
+  // Vendor online status
+  isVendorOnline?: boolean
 }
 
 export function ProductCard({
@@ -39,7 +41,8 @@ export function ProductCard({
   stockUnit = "pieces",
   status = "active",
   vendorId = "",
-  vendorName = ""
+  vendorName = "",
+  isVendorOnline = true
 }: ProductCardProps) {
   const { cart, addToCartOptimistic, updateQuantityOptimistic, removeFromCartOptimistic, isLoading: cartLoading } = useCart()
   
@@ -341,6 +344,11 @@ export function ProductCard({
 
   // Calculate stock status
   const stockStatus = useMemo(() => {
+    // If vendor is offline, override all other statuses
+    if (!isVendorOnline) {
+      return { status: 'vendor_offline', message: 'Vendor Offline', canOrder: false }
+    }
+    
     if (status === 'out_of_stock') {
       return { status: 'out_of_stock', message: 'Out of Stock', canOrder: false }
     }
@@ -370,7 +378,7 @@ export function ProductCard({
       message: `${stockQuantity} ${stockUnit} available`, 
       canOrder: true 
     }
-  }, [hasStock, stockQuantity, stockUnit, status])
+  }, [hasStock, stockQuantity, stockUnit, status, isVendorOnline])
 
   return (
     <motion.div
@@ -466,7 +474,11 @@ export function ProductCard({
         <div className="flex items-center justify-between pt-1">
           {/* Stock Status Display */}
           <div className="text-[10px] text-neutral-500 dark:text-neutral-400">
-            {stockStatus.status === 'out_of_stock' ? (
+            {stockStatus.status === 'vendor_offline' ? (
+              <span className="text-amber-600 dark:text-amber-400 font-medium">
+                Vendor Offline
+              </span>
+            ) : stockStatus.status === 'out_of_stock' ? (
               <span className="text-red-600 dark:text-red-400 font-medium">
                 {stockStatus.message}
               </span>
@@ -484,14 +496,24 @@ export function ProductCard({
           </div>
         </div>
         <div className="flex items-center justify-center pt-1">
-          {displayQuantity === 0 ? (
+          {!isVendorOnline ? (
+            /* Vendor Offline State */
+            <div className="w-full px-3 py-1.5 rounded-xl text-center bg-amber-100 dark:bg-amber-900/30 border border-amber-300 dark:border-amber-700/50">
+              <div className="text-[10px] font-medium text-amber-700 dark:text-amber-300">
+                Vendor Offline
+              </div>
+              <div className="text-[9px] text-amber-600 dark:text-amber-400 mt-0.5">
+                Check back soon
+              </div>
+            </div>
+          ) : displayQuantity === 0 ? (
             <motion.button
               onClick={handleAddToCart}
               disabled={!stockStatus.canOrder}
               className={`flex items-center justify-center gap-1 px-3 py-1.5 rounded-xl text-[10px] font-medium transition-colors w-full ${
                 !stockStatus.canOrder
                   ? 'bg-neutral-300 dark:bg-neutral-700 text-neutral-500 dark:text-neutral-400 cursor-not-allowed'
-                  : 'bg-neutral-100 dark:bg-neutral-100 text-white dark:text-black hover:bg-neutral-200 dark:hover:bg-neutral-700'
+                  : 'bg-neutral-100 dark:bg-neutral-100 text-white dark:text-black hover:bg-neutral-200 dark:hover:bg-neutral-200'
               }`}
               whileHover={stockStatus.canOrder ? { scale: 1.05 } : {}}
               whileTap={stockStatus.canOrder ? { scale: 0.95 } : {}}

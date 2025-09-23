@@ -19,6 +19,7 @@ interface HotMenuItem {
   vendor: {
     stallName: string
     cuisineType: string
+    isOnline: boolean
   }
 }
 
@@ -45,7 +46,7 @@ export async function GET(
             status: "active",
             isOnline: true,
           },
-          attributes: ["id", "stallName", "cuisineType"],
+          attributes: ["id", "stallName", "cuisineType", "isOnline"],
           required: true,
         },
       ],
@@ -86,7 +87,7 @@ export async function GET(
               status: "active",
               // Remove isOnline constraint for fallback
             },
-            attributes: ["id", "stallName", "cuisineType"],
+            attributes: ["id", "stallName", "cuisineType", "isOnline"],
             required: true,
           },
         ],
@@ -129,7 +130,8 @@ export async function GET(
           status: "active",
           vendor: {
             stallName: "Quick Bites",
-            cuisineType: "Fast Food"
+            cuisineType: "Fast Food",
+            isOnline: true
           }
         },
         {
@@ -147,7 +149,8 @@ export async function GET(
           status: "active",
           vendor: {
             stallName: "Pizza Corner",
-            cuisineType: "Italian"
+            cuisineType: "Italian",
+            isOnline: true
           }
         },
         {
@@ -165,7 +168,8 @@ export async function GET(
           status: "active",
           vendor: {
             stallName: "Spice Garden",
-            cuisineType: "Indian"
+            cuisineType: "Indian",
+            isOnline: false
           }
         }
       ]
@@ -218,6 +222,7 @@ export async function GET(
         vendor: {
           stallName: item.vendor.stallName,
           cuisineType: item.vendor.cuisineType,
+          isOnline: item.vendor.isOnline,
         }
       }
       
@@ -248,7 +253,8 @@ export async function GET(
         status: "active",
         vendor: {
           stallName: "Quick Bites",
-          cuisineType: "Fast Food"
+          cuisineType: "Fast Food",
+          isOnline: true
         }
       },
       {
@@ -266,7 +272,8 @@ export async function GET(
         status: "out_of_stock",
         vendor: {
           stallName: "Pizza Corner",
-          cuisineType: "Italian"
+          cuisineType: "Italian",
+          isOnline: true
         }
       },
       {
@@ -284,7 +291,8 @@ export async function GET(
         status: "active",
         vendor: {
           stallName: "Spice Garden",
-          cuisineType: "Indian"
+          cuisineType: "Indian",
+          isOnline: false
         }
       }
     ]

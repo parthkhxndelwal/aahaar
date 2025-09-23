@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Loader2, ArrowLeft, Building2, Mail, Eye, EyeOff } from "lucide-react"
 import { useAppAuth } from "@/contexts/app-auth-context"
+import { InputOTP, InputOTPGroup, InputOTPSlot, InputOTPSeparator } from "@/components/ui/input-otp"
 
 type AuthStep = 'email' | 'otp' | 'password' | 'onboarding'
 
@@ -245,26 +246,21 @@ export default function UserLogin() {
       console.log("🔍 OTP Response data:", data)
 
       if (data.success) {
-        // For new users (email doesn't exist), always go to onboarding
-        if (isNewUser) {
-          // Check if user needs password setup
-          const userNeedsPassword = !data.data?.user?.hasPassword
+        // Check if profile completion is required
+        if (data.data.requiresProfileCompletion) {
+          const isNewUser = data.data.isNewUser
+          setIsNewUser(isNewUser)
           setNeedsOnboarding(true)
           setCurrentStep('onboarding')
-          // Update isNewUser based on whether they need to set a password
-          setIsNewUser(userNeedsPassword)
-          console.log("🔧 New user onboarding:", { userNeedsPassword, hasPassword: data.data?.user?.hasPassword, dataStructure: data.data })
+          console.log("🔧 Profile completion required:", { 
+            isNewUser, 
+            hasPassword: data.data.user?.hasPassword,
+            fullName: data.data.user?.fullName 
+          })
         } else {
-          // For existing users, check if they need onboarding (no name set)
-          if (!data.data.user.name) {
-            setNeedsOnboarding(true)
-            setCurrentStep('onboarding')
-            // Existing user just needs name, not password
-            setIsNewUser(false)
-          } else {
-            // Existing user with complete profile
-            login(data.data.token, data.data.user)
-          }
+          // User has complete profile - login immediately
+          console.log("✅ User with complete profile, logging in:", data.data.user)
+          login(data.data.token, data.data.user)
         }
         return true
       } else {
@@ -597,19 +593,33 @@ export default function UserLogin() {
               <div className="space-y-4">
                 <div className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="otp">Verification Code</Label>
-                    <Input
-                      id="otp"
-                      type="text"
-                      placeholder="Enter 6-digit code"
-                      value={otp}
-                      onChange={(e) => setOtp(e.target.value)}
-                      maxLength={6}
-                    />
+                    <Label>Verification Code</Label>
+                    <div className="flex justify-center">
+                      <InputOTP
+                        maxLength={6}
+                        value={otp}
+                        onChange={setOtp}
+                        onComplete={(val) => { setOtp(val); handleOTPSubmit() }}
+                        aria-label="Enter the 6-digit verification code"
+                      >
+                        <InputOTPGroup>
+                          <InputOTPSlot index={0} />
+                          <InputOTPSlot index={1} />
+                          <InputOTPSlot index={2} />
+                        </InputOTPGroup>
+                        <InputOTPSeparator />
+                        <InputOTPGroup>
+                          <InputOTPSlot index={3} />
+                          <InputOTPSlot index={4} />
+                          <InputOTPSlot index={5} />
+                        </InputOTPGroup>
+                      </InputOTP>
+                    </div>
                   </div>
                   <AnimatedButton 
                     className="w-full"
                     onAsyncClick={handleOTPSubmit}
+                    disabled={otp.length !== 6}
                   >
                     Verify Code
                   </AnimatedButton>
