@@ -374,6 +374,8 @@ export default function CartPage({ params }: { params: Promise<{ courtId: string
             razorpayOrderId: data.data.razorpayOrderId,
             amount: data.data.razorpayOrderAmount,
             localOrderId: data.data?.orders?.[0]?.id || data.data?.orders?.[0]?.orderNumber || data.data?.parentOrderId,
+            transformedOrder,
+            orderData: data.data,
           })
           // Payment success will be handled by the state change in the handler
         } catch (err) {
@@ -408,7 +410,7 @@ export default function CartPage({ params }: { params: Promise<{ courtId: string
   }
 
   // Open Razorpay Checkout
-  const openRazorpayCheckout = ({ razorpayOrderId, amount, localOrderId }: { razorpayOrderId: string, amount: number, localOrderId: string }) => {
+  const openRazorpayCheckout = ({ razorpayOrderId, amount, localOrderId, transformedOrder: passedTransformedOrder, orderData: passedOrderData }: { razorpayOrderId: string, amount: number, localOrderId: string, transformedOrder?: any, orderData?: any }) => {
     return new Promise<void>((resolve, reject) => {
       if (typeof window === "undefined") return reject(new Error("window is undefined"))
       const options: any = {
@@ -433,11 +435,13 @@ export default function CartPage({ params }: { params: Promise<{ courtId: string
             })
 
             // Fetch vendor details to get razorpayAccountId and create payout JSON
-            console.log('Checking for payout data:', { transformedOrder: !!transformedOrder, orderData: !!orderData })
-            if (transformedOrder && orderData) {
-              console.log('transformedOrder:', transformedOrder)
-              console.log('orderData:', orderData)
-              const vendorIds = Object.keys(transformedOrder.vendors)
+            console.log('Checking for payout data:', { transformedOrder: !!passedTransformedOrder, orderData: !!passedOrderData })
+            if (passedTransformedOrder && passedOrderData) {
+              console.log('🔍 [PAYMENT ROUTING] transformedOrder details:', JSON.stringify(passedTransformedOrder, null, 2))
+              console.log('🔍 [PAYMENT ROUTING] orderData details:', JSON.stringify(passedOrderData, null, 2))
+              console.log('transformedOrder:', passedTransformedOrder)
+              console.log('orderData:', passedOrderData)
+              const vendorIds = Object.keys(passedTransformedOrder.vendors)
               console.log('vendorIds:', vendorIds)
               const vendorResponse = await fetch(`/api/app/${courtId}/vendors?ids=${vendorIds.join(',')}`, {
                 headers: {
@@ -452,7 +456,7 @@ export default function CartPage({ params }: { params: Promise<{ courtId: string
                 console.log('All vendor details from database:', JSON.stringify(vendorData.data.vendors, null, 2))
 
                 // Update transformedOrder with razorpayAccountId
-                const updatedTransformedOrder = { ...transformedOrder }
+                const updatedTransformedOrder = { ...passedTransformedOrder }
                 vendorIds.forEach(vendorId => {
                   const vendor = vendorData.data.vendors.find((v: any) => v.id === vendorId)
                   if (vendor && updatedTransformedOrder.vendors[vendorId]) {
@@ -474,11 +478,73 @@ export default function CartPage({ params }: { params: Promise<{ courtId: string
 
                 console.log('Updated transformedOrder with razorpayAccountId:', updatedTransformedOrder)
                 console.log('Vendor Payout JSON:', JSON.stringify(payoutData, null, 2))
+
+                // Create Razorpay transfers to split payment to vendors (only in production)
+                console.log('🚀 [PAYMENT ROUTING] Starting vendor payment distribution process...')
+                if (process.env.NODE_ENV === 'development' && payoutData.some(p => p.razorpayAccountId && p.razorpayAccountId.startsWith('acc_'))) {
+                  console.log('💼 [PAYMENT ROUTING] Production environment detected - proceeding with Razorpay transfers')
+                  try {
+                    const transferData = payoutData
+                      .filter(p => p.razorpayAccountId && p.razorpayAccountId.startsWith('acc_')) // Only include transfers with valid account IDs
+                      .map(payout => ({
+                        account: payout.razorpayAccountId,
+                        amount: payout.amount,
+                        currency: 'INR',
+                        notes: {
+                          vendorId: payout.vendorId,
+                          orderId: localOrderId,
+                        },
+                        linked_account_notes: ['vendorId'],
+                        on_hold: false,
+                      }))
+
+                    console.log('🔄 [PAYMENT ROUTING] Creating Razorpay transfers via Orders API...')
+                    console.log('📊 [PAYMENT ROUTING] Transfer data structure:', JSON.stringify(transferData, null, 2))
+                    console.log('💰 [PAYMENT ROUTING] Total transfer amount:', transferData.reduce((sum, t) => sum + t.amount, 0), 'paise')
+                    console.log('🏪 [PAYMENT ROUTING] Number of vendor transfers:', transferData.length)
+
+                    const transferPayload = {
+                      razorpay_payment_id: response.razorpay_payment_id,
+                      razorpay_order_id: response.razorpay_order_id,
+                      transfers: transferData,
+                    }
+                    console.log('📤 [PAYMENT ROUTING] Payload being sent to transfers API:', JSON.stringify(transferPayload, null, 2))
+
+                    const transfersResponse = await fetch('/api/razorpay/transfers', {
+                      method: 'POST',
+                      headers: {
+                        'Content-Type': 'application/json',
+                        Authorization: `Bearer ${token}`,
+                      },
+                      body: JSON.stringify(transferPayload),
+                    })
+
+                    const transfersResult = await transfersResponse.json()
+                    console.log('✅ [PAYMENT ROUTING] Razorpay transfers API response:', transfersResult)
+
+                    if (!transfersResponse.ok) {
+                      console.error('❌ [PAYMENT ROUTING] Failed to create transfers:', transfersResult)
+                    } else {
+                      console.log('🎉 [PAYMENT ROUTING] Successfully routed payments to all vendors!')
+                      console.log('📈 [PAYMENT ROUTING] Transfer summary:', {
+                        totalAmount: transferData.reduce((sum, t) => sum + t.amount, 0),
+                        vendorCount: transferData.length,
+                        paymentId: response.razorpay_payment_id,
+                        orderId: localOrderId
+                      })
+                    }
+                  } catch (transferError) {
+                    console.error('💥 [PAYMENT ROUTING] Error during transfer creation:', transferError)
+                  }
+                } else {
+                  console.log('⚠️ [PAYMENT ROUTING] Skipping transfers - Environment:', process.env.NODE_ENV, '| Valid accounts found:', payoutData.filter(p => p.razorpayAccountId && p.razorpayAccountId.startsWith('acc_')).length)
+                }
+                console.log('🏁 [PAYMENT ROUTING] Vendor payment distribution process completed')
               } else {
                 console.log('Vendor API call failed:', vendorData)
               }
             } else {
-              console.log('transformedOrder or orderData not available')
+              console.log('transformedOrder or orderData not available - passedTransformedOrder:', !!passedTransformedOrder, 'passedOrderData:', !!passedOrderData)
             }
 
             // Clear the cart after successful payment
