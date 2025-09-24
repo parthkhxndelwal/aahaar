@@ -4,8 +4,10 @@ import { Vendor, MenuItem, MenuCategory, sequelize } from "@/models"
 export async function GET(request, { params }) {
   try {
     const { courtId } = params
+    const { searchParams } = new URL(request.url)
+    const vendorIds = searchParams.get('ids')?.split(',').filter(Boolean)
 
-    console.log("🔍 [VendorsAPI] GET /api/app/[courtId]/vendors called", { courtId })
+    console.log("🔍 [VendorsAPI] GET /api/app/[courtId]/vendors called", { courtId, vendorIds })
 
     if (!courtId) {
       return NextResponse.json(
@@ -14,12 +16,19 @@ export async function GET(request, { params }) {
       )
     }
 
-    // Fetch all active vendors for the specific court with actual item and category counts
+    // Build where clause
+    const whereClause = {
+      courtId: courtId,
+      status: 'active'
+    }
+
+    if (vendorIds && vendorIds.length > 0) {
+      whereClause.id = vendorIds
+    }
+
+    // Fetch vendors for the specific court with actual item and category counts
     const vendors = await Vendor.findAll({
-      where: {
-        courtId: courtId,
-        status: 'active'
-      },
+      where: whereClause,
       attributes: [
         'id',
         'stallName',
@@ -30,6 +39,7 @@ export async function GET(request, { params }) {
         'description',
         'rating',
         'isOnline',
+        'razorpayAccountId',
         // Add subqueries for actual counts
         [
           sequelize.literal(`(
@@ -55,12 +65,13 @@ export async function GET(request, { params }) {
 
     console.log("✅ [VendorsAPI] Vendors fetched successfully", { 
       courtId, 
+      vendorIds,
       vendorCount: vendors.length 
     })
 
     return NextResponse.json({
       success: true,
-      vendors
+      data: { vendors }
     })
 
   } catch (error) {

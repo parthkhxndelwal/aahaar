@@ -12,6 +12,7 @@ interface PaymentGatewayProps {
   courtId: string
   onPaymentComplete: (paymentResult: any) => void
   onCancel: () => void
+  paymentAlreadyComplete?: boolean
 }
 
 export default function DummyPaymentGateway({ 
@@ -19,11 +20,21 @@ export default function DummyPaymentGateway({
   orderData, 
   courtId, 
   onPaymentComplete, 
-  onCancel 
+  onCancel,
+  paymentAlreadyComplete = false
 }: PaymentGatewayProps) {
   const [isProcessing, setIsProcessing] = useState(false)
-  const [paymentComplete, setPaymentComplete] = useState(false)
+  const [paymentComplete, setPaymentComplete] = useState(paymentAlreadyComplete)
   const router = useRouter()
+
+  // Handle redirect when payment is already complete
+  useEffect(() => {
+    if (paymentAlreadyComplete) {
+      setTimeout(() => {
+        router.push(`/app/${courtId}/orders/success?parentOrderId=${orderData.parentOrderId}&otp=${orderData.orderOtp}`)
+      }, 1500)
+    }
+  }, [paymentAlreadyComplete, courtId, orderData, router])
 
   const handlePayment = async () => {
     setIsProcessing(true)

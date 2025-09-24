@@ -40,11 +40,11 @@ export async function POST(request) {
 
         const order = await Order.findByPk(localOrderId)
         if (order) {
-          // If order already marked confirmed, skip
-          if (order.paymentStatus === "confirmed" || order.status === "confirmed") {
+          // If order already marked as paid, skip
+          if (order.paymentStatus === "paid" || order.status === "accepted") {
             console.log("Order already confirmed:", localOrderId)
           } else {
-            await order.update({ status: "confirmed", paymentStatus: "confirmed" })
+            await order.update({ status: "accepted", paymentStatus: "paid" })
           }
         }
       } catch (err) {
