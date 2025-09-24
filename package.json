@@ -4,14 +4,10 @@
   "private": true,
   "scripts": {
     "build": "next build",
-    "dev": "node server.js",
-    "dev:turbo": "next dev --turbopack -H 0.0.0.0",
-    "dev:https": "node server.js",
+    "dev": "next dev --turbopack",
+    "https": "node server.js",
     "lint": "next lint",
     "start": "next start",
-    "db:wipe": "node scripts/wipe-database.js",
-    "db:wipe:advanced": "node scripts/wipe-database-advanced.js",
-    "db:wipe:dry-run": "node scripts/wipe-database-advanced.js --dry-run"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",
