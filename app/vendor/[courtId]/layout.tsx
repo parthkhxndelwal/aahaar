@@ -1,6 +1,7 @@
 "use client"
 
 import type React from "react"
+import { use } from "react"
 
 import { useAuth } from "@/contexts/auth-context"
 import { useRouter } from "next/navigation"
@@ -13,16 +14,17 @@ export default function VendorLayout({
   params,
 }: {
   children: React.ReactNode
-  params: { courtId: string }
+  params: Promise<{ courtId: string }>
 }) {
   const { user, loading } = useAuth()
   const router = useRouter()
+  const { courtId } = use(params)
 
   useEffect(() => {
-    if (!loading && (!user || user.role !== "vendor" || user.courtId !== params.courtId)) {
+    if (!loading && (!user || user.role !== "vendor" || user.courtId !== courtId)) {
       router.push("/vendor/login")
     }
-  }, [user, loading, params.courtId, router])
+  }, [user, loading, courtId, router])
 
   if (loading) {
     return <div className="flex items-center justify-center min-h-screen">Loading...</div>
@@ -34,7 +36,7 @@ export default function VendorLayout({
 
   return (
     <div className="flex h-screen bg-gray-100">
-      <VendorSidebar courtId={params.courtId} />
+      <VendorSidebar courtId={courtId} />
       <div className="flex-1 flex flex-col overflow-hidden">
         <VendorHeader />
         <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-100 p-6">{children}</main>

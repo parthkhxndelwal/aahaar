@@ -1,4 +1,5 @@
 const { Sequelize } = require("sequelize")
+const mysql2 = require("mysql2")
 const config = require("../config/database")
 
 const env = process.env.NODE_ENV || "development"
@@ -8,6 +9,7 @@ const sequelize = new Sequelize(dbConfig.database, dbConfig.username, dbConfig.p
   host: dbConfig.host,
   port: dbConfig.port,
   dialect: dbConfig.dialect,
+  dialectModule: mysql2,
   logging: dbConfig.logging,
   pool: dbConfig.pool,
 })

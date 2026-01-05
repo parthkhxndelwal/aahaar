@@ -1,16 +1,17 @@
 import { NextResponse } from "next/server"
 import { Order, OrderItem, User, Vendor, MenuItem, Payment } from "@/models"
-import { authenticateTokenNextJS } from "@/middleware/auth"
+import { authenticateToken } from "@/middleware/auth"
 import { Op } from "sequelize"
 
 export async function GET(request, { params }) {
   try {
-    const authResult = await authenticateTokenNextJS(request)
-    if (authResult.error) {
-      return NextResponse.json({ success: false, message: authResult.error }, { status: authResult.status })
-    }
+    const authResult = await authenticateToken(request)
+    if (authResult instanceof NextResponse) return authResult
 
-    const { courtId } = params
+    // Extract user and courtId from auth result
+    const { user, courtId: authCourtId } = authResult
+
+    const { courtId } = await params
     const { searchParams } = new URL(request.url)
 
     const status = searchParams.get("status")

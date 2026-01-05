@@ -28,10 +28,10 @@ async function initializeDatabase() {
     if (!existingAdmin) {
       // Create a demo court for testing
       const demoCourt = await Court.create({
-        courtId: "demo-court",
+        courtId: "democourt",
         instituteName: "Demo Institute",
         instituteType: "college",
-        contactEmail: "admin@demo-court.com",
+        contactEmail: "admin@democourt.com",
         contactPhone: "9999999999",
         status: "active",
         subscriptionPlan: "premium",
@@ -39,7 +39,7 @@ async function initializeDatabase() {
 
       // Create default settings for demo court
       await CourtSettings.create({
-        courtId: "demo-court",
+        courtId: "democourt",
         allowOnlinePayments: true,
         allowCOD: true,
         platformFeePercentage: 2.5,
@@ -48,8 +48,8 @@ async function initializeDatabase() {
       // Create demo admin user
       const hashedPassword = await bcrypt.hash("admin123", 12)
       await User.create({
-        courtId: "demo-court",
-        email: "admin@demo-court.com",
+        courtId: "democourt",
+        email: "admin@democourt.com",
         fullName: "Demo Admin",
         password: hashedPassword,
         role: "admin",
@@ -58,9 +58,9 @@ async function initializeDatabase() {
       })
 
       console.log("✅ Demo court and admin user created successfully.")
-      console.log("📧 Demo Admin Email: admin@demo-court.com")
+      console.log("📧 Demo Admin Email: admin@democourt.com")
       console.log("🔑 Demo Admin Password: admin123")
-      console.log("🏢 Demo Court ID: demo-court")
+      console.log("🏢 Demo Court ID: democourt")
     }
 
     console.log("🎉 Database initialization completed successfully!")

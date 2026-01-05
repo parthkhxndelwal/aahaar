@@ -8,7 +8,10 @@ export async function GET(request, { params }) {
     const authResult = await authenticateToken(request)
     if (authResult instanceof NextResponse) return authResult
 
-    const { courtId } = params
+    // Extract user and courtId from auth result
+    const { user, courtId: authCourtId } = authResult
+
+    const { courtId } = await params
     const { searchParams } = new URL(request.url)
     const status = searchParams.get("status")
     const page = Number.parseInt(searchParams.get("page")) || 1

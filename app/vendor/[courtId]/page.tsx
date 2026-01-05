@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { use } from "react"
 import { useAuth } from "@/contexts/auth-context"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -38,16 +39,17 @@ interface VendorStats {
   totalOrders: number
 }
 
-export default function VendorDashboard({ params }: { params: { courtId: string } }) {
+export default function VendorDashboard({ params }: { params: Promise<{ courtId: string }> }) {
   const { user, token } = useAuth()
   const router = useRouter()
+  const { courtId } = use(params)
   const [orders, setOrders] = useState<Order[]>([])
   const [stats, setStats] = useState<VendorStats | null>(null)
   const [isOnline, setIsOnline] = useState(true)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    if (!user || user.role !== "vendor" || user.courtId !== params.courtId) {
+    if (!user || user.role !== "vendor" || user.courtId !== courtId) {
       router.push("/vendor/login")
       return
     }
@@ -57,7 +59,7 @@ export default function VendorDashboard({ params }: { params: { courtId: string 
     // Set up real-time updates (polling for now)
     const interval = setInterval(fetchData, 30000) // Refresh every 30 seconds
     return () => clearInterval(interval)
-  }, [user, params.courtId])
+  }, [user, courtId])
 
   const fetchData = async () => {
     try {

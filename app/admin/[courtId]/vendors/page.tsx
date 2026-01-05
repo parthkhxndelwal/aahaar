@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { use } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -21,11 +22,12 @@ interface Vendor {
   totalRatings: number
 }
 
-export default function AdminVendorsPage({ params }: { params: { courtId: string } }) {
+export default function AdminVendorsPage({ params }: { params: Promise<{ courtId: string }> }) {
   const [vendors, setVendors] = useState<Vendor[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
   const { toast } = useToast()
+  const { courtId } = use(params)
 
   useEffect(() => {
     fetchVendors()
@@ -33,7 +35,7 @@ export default function AdminVendorsPage({ params }: { params: { courtId: string
 
   const fetchVendors = async () => {
     try {
-      const response = await fetch(`/api/courts/${params.courtId}/vendors`, {
+      const response = await fetch(`/api/courts/${courtId}/vendors`, {
         headers: {
           Authorization: `Bearer ${localStorage.getItem("token")}`,
         },
@@ -71,7 +73,7 @@ export default function AdminVendorsPage({ params }: { params: { courtId: string
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold text-gray-900">Vendors</h1>
         <Button asChild>
-          <Link href={`/admin/${params.courtId}/vendors/add`}>
+          <Link href={`/admin/${courtId}/vendors/add`}>
             <Plus className="h-4 w-4 mr-2" />
             Add Vendor
           </Link>
@@ -138,7 +140,7 @@ export default function AdminVendorsPage({ params }: { params: { courtId: string
           <CardContent className="text-center py-12">
             <p className="text-gray-500 mb-4">No vendors found</p>
             <Button asChild>
-              <Link href={`/admin/${params.courtId}/vendors/add`}>Add First Vendor</Link>
+              <Link href={`/admin/${courtId}/vendors/add`}>Add First Vendor</Link>
             </Button>
           </CardContent>
         </Card>
