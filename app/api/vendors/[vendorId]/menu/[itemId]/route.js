@@ -7,6 +7,7 @@ export async function PATCH(request, { params }) {
     const authResult = await authenticateToken(request)
     if (authResult instanceof NextResponse) return authResult
 
+    const { user } = authResult
     const { vendorId, itemId } = params
     const updateData = await request.json()
 
@@ -18,8 +19,8 @@ export async function PATCH(request, { params }) {
       return NextResponse.json({ success: false, message: "Vendor or menu item not found" }, { status: 404 })
     }
 
-    const isVendorOwner = vendor.userId === request.user.id
-    const isAdmin = request.user.role === "admin"
+    const isVendorOwner = vendor.userId === user.id
+    const isAdmin = user.role === "admin"
 
     if (!isVendorOwner && !isAdmin) {
       return NextResponse.json({ success: false, message: "Access denied" }, { status: 403 })
@@ -43,6 +44,7 @@ export async function DELETE(request, { params }) {
     const authResult = await authenticateToken(request)
     if (authResult instanceof NextResponse) return authResult
 
+    const { user } = authResult
     const { vendorId, itemId } = params
 
     // Verify ownership
@@ -53,8 +55,8 @@ export async function DELETE(request, { params }) {
       return NextResponse.json({ success: false, message: "Vendor or menu item not found" }, { status: 404 })
     }
 
-    const isVendorOwner = vendor.userId === request.user.id
-    const isAdmin = request.user.role === "admin"
+    const isVendorOwner = vendor.userId === user.id
+    const isAdmin = user.role === "admin"
 
     if (!isVendorOwner && !isAdmin) {
       return NextResponse.json({ success: false, message: "Access denied" }, { status: 403 })

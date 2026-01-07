@@ -36,6 +36,7 @@ export async function POST(request, { params }) {
     const authResult = await authenticateToken(request)
     if (authResult instanceof NextResponse) return authResult
 
+    const { user } = authResult
     const { vendorId } = params
     const menuItemData = await request.json()
 
@@ -45,8 +46,8 @@ export async function POST(request, { params }) {
       return NextResponse.json({ success: false, message: "Vendor not found" }, { status: 404 })
     }
 
-    const isVendorOwner = vendor.userId === request.user.id
-    const isAdmin = request.user.role === "admin"
+    const isVendorOwner = vendor.userId === user.id
+    const isAdmin = user.role === "admin"
 
     if (!isVendorOwner && !isAdmin) {
       return NextResponse.json({ success: false, message: "Access denied" }, { status: 403 })

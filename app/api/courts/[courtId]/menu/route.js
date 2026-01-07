@@ -4,7 +4,7 @@ import { Op } from "sequelize"
 
 export async function GET(request, { params }) {
   try {
-    const { courtId } = params
+    const { courtId } = await params
     const { searchParams } = new URL(request.url)
     const vendorId = searchParams.get("vendorId")
     const category = searchParams.get("category")

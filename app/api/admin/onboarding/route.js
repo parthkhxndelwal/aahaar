@@ -1,13 +1,11 @@
 import { NextResponse } from "next/server"
 import { Court, CourtSettings, Vendor, AuditLog } from "@/models"
-import { authenticateTokenNextJS } from "@/middleware/auth"
+import { authenticateToken } from "@/middleware/auth"
 
 export async function GET(request) {
   try {
-    const authResult = await authenticateTokenNextJS(request)
-    if (authResult.error) {
-      return NextResponse.json({ success: false, message: authResult.error }, { status: authResult.status })
-    }
+    const authResult = await authenticateToken(request)
+    if (authResult instanceof NextResponse) return authResult
 
     const { user, courtId } = authResult
 
@@ -41,10 +39,8 @@ export async function GET(request) {
 export async function POST(request) {
   try {
     // Authenticate user
-    const authResult = await authenticateTokenNextJS(request)
-    if (authResult.error) {
-      return NextResponse.json({ success: false, message: authResult.error }, { status: authResult.status })
-    }
+    const authResult = await authenticateToken(request)
+    if (authResult instanceof NextResponse) return authResult
 
     const { user, courtId } = authResult
 

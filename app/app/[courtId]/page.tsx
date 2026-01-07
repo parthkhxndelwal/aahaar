@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, use } from "react"
 import { useAuth } from "@/contexts/auth-context"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -45,9 +45,10 @@ interface CartItem {
   vendorName: string
 }
 
-export default function UserApp({ params }: { params: { courtId: string } }) {
+export default function UserApp({ params }: { params: Promise<{ courtId: string }> }) {
   const { user, token } = useAuth()
   const router = useRouter()
+  const { courtId } = use(params)
   const [vendors, setVendors] = useState<Vendor[]>([])
   const [menuItems, setMenuItems] = useState<MenuItem[]>([])
   const [cart, setCart] = useState<CartItem[]>([])
@@ -57,25 +58,25 @@ export default function UserApp({ params }: { params: { courtId: string } }) {
 
   useEffect(() => {
     if (!user) {
-      router.push(`/app/${params.courtId}/login`)
+      router.push(`/app/${courtId}/login`)
       return
     }
 
-    if (user.courtId !== params.courtId) {
+    if (user.courtId !== courtId) {
       router.push("/")
       return
     }
 
     fetchData()
     loadCart()
-  }, [user, params.courtId])
+  }, [user, courtId])
 
   const fetchData = async () => {
     try {
       setLoading(true)
 
       // Fetch vendors
-      const vendorsResponse = await fetch(`/api/courts/${params.courtId}/vendors?status=active`, {
+      const vendorsResponse = await fetch(`/api/courts/${courtId}/vendors?status=active`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       })
 
@@ -85,7 +86,7 @@ export default function UserApp({ params }: { params: { courtId: string } }) {
       }
 
       // Fetch menu items
-      const menuResponse = await fetch(`/api/courts/${params.courtId}/menu?isAvailable=true`, {
+      const menuResponse = await fetch(`/api/courts/${courtId}/menu?isAvailable=true`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       })
 
@@ -101,7 +102,7 @@ export default function UserApp({ params }: { params: { courtId: string } }) {
   }
 
   const loadCart = () => {
-    const savedCart = localStorage.getItem(`cart_${params.courtId}`)
+    const savedCart = localStorage.getItem(`cart_${courtId}`)
     if (savedCart) {
       try {
         setCart(JSON.parse(savedCart))
@@ -112,7 +113,7 @@ export default function UserApp({ params }: { params: { courtId: string } }) {
   }
 
   const saveCart = (newCart: CartItem[]) => {
-    localStorage.setItem(`cart_${params.courtId}`, JSON.stringify(newCart))
+    localStorage.setItem(`cart_${courtId}`, JSON.stringify(newCart))
     setCart(newCart)
   }
 
@@ -191,10 +192,10 @@ export default function UserApp({ params }: { params: { courtId: string } }) {
               <p className="text-sm text-gray-600">{user?.court?.instituteName}</p>
             </div>
             <div className="flex items-center gap-4">
-              <Button variant="outline" onClick={() => router.push(`/app/${params.courtId}/orders`)}>
+              <Button variant="outline" onClick={() => router.push(`/app/${courtId}/orders`)}>
                 My Orders
               </Button>
-              <Button onClick={() => router.push(`/app/${params.courtId}/cart`)} className="relative">
+              <Button onClick={() => router.push(`/app/${courtId}/cart`)} className="relative">
                 <ShoppingCart className="h-4 w-4 mr-2" />
                 Cart
                 {getTotalCartItems() > 0 && (
@@ -351,7 +352,7 @@ export default function UserApp({ params }: { params: { courtId: string } }) {
       {getTotalCartItems() > 0 && (
         <div className="fixed bottom-4 right-4 z-50">
           <Button
-            onClick={() => router.push(`/app/${params.courtId}/cart`)}
+            onClick={() => router.push(`/app/${courtId}/cart`)}
             className="rounded-full h-14 w-14 shadow-lg"
           >
             <div className="flex flex-col items-center">

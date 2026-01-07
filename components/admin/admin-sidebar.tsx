@@ -1,10 +1,11 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
+import Image from "next/image"
 import {
   LayoutDashboard,
   Users,
@@ -23,6 +24,9 @@ interface AdminSidebarProps {
 
 export function AdminSidebar({ courtId }: AdminSidebarProps) {
   const [collapsed, setCollapsed] = useState(false)
+  const [showTitle, setShowTitle] = useState(true)
+  const [showLink, setShowLink] = useState(true)
+
   const pathname = usePathname()
 
   const navigation = [
@@ -63,13 +67,31 @@ export function AdminSidebar({ courtId }: AdminSidebarProps) {
     },
   ]
 
+  useEffect(() => {
+    if (collapsed) {
+      setShowTitle(false)
+      setShowLink(false)
+    } else {
+      const timer = setTimeout(() => {
+        setShowTitle(true)
+        setShowLink(true)
+
+      }, 210)
+      return () => clearTimeout(timer)
+    }
+  }, [collapsed])
+
   return (
-    <div className={cn("bg-white shadow-lg transition-all duration-300", collapsed ? "w-16" : "w-64")}>
-      <div className="flex items-center justify-between p-4 border-b">
-        {!collapsed && <h2 className="text-xl font-semibold text-gray-800">Admin Panel</h2>}
-        <Button variant="ghost" size="sm" onClick={() => setCollapsed(!collapsed)}>
+    <div className={cn("transition-all duration-300 bg-black", collapsed ? "w-24" : "w-64")}>
+      <div className="flex items-center justify-between p-4 mt-2">
+        <Image src="/logo.png" alt="Logo" width={32} height={32}></Image>
+        {!collapsed && showTitle && <h2 className="text-xl font-semibold ">Admin Panel</h2>}
+        <button 
+          className="p-2 hover:bg-neutral-900 rounded-md transition-colors"
+          onClick={() => setCollapsed(!collapsed)}
+        >
           {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
-        </Button>
+        </button>
       </div>
 
       <nav className="mt-6">
@@ -80,14 +102,13 @@ export function AdminSidebar({ courtId }: AdminSidebarProps) {
               key={item.name}
               href={item.href}
               className={cn(
-                "flex items-center px-4 py-3 text-sm font-medium transition-colors",
-                isActive
-                  ? "bg-blue-50 text-blue-700 border-r-2 border-blue-700"
-                  : "text-gray-600 hover:bg-gray-50 hover:text-gray-900",
+                "flex items-center px-4 py-3 text-sm font-medium transition-colors ml-2 mr-4 rounded-xl",                isActive
+                  ? " text-blue-700 border-r-2 bg-neutral-900 hover:bg-neutral-800 border-blue-700"
+                  : "text-neutral-600 hover:bg-neutral-950",
               )}
             >
-              <item.icon className="h-5 w-5 mr-3" />
-              {!collapsed && item.name}
+              <item.icon className={cn("h-5 w-5 mr-3 p-0")} />
+              {!collapsed && showLink && item.name}
             </Link>
           )
         })}

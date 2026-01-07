@@ -1,7 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { use } from "react"
+import { useEffect, useState, use } from "react"
 import { useAuth } from "@/contexts/auth-context"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -47,6 +46,7 @@ export default function VendorDashboard({ params }: { params: Promise<{ courtId:
   const [stats, setStats] = useState<VendorStats | null>(null)
   const [isOnline, setIsOnline] = useState(true)
   const [loading, setLoading] = useState(true)
+  const [eventSource, setEventSource] = useState<EventSource | null>(null)
 
   useEffect(() => {
     if (!user || user.role !== "vendor" || user.courtId !== courtId) {
@@ -55,11 +55,75 @@ export default function VendorDashboard({ params }: { params: Promise<{ courtId:
     }
 
     fetchData()
+    setupRealTimeUpdates()
 
-    // Set up real-time updates (polling for now)
-    const interval = setInterval(fetchData, 30000) // Refresh every 30 seconds
-    return () => clearInterval(interval)
+    return () => {
+      if (eventSource) {
+        eventSource.close()
+      }
+    }
   }, [user, courtId])
+
+  const setupRealTimeUpdates = () => {
+    if (!user?.vendorProfile?.id || !token) return
+
+    // Use fetch with streaming for auth support
+    const connectStream = async () => {
+      try {
+        const response = await fetch(`/api/vendors/${user.vendorProfile!.id}/orders/stream`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        })
+
+        if (!response.ok) {
+          throw new Error("Failed to connect to stream")
+        }
+
+        const reader = response.body?.getReader()
+        const decoder = new TextDecoder()
+
+        if (!reader) return
+
+        const readStream = async () => {
+          try {
+            while (true) {
+              const { done, value } = await reader.read()
+              if (done) break
+
+              const chunk = decoder.decode(value)
+              const lines = chunk.split("\n")
+
+              for (const line of lines) {
+                if (line.startsWith("data: ")) {
+                  try {
+                    const data = JSON.parse(line.slice(6))
+                    if (data.type === "orders_update") {
+                      setOrders(data.orders)
+                    }
+                  } catch (error) {
+                    console.error("Error parsing stream data:", error)
+                  }
+                }
+              }
+            }
+          } catch (error) {
+            console.error("Stream reading error:", error)
+            // Try to reconnect after 5 seconds
+            setTimeout(connectStream, 5000)
+          }
+        }
+
+        readStream()
+      } catch (error) {
+        console.error("Stream connection error:", error)
+        // Try to reconnect after 5 seconds
+        setTimeout(connectStream, 5000)
+      }
+    }
+
+    connectStream()
+  }
 
   const fetchData = async () => {
     try {
@@ -210,7 +274,7 @@ export default function VendorDashboard({ params }: { params: Promise<{ courtId:
             <span className="text-sm font-medium">Online Status</span>
             <Switch checked={isOnline} onCheckedChange={toggleOnlineStatus} />
           </div>
-          <Button onClick={() => router.push(`/vendor/${params.courtId}/menu`)}>
+          <Button onClick={() => router.push(`/vendor/${courtId}/menu`)}>
             <Plus className="h-4 w-4 mr-2" />
             Add Menu Item
           </Button>
@@ -356,7 +420,7 @@ export default function VendorDashboard({ params }: { params: Promise<{ courtId:
               <div className="text-center py-8">
                 <Plus className="h-12 w-12 mx-auto text-gray-400 mb-4" />
                 <p className="text-gray-600 mb-4">Menu management interface</p>
-                <Button onClick={() => router.push(`/vendor/${params.courtId}/menu`)}>Manage Menu</Button>
+                <Button onClick={() => router.push(`/vendor/${courtId}/menu`)}>Manage Menu</Button>
               </div>
             </CardContent>
           </Card>

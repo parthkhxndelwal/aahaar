@@ -30,6 +30,13 @@ module.exports = (sequelize, DataTypes) => {
           len: [2, 100],
         },
       },
+      stallLocation: {
+        type: DataTypes.STRING,
+        allowNull: true,
+        validate: {
+          len: [2, 200],
+        },
+      },
       vendorName: {
         type: DataTypes.STRING,
         allowNull: false,
@@ -103,6 +110,11 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: false,
         defaultValue: 10,
       },
+      maxOrdersPerHour: {
+        type: DataTypes.INTEGER,
+        allowNull: false,
+        defaultValue: 10,
+      },
       averagePreparationTime: {
         type: DataTypes.INTEGER, // in minutes
         allowNull: false,
@@ -128,6 +140,10 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: true,
       },
       bankAccountHolderName: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
+      bankName: {
         type: DataTypes.STRING,
         allowNull: true,
       },

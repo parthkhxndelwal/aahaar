@@ -10,7 +10,8 @@ export async function GET(request) {
     const authResult = await authenticateToken(request)
     if (authResult instanceof NextResponse) return authResult
 
-    const cart = userCarts.get(request.user.id) || { items: [], total: 0 }
+    const { user } = authResult
+    const cart = userCarts.get(user.id) || { items: [], total: 0 }
 
     return NextResponse.json({
       success: true,
@@ -27,6 +28,7 @@ export async function POST(request) {
     const authResult = await authenticateToken(request)
     if (authResult instanceof NextResponse) return authResult
 
+    const { user } = authResult
     const { menuItemId, quantity = 1, customizations = {} } = await request.json()
 
     const menuItem = await MenuItem.findByPk(menuItemId)
@@ -34,7 +36,7 @@ export async function POST(request) {
       return NextResponse.json({ success: false, message: "Menu item not available" }, { status: 400 })
     }
 
-    const cart = userCarts.get(request.user.id) || { items: [], total: 0 }
+    const cart = userCarts.get(user.id) || { items: [], total: 0 }
 
     // Check if item already in cart
     const existingItemIndex = cart.items.findIndex((item) => item.menuItemId === menuItemId)

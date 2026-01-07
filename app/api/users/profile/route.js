@@ -8,7 +8,8 @@ export async function GET(request) {
     const authResult = await authenticateToken(request)
     if (authResult instanceof NextResponse) return authResult
 
-    const user = await User.findByPk(request.user.id, {
+    const { user: authenticatedUser } = authResult
+    const user = await User.findByPk(authenticatedUser.id, {
       attributes: { exclude: ["password"] },
     })
 
@@ -27,9 +28,10 @@ export async function PATCH(request) {
     const authResult = await authenticateToken(request)
     if (authResult instanceof NextResponse) return authResult
 
+    const { user: authenticatedUser } = authResult
     const { fullName, phone, preferences, currentPassword, newPassword } = await request.json()
 
-    const user = await User.findByPk(request.user.id)
+    const user = await User.findByPk(authenticatedUser.id)
 
     const updateData = {}
     if (fullName) updateData.fullName = fullName

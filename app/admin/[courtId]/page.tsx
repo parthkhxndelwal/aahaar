@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, use } from "react"
 import { useAuth } from "@/contexts/auth-context"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -30,28 +30,29 @@ interface RecentOrder {
   createdAt: string
 }
 
-export default function AdminDashboard({ params }: { params: { courtId: string } }) {
+export default function AdminDashboard({ params }: { params: Promise<{ courtId: string }> }) {
   const { user, token } = useAuth()
   const router = useRouter()
+  const { courtId } = use(params)
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [recentOrders, setRecentOrders] = useState<RecentOrder[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    if (!user || user.role !== "admin" || user.courtId !== params.courtId) {
+    if (!user || user.role !== "admin" || user.courtId !== courtId) {
       router.push("/admin/login")
       return
     }
 
     fetchDashboardData()
-  }, [user, params.courtId])
+  }, [user, courtId])
 
   const fetchDashboardData = async () => {
     try {
       setLoading(true)
 
       // Fetch dashboard stats
-      const statsResponse = await fetch(`/api/analytics/${params.courtId}/dashboard`, {
+      const statsResponse = await fetch(`/api/analytics/${courtId}/dashboard`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -59,11 +60,21 @@ export default function AdminDashboard({ params }: { params: { courtId: string }
 
       if (statsResponse.ok) {
         const statsData = await statsResponse.json()
-        setStats(statsData.data)
+        // Extract data from the summary object returned by analytics API
+        setStats({
+          totalOrders: statsData.data.summary.totalOrders || 0,
+          totalRevenue: statsData.data.summary.totalRevenue || 0,
+          activeVendors: statsData.data.summary.activeVendors || 0,
+          totalUsers: statsData.data.summary.totalUsers || 0,
+          todayOrders: statsData.data.summary.todayOrders || 0,
+          todayRevenue: statsData.data.summary.todayRevenue || 0,
+          pendingOrders: statsData.data.summary.pendingOrders || 0,
+          completedOrders: statsData.data.summary.completedOrders || 0,
+        })
       }
 
       // Fetch recent orders
-      const ordersResponse = await fetch(`/api/courts/${params.courtId}/orders?limit=10`, {
+      const ordersResponse = await fetch(`/api/courts/${courtId}/orders?limit=10`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -112,15 +123,15 @@ export default function AdminDashboard({ params }: { params: { courtId: string }
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-          <p className="text-gray-600">Welcome back, {user?.fullName}</p>
+          <h1 className="text-3xl font-bold ">Dashboard</h1>
+          <p className="">Welcome back, {user?.fullName}</p>
         </div>
         <div className="flex gap-2">
-          <Button onClick={() => router.push(`/admin/${params.courtId}/vendors`)}>
+          <Button onClick={() => router.push(`/admin/${courtId}/vendors`)}>
             <Plus className="h-4 w-4 mr-2" />
             Add Vendor
           </Button>
-          <Button variant="outline" onClick={() => router.push(`/admin/${params.courtId}/orders`)}>
+          <Button variant="outline" onClick={() => router.push(`/admin/${courtId}/orders`)}>
             <Eye className="h-4 w-4 mr-2" />
             View All Orders
           </Button>
@@ -212,7 +223,7 @@ export default function AdminDashboard({ params }: { params: { courtId: string }
                 <Button
                   className="w-full justify-start"
                   variant="outline"
-                  onClick={() => router.push(`/admin/${params.courtId}/vendors`)}
+                  onClick={() => router.push(`/admin/${courtId}/vendors`)}
                 >
                   <Store className="h-4 w-4 mr-2" />
                   Manage Vendors
@@ -220,7 +231,7 @@ export default function AdminDashboard({ params }: { params: { courtId: string }
                 <Button
                   className="w-full justify-start"
                   variant="outline"
-                  onClick={() => router.push(`/admin/${params.courtId}/orders`)}
+                  onClick={() => router.push(`/admin/${courtId}/orders`)}
                 >
                   <ShoppingCart className="h-4 w-4 mr-2" />
                   View All Orders
@@ -228,7 +239,7 @@ export default function AdminDashboard({ params }: { params: { courtId: string }
                 <Button
                   className="w-full justify-start"
                   variant="outline"
-                  onClick={() => router.push(`/admin/${params.courtId}/settings`)}
+                  onClick={() => router.push(`/admin/${courtId}/settings`)}
                 >
                   <Users className="h-4 w-4 mr-2" />
                   Court Settings

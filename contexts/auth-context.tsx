@@ -15,6 +15,12 @@ interface User {
     courtId: string
     instituteName: string
   }
+  vendorProfile?: {
+    id: string
+    stallName: string
+    stallLocation?: string
+    isOnline: boolean
+  }
 }
 
 interface AuthContextType {

@@ -7,18 +7,19 @@ export async function PATCH(request, { params }) {
     const authResult = await authenticateToken(request)
     if (authResult instanceof NextResponse) return authResult
 
+    const { user } = authResult
     const { userId } = params
     const { status, role } = await request.json()
 
-    if (request.user.role !== "admin") {
+    if (user.role !== "admin") {
       return NextResponse.json({ success: false, message: "Admin access required" }, { status: 403 })
     }
 
-    const user = await User.findOne({
-      where: { id: userId, courtId: request.user.courtId },
+    const targetUser = await User.findOne({
+      where: { id: userId, courtId: user.courtId },
     })
 
-    if (!user) {
+    if (!targetUser) {
       return NextResponse.json({ success: false, message: "User not found" }, { status: 404 })
     }
 
@@ -26,7 +27,7 @@ export async function PATCH(request, { params }) {
     if (status) updateData.status = status
     if (role) updateData.role = role
 
-    await user.update(updateData)
+    await targetUser.update(updateData)
 
     return NextResponse.json({
       success: true,

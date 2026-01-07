@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, use } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -12,12 +12,15 @@ import { useToast } from "@/hooks/use-toast"
 import { useRouter } from "next/navigation"
 import { Progress } from "@/components/ui/progress"
 import { CheckCircle } from "lucide-react"
+import { useAuth } from "@/contexts/auth-context"
 
-export default function AdminOnboardingPage({ params }: { params: { courtId: string } }) {
+export default function AdminOnboardingPage({ params }: { params: Promise<{ courtId: string }> }) {
+  const { courtId } = use(params)
   const [currentStep, setCurrentStep] = useState(1)
   const [loading, setLoading] = useState(false)
   const { toast } = useToast()
   const router = useRouter()
+  const { token } = useAuth()
 
   const [courtData, setCourtData] = useState({
     instituteName: "",
@@ -90,7 +93,7 @@ export default function AdminOnboardingPage({ params }: { params: { courtId: str
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({ step: stepName, data: stepData }),
       })
@@ -103,7 +106,7 @@ export default function AdminOnboardingPage({ params }: { params: { courtId: str
           title: "Setup Complete!",
           description: "Your food court is now ready to use.",
         })
-        router.push(`/admin/${params.courtId}`)
+        router.push(`/admin/${courtId}`)
       } else {
         setCurrentStep(step + 1)
       }
@@ -294,7 +297,7 @@ export default function AdminOnboardingPage({ params }: { params: { courtId: str
     <div className="min-h-screen bg-gray-50 py-12 px-4">
       <div className="max-w-4xl mx-auto">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Food Court Setup</h1>
+          <h1 className="text-3xl font-bold mb-2">Food Court Setup</h1>
           <p className="text-gray-600">Let's get your food court configured and ready to use.</p>
         </div>
 

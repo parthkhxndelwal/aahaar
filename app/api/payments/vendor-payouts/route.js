@@ -9,8 +9,9 @@ export async function POST(request) {
     const authResult = await authenticateToken(request)
     if (authResult instanceof NextResponse) return authResult
 
+    const { user } = authResult
     // Only admin can trigger payouts
-    if (request.user.role !== "admin") {
+    if (user.role !== "admin") {
       return NextResponse.json({ success: false, message: "Admin access required" }, { status: 403 })
     }
 

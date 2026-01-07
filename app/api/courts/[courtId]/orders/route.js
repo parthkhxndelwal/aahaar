@@ -110,7 +110,7 @@ export async function POST(request, { params }) {
       return NextResponse.json({ success: false, message: authResult.error }, { status: authResult.status })
     }
 
-    const { courtId } = params
+    const { courtId } = await params
     const {
       vendorId,
       items, // Array of { menuItemId, quantity, customizations, specialInstructions }

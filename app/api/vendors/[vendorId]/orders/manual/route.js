@@ -8,6 +8,7 @@ export async function POST(request, { params }) {
     const authResult = await authenticateToken(request)
     if (authResult instanceof NextResponse) return authResult
 
+    const { user } = authResult
     const { vendorId } = params
     const { items, customerName, customerPhone, paymentMethod = "online", customPrices = false } = await request.json()
 
@@ -17,8 +18,8 @@ export async function POST(request, { params }) {
       return NextResponse.json({ success: false, message: "Vendor not found" }, { status: 404 })
     }
 
-    const isVendorOwner = vendor.userId === request.user.id
-    if (!isVendorOwner && request.user.role !== "admin") {
+    const isVendorOwner = vendor.userId === user.id
+    if (!isVendorOwner && user.role !== "admin") {
       return NextResponse.json({ success: false, message: "Access denied" }, { status: 403 })
     }
 

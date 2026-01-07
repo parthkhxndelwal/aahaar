@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
-import { Vendor, MenuItem } from "@/models"
+import { Vendor, MenuItem, User } from "@/models"
 import { authenticateToken } from "@/middleware/auth"
+import bcrypt from "bcryptjs"
 
 export async function GET(request, { params }) {
   try {
@@ -40,10 +41,17 @@ export async function GET(request, { params }) {
       order: [["createdAt", "DESC"]],
     })
 
+    // Transform vendor data to ensure proper numeric values
+    const transformedVendors = vendors.rows.map(vendor => ({
+      ...vendor.toJSON(),
+      rating: typeof vendor.rating === 'number' ? vendor.rating : 0.0,
+      totalRatings: typeof vendor.totalRatings === 'number' ? vendor.totalRatings : 0,
+    }))
+
     return NextResponse.json({
       success: true,
       data: {
-        vendors: vendors.rows,
+        vendors: transformedVendors,
         pagination: {
           total: vendors.count,
           page,
@@ -69,27 +77,41 @@ export async function POST(request, { params }) {
     const authResult = await authenticateToken(request)
     if (authResult instanceof NextResponse) return authResult
 
-    const { courtId } = params
+    const { courtId } = await params
     const {
+      // Basic Information
       stallName,
       vendorName,
-      contactEmail,
-      contactPhone,
-      logoUrl,
+      email,
+      phone,
+      password,
+      
+      // Stall Details
+      stallLocation,
       cuisineType,
       description,
-      bankAccountNumber,
-      bankIfscCode,
-      bankAccountHolderName,
+      logoUrl,
+      bannerUrl,
       operatingHours,
+      
+      // Bank Details
+      accountHolderName,
+      accountNumber,
+      ifscCode,
+      bankName,
+      
+      // Settings
+      maxOrdersPerHour,
+      averagePreparationTime,
+      isActive,
     } = await request.json()
 
     // Validation
-    if (!stallName || !vendorName || !contactEmail || !contactPhone) {
+    if (!stallName || !vendorName || !email || !phone || !password) {
       return NextResponse.json(
         {
           success: false,
-          message: "Required fields: stallName, vendorName, contactEmail, contactPhone",
+          message: "Required fields: stallName, vendorName, email, phone, password",
         },
         { status: 400 },
       )
@@ -110,21 +132,57 @@ export async function POST(request, { params }) {
       )
     }
 
-    // Create vendor
+    // Check if email already exists
+    const existingEmail = await Vendor.findOne({
+      where: { contactEmail: email.toLowerCase() },
+    })
+
+    if (existingEmail) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Email already exists",
+        },
+        { status: 400 },
+      )
+    }
+
+    // Create vendor user account first
+    const hashedPassword = await bcrypt.hash(password, 12)
+
+    const user = await User.create({
+      fullName: vendorName,
+      email: email.toLowerCase(),
+      phone,
+      password: hashedPassword,
+      role: "vendor",
+      courtId,
+      isEmailVerified: false,
+      isPhoneVerified: false,
+    })
+
+    // Create vendor profile
     const vendor = await Vendor.create({
+      userId: user.id,
       courtId,
       stallName,
       vendorName,
-      contactEmail: contactEmail.toLowerCase(),
-      contactPhone,
+      contactEmail: email.toLowerCase(),
+      contactPhone: phone,
+      stallLocation,
       logoUrl,
+      bannerUrl,
       cuisineType,
       description,
-      bankAccountNumber,
-      bankIfscCode,
-      bankAccountHolderName,
+      bankAccountNumber: accountNumber,
+      bankIfscCode: ifscCode,
+      bankAccountHolderName: accountHolderName,
+      bankName,
       operatingHours: operatingHours || undefined,
-      status: "inactive", // Will be activated when vendor completes onboarding
+      maxOrdersPerHour: maxOrdersPerHour || 10,
+      averagePreparationTime: averagePreparationTime || 15,
+      status: isActive ? "active" : "inactive",
+      isOnline: false,
     })
 
     // TODO: Create Razorpay Fund Account
@@ -134,7 +192,7 @@ export async function POST(request, { params }) {
       {
         success: true,
         message: "Vendor created successfully",
-        data: { vendor },
+        data: { vendor, user: { id: user.id, email: user.email, fullName: user.fullName } },
       },
       { status: 201 },
     )

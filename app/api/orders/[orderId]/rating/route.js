@@ -7,6 +7,7 @@ export async function POST(request, { params }) {
     const authResult = await authenticateToken(request)
     if (authResult instanceof NextResponse) return authResult
 
+    const { user } = authResult
     const { orderId } = params
     const { rating, feedback } = await request.json()
 
@@ -15,7 +16,7 @@ export async function POST(request, { params }) {
     }
 
     const order = await Order.findOne({
-      where: { id: orderId, userId: request.user.id },
+      where: { id: orderId, userId: user.id },
       include: [{ model: Vendor, as: "vendor" }],
     })
 

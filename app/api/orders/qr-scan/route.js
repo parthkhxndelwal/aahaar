@@ -7,6 +7,7 @@ export async function POST(request) {
     const authResult = await authenticateToken(request)
     if (authResult instanceof NextResponse) return authResult
 
+    const { user } = authResult
     const { qrData } = await request.json()
 
     if (!qrData) {
@@ -50,10 +51,10 @@ export async function POST(request) {
     }
 
     // Update order with user info if not already set
-    if (!order.userId && request.user.role === "user") {
+    if (!order.userId && user.role === "user") {
       await order.update({
-        userId: request.user.id,
-        customerEmail: request.user.email,
+        userId: user.id,
+        customerEmail: user.email,
       })
     }
 

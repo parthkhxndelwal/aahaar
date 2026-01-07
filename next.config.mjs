@@ -16,9 +16,7 @@ const nextConfig = {
     }
     return config;
   },
-  experimental: {
-    serverComponentsExternalPackages: ['sequelize', 'mysql2'],
-  },
+  serverExternalPackages: ['sequelize', 'mysql2'],
 }
 
 export default nextConfig

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { authenticateToken } from "@/middleware/auth"
-import { uploadImage } from "@/utils/cloudinary"
+import { uploadImage, generateTransformationUrl, transformationPresets } from "@/utils/cloudinary"
 
 export async function POST(request) {
   try {
@@ -10,6 +10,7 @@ export async function POST(request) {
     const formData = await request.formData()
     const file = formData.get("file")
     const folder = formData.get("folder") || "aahaar"
+    const transformation = formData.get("transformation") || "medium"
 
     if (!file) {
       return NextResponse.json({ success: false, message: "No file provided" }, { status: 400 })
@@ -21,10 +22,10 @@ export async function POST(request) {
     }
 
     // Check file type
-    const allowedTypes = ["image/jpeg", "image/png", "image/webp"]
+    const allowedTypes = ["image/jpeg", "image/png", "image/webp", "image/jpg"]
     if (!allowedTypes.includes(file.type)) {
       return NextResponse.json(
-        { success: false, message: "Invalid file type. Only JPEG, PNG, and WebP are allowed" },
+        { success: false, message: "Invalid file type. Only JPEG, PNG, JPG, and WebP are allowed" },
         { status: 400 },
       )
     }
@@ -34,11 +35,24 @@ export async function POST(request) {
     const buffer = Buffer.from(bytes)
     const base64 = `data:${file.type};base64,${buffer.toString("base64")}`
 
+    // Use transformation preset if available
+    const transformationPreset = transformationPresets[transformation] || transformationPresets.medium
+    
+    const uploadOptions = {
+      transformation: transformationPreset
+    }
+
     // Upload to Cloudinary
-    const result = await uploadImage(base64, folder)
+    const result = await uploadImage(base64, folder, uploadOptions)
 
     if (!result.success) {
       return NextResponse.json({ success: false, message: "Failed to upload image" }, { status: 500 })
+    }
+
+    // Generate additional transformation URLs
+    const transformedUrls = {}
+    for (const [preset, transforms] of Object.entries(transformationPresets)) {
+      transformedUrls[preset] = generateTransformationUrl(result.publicId, transforms)
     }
 
     return NextResponse.json({
@@ -47,6 +61,11 @@ export async function POST(request) {
       data: {
         url: result.url,
         publicId: result.publicId,
+        width: result.width,
+        height: result.height,
+        format: result.format,
+        bytes: result.bytes,
+        transformedUrls,
       },
     })
   } catch (error) {

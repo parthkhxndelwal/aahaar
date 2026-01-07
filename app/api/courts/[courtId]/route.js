@@ -4,7 +4,7 @@ import { authenticateToken } from "@/middleware/auth"
 
 export async function GET(request, { params }) {
   try {
-    const { courtId } = params
+    const { courtId } = await params
 
     const court = await Court.findOne({
       where: { courtId, status: "active" },
@@ -35,7 +35,7 @@ export async function PATCH(request, { params }) {
     const authResult = await authenticateToken(request)
     if (authResult instanceof NextResponse) return authResult
 
-    const { courtId } = params
+    const { courtId } = await params
     const updateData = await request.json()
 
     // Only admin can update court details

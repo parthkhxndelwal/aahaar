@@ -8,6 +8,7 @@ export async function GET(request, { params }) {
     const authResult = await authenticateToken(request)
     if (authResult instanceof NextResponse) return authResult
 
+    const { user } = authResult
     const { vendorId } = params
 
     const vendor = await Vendor.findByPk(vendorId, {
@@ -24,8 +25,8 @@ export async function GET(request, { params }) {
       return NextResponse.json({ success: false, message: "Vendor not found" }, { status: 404 })
     }
 
-    const isOwner = vendor.userId === request.user.id
-    const isAdmin = request.user.role === "admin"
+    const isOwner = vendor.userId === user.id
+    const isAdmin = user.role === "admin"
 
     if (!isOwner && !isAdmin) {
       return NextResponse.json({ success: false, message: "Access denied" }, { status: 403 })
@@ -46,6 +47,7 @@ export async function PATCH(request, { params }) {
     const authResult = await authenticateToken(request)
     if (authResult instanceof NextResponse) return authResult
 
+    const { user } = authResult
     const { vendorId } = params
     const updateData = await request.json()
 
@@ -54,8 +56,8 @@ export async function PATCH(request, { params }) {
       return NextResponse.json({ success: false, message: "Vendor not found" }, { status: 404 })
     }
 
-    const isOwner = vendor.userId === request.user.id
-    const isAdmin = request.user.role === "admin"
+    const isOwner = vendor.userId === user.id
+    const isAdmin = user.role === "admin"
 
     if (!isOwner && !isAdmin) {
       return NextResponse.json({ success: false, message: "Access denied" }, { status: 403 })

@@ -8,7 +8,8 @@ export async function GET(request) {
     const authResult = await authenticateToken(request)
     if (authResult instanceof NextResponse) return authResult
 
-    if (request.user.role !== "admin") {
+    const { user } = authResult
+    if (user.role !== "admin") {
       return NextResponse.json({ success: false, message: "Admin access required" }, { status: 403 })
     }
 
@@ -37,7 +38,7 @@ export async function GET(request) {
           model: Order,
           as: "order",
           where: {
-            courtId: request.user.courtId,
+            courtId: user.courtId,
             createdAt: { [Op.between]: [startDate, endDate] },
           },
           attributes: [],
@@ -54,7 +55,7 @@ export async function GET(request) {
           model: Order,
           as: "order",
           where: {
-            courtId: request.user.courtId,
+            courtId: user.courtId,
             createdAt: { [Op.between]: [startDate, endDate] },
           },
           include: [
@@ -80,7 +81,7 @@ export async function GET(request) {
           model: Order,
           as: "order",
           where: {
-            courtId: request.user.courtId,
+            courtId: user.courtId,
             createdAt: { [Op.between]: [startDate, endDate] },
           },
           attributes: [],

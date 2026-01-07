@@ -8,7 +8,8 @@ export async function GET(request, { params }) {
     const authResult = await authenticateToken(request)
     if (authResult instanceof NextResponse) return authResult
 
-    const { courtId } = params
+    const { user } = authResult
+    const { courtId } = await params
     const { searchParams } = new URL(request.url)
     const role = searchParams.get("role")
     const status = searchParams.get("status")
@@ -17,7 +18,7 @@ export async function GET(request, { params }) {
     const limit = Number.parseInt(searchParams.get("limit")) || 20
     const offset = (page - 1) * limit
 
-    if (request.user.role !== "admin") {
+    if (user.role !== "admin") {
       return NextResponse.json({ success: false, message: "Admin access required" }, { status: 403 })
     }
 
