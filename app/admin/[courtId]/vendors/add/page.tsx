@@ -43,6 +43,9 @@ interface VendorFormData {
   accountNumber: string
   ifscCode: string
   bankName: string
+  // Legal Information
+  panNumber: string
+  gstin?: string
   
   // Settings
   maxOrdersPerHour: number
@@ -78,6 +81,8 @@ export default function AddVendorPage({ params }: { params: Promise<{ courtId: s
     accountNumber: "",
     ifscCode: "",
     bankName: "",
+    panNumber: "",
+    gstin: "",
     maxOrdersPerHour: 10,
     averagePreparationTime: 15,
     isActive: true,
@@ -88,6 +93,18 @@ export default function AddVendorPage({ params }: { params: Promise<{ courtId: s
   const [currentStep, setCurrentStep] = useState(1)
 
   const daysOfWeek = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+
+  // Validation functions
+  const validatePAN = (pan: string): boolean => {
+    const panRegex = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/
+    return panRegex.test(pan)
+  }
+
+  const validateGSTIN = (gstin: string): boolean => {
+    if (!gstin) return true // GSTIN is optional
+    const gstinRegex = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/
+    return gstinRegex.test(gstin)
+  }
 
   const updateOperatingHours = (day: string, field: string, value: any) => {
     setFormData({
@@ -219,7 +236,15 @@ export default function AddVendorPage({ params }: { params: Promise<{ courtId: s
       case 2:
         return !!(formData.stallLocation && formData.cuisineType)
       case 3:
-        return !!(formData.accountHolderName && formData.accountNumber && formData.ifscCode && formData.bankName)
+        return !!(
+          formData.accountHolderName && 
+          formData.accountNumber && 
+          formData.ifscCode && 
+          formData.bankName && 
+          formData.panNumber && 
+          validatePAN(formData.panNumber) &&
+          validateGSTIN(formData.gstin || "")
+        )
       default:
         return true
     }
@@ -508,6 +533,44 @@ export default function AddVendorPage({ params }: { params: Promise<{ courtId: s
                     onChange={(e) => setFormData({ ...formData, bankName: e.target.value })}
                     placeholder="e.g., HDFC Bank"
                   />
+                </div>
+              </div>
+
+              <Separator />
+
+              <div>
+                <Label className="text-base font-medium mb-3 block">Legal Information</Label>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="panNumber">PAN Number *</Label>
+                    <Input
+                      id="panNumber"
+                      value={formData.panNumber}
+                      onChange={(e) => setFormData({ ...formData, panNumber: e.target.value.toUpperCase() })}
+                      placeholder="e.g., AAAAA9999A"
+                      maxLength={10}
+                      className={formData.panNumber && !validatePAN(formData.panNumber) ? "border-red-500" : ""}
+                    />
+                    <p className="text-xs text-gray-500 mt-1">Required for Razorpay account creation</p>
+                    {formData.panNumber && !validatePAN(formData.panNumber) && (
+                      <p className="text-xs text-red-500 mt-1">Invalid PAN format. Should be: AAAAA9999A</p>
+                    )}
+                  </div>
+                  <div>
+                    <Label htmlFor="gstin">GSTIN (Optional)</Label>
+                    <Input
+                      id="gstin"
+                      value={formData.gstin || ""}
+                      onChange={(e) => setFormData({ ...formData, gstin: e.target.value.toUpperCase() })}
+                      placeholder="e.g., 18AABCU9603R1ZM"
+                      maxLength={15}
+                      className={formData.gstin && !validateGSTIN(formData.gstin) ? "border-red-500" : ""}
+                    />
+                    <p className="text-xs text-gray-500 mt-1">Goods and Services Tax Identification Number</p>
+                    {formData.gstin && !validateGSTIN(formData.gstin) && (
+                      <p className="text-xs text-red-500 mt-1">Invalid GSTIN format</p>
+                    )}
+                  </div>
                 </div>
               </div>
             </CardContent>

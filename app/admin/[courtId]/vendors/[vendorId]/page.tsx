@@ -42,6 +42,9 @@ interface Vendor {
   bankIfscCode?: string
   bankAccountHolderName?: string
   bankName?: string
+  panNumber?: string
+  gstin?: string
+  razorpayAccountId?: string
   payoutSettings: {
     autoPayoutEnabled: boolean
     payoutFrequency: "daily" | "weekly" | "manual"
@@ -477,6 +480,67 @@ export default function VendorEditPage({
                     onChange={(e) => updateVendorField("bankName", e.target.value)}
                     placeholder="Enter bank name"
                   />
+                </div>
+              </div>
+
+              <div className="space-y-4 pt-4 border-t">
+                <h4 className="font-medium">Legal Information</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="panNumber">PAN Number</Label>
+                    <Input
+                      id="panNumber"
+                      value={vendor.panNumber || ""}
+                      onChange={(e) => updateVendorField("panNumber", e.target.value.toUpperCase())}
+                      placeholder="e.g., AAAAA9999A"
+                      maxLength={10}
+                      disabled={!editMode}
+                    />
+                    <p className="text-xs text-gray-500">Required for Razorpay payments</p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="gstin">GSTIN (Optional)</Label>
+                    <Input
+                      id="gstin"
+                      value={vendor.gstin || ""}
+                      onChange={(e) => updateVendorField("gstin", e.target.value.toUpperCase())}
+                      placeholder="e.g., 18AABCU9603R1ZM"
+                      maxLength={15}
+                      disabled={!editMode}
+                    />
+                    <p className="text-xs text-gray-500">Goods and Services Tax Identification Number</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-4 pt-4 border-t">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-medium">Razorpay Account</h4>
+                  {vendor.razorpayAccountId && (
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => window.open(`/api/courts/${courtId}/vendors/${vendor.id}/razorpay`, '_blank')}
+                    >
+                      View Details
+                    </Button>
+                  )}
+                </div>
+                <div className="grid grid-cols-1 gap-4">
+                  <div className="space-y-2">
+                    <Label>Account ID</Label>
+                    <Input
+                      value={vendor.razorpayAccountId || "Not linked"}
+                      disabled
+                      className="bg-gray-50"
+                    />
+                    <p className="text-xs text-gray-500">
+                      {vendor.razorpayAccountId 
+                        ? "This vendor is linked to a Razorpay Route account for payments" 
+                        : "No Razorpay account linked. Account will be created automatically when needed."
+                      }
+                    </p>
+                  </div>
                 </div>
               </div>
 

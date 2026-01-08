@@ -155,6 +155,28 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.STRING,
         allowNull: true,
       },
+      razorpayAccountId: {
+        type: DataTypes.STRING,
+        allowNull: true,
+        comment: "Razorpay Route Account ID for direct settlements",
+      },
+      // Legal Information
+      panNumber: {
+        type: DataTypes.STRING,
+        allowNull: false,
+        validate: {
+          is: /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/,
+        },
+        comment: "PAN number for tax compliance",
+      },
+      gstin: {
+        type: DataTypes.STRING,
+        allowNull: true,
+        validate: {
+          is: /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/,
+        },
+        comment: "GSTIN number for GST compliance (optional)",
+      },
       payoutSettings: {
         type: DataTypes.JSON,
         allowNull: false,

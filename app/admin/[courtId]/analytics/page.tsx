@@ -100,12 +100,12 @@ export default function AdminAnalyticsPage({ params }: { params: Promise<{ court
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Analytics</h1>
-          <p className="text-gray-600">Insights and performance metrics for {formatPeriodText(period)}</p>
+          <h1 className="text-3xl font-bold text-neutral-100">Analytics</h1>
+          <p className="text-neutral-600">Insights and performance metrics for {formatPeriodText(period)}</p>
         </div>
         <div className="flex gap-2">
           <Select value={period} onValueChange={setPeriod}>
-            <SelectTrigger className="w-[150px]">
+            <SelectTrigger className="w-[150px] text-white">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -114,7 +114,7 @@ export default function AdminAnalyticsPage({ params }: { params: Promise<{ court
               <SelectItem value="90d">Last 90 Days</SelectItem>
             </SelectContent>
           </Select>
-          <Button variant="outline" onClick={fetchAnalytics}>
+          <Button variant="outline" className="text-white" onClick={fetchAnalytics}>
             <BarChart3 className="h-4 w-4 mr-2" />
             Refresh
           </Button>

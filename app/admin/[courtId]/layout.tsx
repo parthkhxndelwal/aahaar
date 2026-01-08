@@ -2,7 +2,6 @@
 
 import type React from "react"
 import { use } from "react"
-
 import { useAuth } from "@/contexts/auth-context"
 import { useRouter } from "next/navigation"
 import { useEffect } from "react"
@@ -39,7 +38,7 @@ export default function AdminLayout({
       <AdminSidebar courtId={courtId} />
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* <AdminHeader /> */}
-        <main className="flex-1 overf low-x-hidden overflow-y-auto p-6">{children}</main>
+        <main className="flex-1 overf low-x-hidden overflow-y-auto p-6 dark:bg-neutral-950">{children}</main>
       </div>
     </div>
   )

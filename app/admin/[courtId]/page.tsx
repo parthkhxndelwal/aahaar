@@ -1,5 +1,4 @@
 "use client"
-
 import { useEffect, useState, use } from "react"
 import { useAuth } from "@/contexts/auth-context"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -123,15 +122,15 @@ export default function AdminDashboard({ params }: { params: Promise<{ courtId: 
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold ">Dashboard</h1>
-          <p className="">Welcome back, {user?.fullName}</p>
+          <h1 className="text-3xl font-bold text-white">Dashboard</h1>
+          <p className="text-neutral-500">Welcome back, {user?.fullName}</p>
         </div>
         <div className="flex gap-2">
-          <Button onClick={() => router.push(`/admin/${courtId}/vendors`)}>
+          <Button  onClick={() => router.push(`/admin/${courtId}/vendors`)}>
             <Plus className="h-4 w-4 mr-2" />
             Add Vendor
           </Button>
-          <Button variant="outline" onClick={() => router.push(`/admin/${courtId}/orders`)}>
+          <Button className="text-white" variant="outline" onClick={() => router.push(`/admin/${courtId}/orders`)}>
             <Eye className="h-4 w-4 mr-2" />
             View All Orders
           </Button>

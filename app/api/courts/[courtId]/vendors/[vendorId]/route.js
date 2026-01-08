@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
-import { Vendor, MenuItem, User } from "@/models"
+import { Vendor, MenuItem, User, Order, OrderItem } from "@/models"
 import { authenticateToken } from "@/middleware/auth"
+import { updateRouteAccount, fetchRouteAccount } from "@/utils/razorpay"
 
 export async function GET(request, { params }) {
   try {
@@ -112,7 +113,9 @@ export async function PUT(request, { params }) {
       'bankIfscCode',
       'bankAccountHolderName',
       'bankName',
-      'payoutSettings'
+      'payoutSettings',
+      'panNumber',
+      'gstin'
     ]
 
     const updateFields = {}
@@ -150,6 +153,34 @@ export async function PUT(request, { params }) {
       }
     }
 
+    // Validate PAN format if PAN is being updated
+    if (updateFields.panNumber) {
+      const panRegex = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/
+      if (!panRegex.test(updateFields.panNumber)) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "Invalid PAN number format. PAN should be in format: AAAAA9999A",
+          },
+          { status: 400 }
+        )
+      }
+    }
+
+    // Validate GSTIN format if GSTIN is being updated
+    if (updateFields.gstin) {
+      const gstinRegex = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/
+      if (!gstinRegex.test(updateFields.gstin)) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "Invalid GSTIN format",
+          },
+          { status: 400 }
+        )
+      }
+    }
+
     // Update the vendor
     await vendor.update(updateFields)
 
@@ -164,6 +195,39 @@ export async function PUT(request, { params }) {
         await User.update(userUpdateFields, {
           where: { id: vendor.userId }
         })
+      }
+    }
+
+    // Update Razorpay account if relevant fields are being updated
+    if (vendor.razorpayAccountId && (
+      updateFields.stallName || 
+      updateFields.vendorName || 
+      updateFields.panNumber || 
+      updateFields.gstin !== undefined
+    )) {
+      try {
+        console.log(`Updating Razorpay account for vendor: ${vendor.vendorName} (${vendor.contactEmail})`)
+        
+        const razorpayUpdateData = {
+          vendorName: updateFields.vendorName || vendor.vendorName,
+          stallName: updateFields.stallName || vendor.stallName,
+          courtId: vendor.courtId,
+          panNumber: updateFields.panNumber || vendor.panNumber,
+          gstin: updateFields.gstin !== undefined ? updateFields.gstin : vendor.gstin
+        }
+
+        const razorpayResult = await updateRouteAccount(vendor.razorpayAccountId, razorpayUpdateData)
+        
+        if (razorpayResult.success) {
+          console.log(`✅ Razorpay account updated successfully for vendor: ${vendor.vendorName}`)
+        } else {
+          console.error(`❌ Failed to update Razorpay account for vendor: ${vendor.vendorName}`, razorpayResult.error)
+          // Don't fail the entire update if Razorpay update fails
+          // Just log the error for now
+        }
+      } catch (error) {
+        console.error(`❌ Error updating Razorpay account for vendor: ${vendor.vendorName}`, error)
+        // Don't fail the entire update if Razorpay update fails
       }
     }
 
@@ -239,13 +303,62 @@ export async function DELETE(request, { params }) {
       )
     }
 
-    // Soft delete - just update status to suspended
-    await vendor.update({ status: 'suspended' })
+    // Get the associated user ID before deletion
+    const userId = vendor.userId
 
-    return NextResponse.json({
-      success: true,
-      message: "Vendor suspended successfully",
-    })
+    // Start a transaction for data consistency
+    const transaction = await vendor.sequelize.transaction()
+
+    try {
+      // Find all orders for this vendor to delete order items first
+      const orders = await Order.findAll({
+        where: { vendorId: vendorId },
+        transaction
+      })
+
+      // Delete all order items for this vendor's orders
+      for (const order of orders) {
+        await OrderItem.destroy({
+          where: { orderId: order.id },
+          transaction
+        })
+      }
+
+      // Delete all orders for this vendor
+      await Order.destroy({
+        where: { vendorId: vendorId },
+        transaction
+      })
+
+      // Delete associated menu items
+      await MenuItem.destroy({
+        where: { vendorId: vendorId },
+        transaction
+      })
+
+      // Delete the vendor permanently
+      await vendor.destroy({ transaction })
+
+      // Delete the associated user account if it exists
+      if (userId) {
+        await User.destroy({
+          where: { id: userId },
+          transaction
+        })
+      }
+
+      // Commit the transaction
+      await transaction.commit()
+
+      return NextResponse.json({
+        success: true,
+        message: "Vendor deleted permanently",
+      })
+    } catch (error) {
+      // Rollback the transaction in case of error
+      await transaction.rollback()
+      throw error
+    }
   } catch (error) {
     console.error("Delete vendor error:", error)
     return NextResponse.json(

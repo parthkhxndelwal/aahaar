@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { Vendor, MenuItem, User } from "@/models"
 import { authenticateToken } from "@/middleware/auth"
+import { createRouteAccount } from "@/utils/razorpay"
 import bcrypt from "bcryptjs"
 
 export async function GET(request, { params }) {
@@ -100,6 +101,10 @@ export async function POST(request, { params }) {
       ifscCode,
       bankName,
       
+      // Legal Information
+      panNumber,
+      gstin,
+      
       // Settings
       maxOrdersPerHour,
       averagePreparationTime,
@@ -107,14 +112,40 @@ export async function POST(request, { params }) {
     } = await request.json()
 
     // Validation
-    if (!stallName || !vendorName || !email || !phone || !password) {
+    if (!stallName || !vendorName || !email || !phone || !password || !panNumber) {
       return NextResponse.json(
         {
           success: false,
-          message: "Required fields: stallName, vendorName, email, phone, password",
+          message: "Required fields: stallName, vendorName, email, phone, password, panNumber",
         },
         { status: 400 },
       )
+    }
+
+    // Validate PAN number format
+    const panRegex = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/
+    if (!panRegex.test(panNumber)) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Invalid PAN number format. PAN should be in format: AAAAA9999A",
+        },
+        { status: 400 },
+      )
+    }
+
+    // Validate GSTIN format if provided
+    if (gstin) {
+      const gstinRegex = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/
+      if (!gstinRegex.test(gstin)) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "Invalid GSTIN format",
+          },
+          { status: 400 },
+        )
+      }
     }
 
     // Check if stall name already exists in this court
@@ -178,6 +209,8 @@ export async function POST(request, { params }) {
       bankIfscCode: ifscCode,
       bankAccountHolderName: accountHolderName,
       bankName,
+      panNumber,
+      gstin: gstin || null,
       operatingHours: operatingHours || undefined,
       maxOrdersPerHour: maxOrdersPerHour || 10,
       averagePreparationTime: averagePreparationTime || 15,
@@ -185,16 +218,90 @@ export async function POST(request, { params }) {
       isOnline: false,
     })
 
-    // TODO: Create Razorpay Fund Account
+    // Create Razorpay Route Account
+    let razorpayAccountId = null
+    let razorpayError = null
+
+    try {      
+      const razorpayResult = await createRouteAccount({
+        email: email.toLowerCase(),
+        phone,
+        vendorName,
+        stallName,
+        courtId,
+        vendorId: vendor.id,
+        panNumber,
+        gstin
+      })
+
+      if (razorpayResult.success) {
+        razorpayAccountId = razorpayResult.account.id
+        
+        // Update vendor with Razorpay account ID
+        await vendor.update({
+          razorpayAccountId: razorpayAccountId
+        })
+        
+        console.log(`✅ Razorpay account created for vendor ${vendor.id}: ${razorpayAccountId}`)
+        console.log(`Account status: ${razorpayResult.account.status}`)
+      } else {
+        console.error(`❌ Failed to create Razorpay account for vendor ${vendor.id}:`, {
+          error: razorpayResult.error,
+          errorCode: razorpayResult.errorCode,
+          errorDetails: razorpayResult.errorDetails
+        })
+        razorpayError = {
+          message: razorpayResult.error,
+          code: razorpayResult.errorCode,
+          details: razorpayResult.errorDetails
+        }
+        
+        // Log the error but don't fail vendor creation
+        // This allows manual retry later or alternative payment setup
+      }
+    } catch (error) {
+      console.error(`❌ Exception while creating Razorpay account for vendor ${vendor.id}:`, error)
+      razorpayError = {
+        message: error.message,
+        code: 'EXCEPTION_ERROR',
+        details: error.stack
+      }
+    }
+
     // TODO: Send invitation email to vendor
+    const responseData = {
+      vendor: {
+        ...vendor.toJSON(),
+        razorpayAccountId
+      },
+      user: { 
+        id: user.id, 
+        email: user.email, 
+        fullName: user.fullName 
+      }
+    }
+
+    // Include Razorpay information in response
+    if (razorpayError) {
+      responseData.razorpayError = razorpayError
+      responseData.razorpayWarning = "Vendor created successfully but Razorpay account creation failed. Please create manually or retry later."
+    } else if (razorpayAccountId) {
+      responseData.razorpaySuccess = true
+      responseData.razorpayAccountId = razorpayAccountId
+    }
+
+    const statusCode = 201
+    const message = razorpayError 
+      ? "Vendor created successfully but with Razorpay account creation error" 
+      : "Vendor and Razorpay account created successfully"
 
     return NextResponse.json(
       {
         success: true,
-        message: "Vendor created successfully",
-        data: { vendor, user: { id: user.id, email: user.email, fullName: user.fullName } },
+        message,
+        data: responseData,
       },
-      { status: 201 },
+      { status: statusCode },
     )
   } catch (error) {
     console.error("Create vendor error:", error)

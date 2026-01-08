@@ -1,5 +1,7 @@
 const { sequelize } = require("../models")
 const bcrypt = require("bcryptjs")
+const { addRazorpayAccountField } = require("./add-razorpay-account-field")
+const { addPanGstinFields } = require("./add-pan-gstin-fields")
 
 async function initializeDatabase() {
   try {
@@ -14,6 +16,12 @@ async function initializeDatabase() {
     // Sync all models (create tables if they don't exist)
     await sequelize.sync({ force: false, alter: true })
     console.log("✅ Database models synchronized successfully.")
+
+    // Run additional migrations
+    console.log("🔄 Running additional migrations...")
+    await addRazorpayAccountField()
+    await addPanGstinFields()
+    console.log("✅ Additional migrations completed.")
 
     console.log("🔄 Creating default data...")
 

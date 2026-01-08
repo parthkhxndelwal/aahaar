@@ -85,7 +85,7 @@ export function AdminSidebar({ courtId }: AdminSidebarProps) {
     <div className={cn("transition-all duration-300 bg-black", collapsed ? "w-24" : "w-64")}>
       <div className="flex items-center justify-between p-4 mt-2">
         <Image src="/logo.png" alt="Logo" width={32} height={32}></Image>
-        {!collapsed && showTitle && <h2 className="text-xl font-semibold ">Admin Panel</h2>}
+        {!collapsed && showTitle && <h2 className="text-xl font-semibold text-neutral-50">Admin Panel</h2>}
         <button 
           className="p-2 hover:bg-neutral-900 rounded-md transition-colors"
           onClick={() => setCollapsed(!collapsed)}
@@ -102,9 +102,9 @@ export function AdminSidebar({ courtId }: AdminSidebarProps) {
               key={item.name}
               href={item.href}
               className={cn(
-                "flex items-center px-4 py-3 text-sm font-medium transition-colors ml-2 mr-4 rounded-xl",                isActive
-                  ? " text-blue-700 border-r-2 bg-neutral-900 hover:bg-neutral-800 border-blue-700"
-                  : "text-neutral-600 hover:bg-neutral-950",
+                "flex items-center px-4 py-2.5 my-1 text-sm font-medium transition-colors ml-2 mr-4 rounded-xl",                isActive
+                  ? " text-neutral-300 border-r-2 bg-neutral-900 hover:bg-neutral-800 border-neutral-300"
+                  : "text-neutral-500 hover:bg-neutral-950",
               )}
             >
               <item.icon className={cn("h-5 w-5 mr-3 p-0")} />
