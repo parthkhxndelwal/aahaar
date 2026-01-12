@@ -19,6 +19,7 @@ const Court = require("./Court")(sequelize, Sequelize.DataTypes)
 const User = require("./User")(sequelize, Sequelize.DataTypes)
 const Vendor = require("./Vendor")(sequelize, Sequelize.DataTypes)
 const MenuItem = require("./MenuItem")(sequelize, Sequelize.DataTypes)
+const MenuCategory = require("./MenuCategory")(sequelize, Sequelize.DataTypes)
 const Order = require("./Order")(sequelize, Sequelize.DataTypes)
 const OrderItem = require("./OrderItem")(sequelize, Sequelize.DataTypes)
 const Payment = require("./Payment")(sequelize, Sequelize.DataTypes)
@@ -37,6 +38,12 @@ Vendor.belongsTo(User, { foreignKey: "userId", as: "user" })
 
 Vendor.hasMany(MenuItem, { foreignKey: "vendorId", as: "menuItems" })
 MenuItem.belongsTo(Vendor, { foreignKey: "vendorId", as: "vendor" })
+
+Vendor.hasMany(MenuCategory, { foreignKey: "vendorId", as: "menuCategories" })
+MenuCategory.belongsTo(Vendor, { foreignKey: "vendorId", as: "vendor" })
+
+MenuCategory.hasMany(MenuItem, { foreignKey: "categoryId", as: "menuItems" })
+MenuItem.belongsTo(MenuCategory, { foreignKey: "categoryId", as: "menuCategory" })
 
 Court.hasMany(Order, { foreignKey: "courtId", sourceKey: "courtId", as: "orders" })
 Order.belongsTo(Court, { foreignKey: "courtId", targetKey: "courtId", as: "court" })
@@ -71,6 +78,7 @@ module.exports = {
   User,
   Vendor,
   MenuItem,
+  MenuCategory,
   Order,
   OrderItem,
   Payment,

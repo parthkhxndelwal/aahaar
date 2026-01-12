@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import bcrypt from "bcryptjs"
 import jwt from "jsonwebtoken"
-import { User, Court } from "@/models"
+import { User, Court, Vendor } from "@/models"
 
 export async function POST(request) {
   try {
@@ -87,6 +87,11 @@ export async function POST(request) {
           as: "court",
           attributes: ["courtId", "instituteName", "status"],
         },
+        {
+          model: Vendor,
+          as: "vendorProfile",
+          attributes: ["id", "stallName", "stallLocation", "isOnline"],
+        },
       ],
     })
 
@@ -104,13 +109,13 @@ export async function POST(request) {
       return NextResponse.json(
         {
           success: false,
-          message: "Account is not active",
+          message: "Account is not active. Please contact your admin.",
         },
         { status: 401 },
       )
     }
 
-    if (user.court.status !== "active") {
+    if (user.court?.status !== "active") {
       return NextResponse.json(
         {
           success: false,
@@ -122,6 +127,7 @@ export async function POST(request) {
 
     // Verify password
     const isValidPassword = await bcrypt.compare(password, user.password)
+    
     if (!isValidPassword) {
       return NextResponse.json(
         {
@@ -147,22 +153,35 @@ export async function POST(request) {
     // Update last login
     await user.update({ lastLoginAt: new Date() })
 
+    // Prepare user data for response
+    const userData = {
+      id: user.id,
+      email: user.email,
+      fullName: user.fullName,
+      role: user.role,
+      courtId: user.courtId,
+      court: {
+        courtId: user.court.courtId,
+        instituteName: user.court.instituteName,
+      },
+    }
+
+    // Add vendor profile if user is a vendor
+    if (user.role === "vendor" && user.vendorProfile) {
+      userData.vendorProfile = {
+        id: user.vendorProfile.id,
+        stallName: user.vendorProfile.stallName,
+        stallLocation: user.vendorProfile.stallLocation,
+        isOnline: user.vendorProfile.isOnline,
+      }
+    }
+
     return NextResponse.json({
       success: true,
       message: "Login successful",
       data: {
         token,
-        user: {
-          id: user.id,
-          email: user.email,
-          fullName: user.fullName,
-          role: user.role,
-          courtId: user.courtId,
-          court: {
-            courtId: user.court.courtId,
-            instituteName: user.court.instituteName,
-          },
-        },
+        user: userData,
       },
     })
   } catch (error) {

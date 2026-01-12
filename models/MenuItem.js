@@ -37,7 +37,7 @@ module.exports = (sequelize, DataTypes) => {
           min: 0,
         },
       },
-      originalPrice: {
+      mrp: {
         type: DataTypes.DECIMAL(10, 2),
         allowNull: true,
         validate: {
@@ -49,6 +49,14 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: true,
         validate: {
           len: [2, 50],
+        },
+      },
+      categoryId: {
+        type: DataTypes.UUID,
+        allowNull: true,
+        references: {
+          model: "menu_categories",
+          key: "id",
         },
       },
       tags: {

@@ -64,7 +64,7 @@ export default function AdminLoginPage() {
     <div className="min-h-screen bg-neutral-950 flex items-center justify-center py-12 px-4">
       <Card className="w-full max-w-md bg-neutral-900">
         <CardHeader>
-          <CardTitle>Admin Login</CardTitle>
+          <CardTitle ><span className="text-white">Admin Login</span></CardTitle>
           <CardDescription>Access your food court management dashboard</CardDescription>
         </CardHeader>
         <CardContent>
