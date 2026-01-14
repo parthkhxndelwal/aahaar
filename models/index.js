@@ -10,6 +10,7 @@ const sequelize = new Sequelize(dbConfig.database, dbConfig.username, dbConfig.p
   port: dbConfig.port,
   dialect: dbConfig.dialect,
   dialectModule: mysql2,
+  dialectOptions: dbConfig.dialectOptions,
   logging: dbConfig.logging,
   pool: dbConfig.pool,
 })

@@ -1,0 +1,8 @@
+{
+  "scripts": {
+    "migrate:test": "node scripts/migrate-to-tidb.js test",
+    "migrate:run": "node scripts/migrate-to-tidb.js migrate",
+    "migrate:summary": "node scripts/migrate-to-tidb.js summary",
+    "db:backup": "node scripts/backup-local-db.js"
+  }
+}

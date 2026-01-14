@@ -9,6 +9,12 @@ module.exports = {
     port: process.env.DB_PORT || 3306,
     dialect: "mysql",
     logging: false,
+    dialectOptions: {
+      ssl: process.env.DB_HOST && process.env.DB_HOST.includes('tidbcloud') ? {
+        require: true,
+        rejectUnauthorized: false
+      } : false,
+    },
     pool: {
       max: 5,
       min: 0,
@@ -24,6 +30,12 @@ module.exports = {
     port: process.env.DB_PORT || 3306,
     dialect: "mysql",
     logging: false,
+    dialectOptions: {
+      ssl: {
+        require: true,
+        rejectUnauthorized: false
+      },
+    },
     pool: {
       max: 10,
       min: 0,
