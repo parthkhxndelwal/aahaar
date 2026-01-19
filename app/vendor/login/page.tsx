@@ -22,6 +22,16 @@ export default function VendorLogin() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [courtId, setCourtId] = useState("")
+  
+  // Check if we're in development mode
+  const isDevelopment = process.env.NODE_ENV === 'development'
+  
+  // Test vendor credentials for development
+  const testVendorCredentials = {
+    courtId: "democourt",
+    email: "parthmethi@gmail.com",
+    password: "password123"
+  }
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -61,6 +71,51 @@ export default function VendorLogin() {
         setError(error)
       } else {
         setError("Login failed. Please check your credentials and try again.")
+      }
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleTestVendorLogin = async () => {
+    setLoading(true)
+    setError("")
+
+    try {
+      console.log("🚀 Attempting test vendor login with:", { 
+        email: testVendorCredentials.email, 
+        courtId: testVendorCredentials.courtId, 
+        hasPassword: !!testVendorCredentials.password 
+      })
+      
+      const response = await api.login(
+        testVendorCredentials.email, 
+        testVendorCredentials.password, 
+        testVendorCredentials.courtId
+      )
+
+      console.log("📥 Test vendor login response:", response)
+
+      if (response.success) {
+        const userData = response.data.user
+        if (userData.role !== "vendor") {
+          setError("Access denied. Vendor account required.")
+          return
+        }
+
+        login(response.data.token, userData)
+        router.push(`/vendor/${testVendorCredentials.courtId}`)
+      } else {
+        setError(response.message || "Invalid test credentials")
+      }
+    } catch (error: any) {
+      console.error("❌ Test vendor login error:", error)
+      if (error.message) {
+        setError(error.message)
+      } else if (typeof error === 'string') {
+        setError(error)
+      } else {
+        setError("Test login failed. Please try again.")
       }
     } finally {
       setLoading(false)
@@ -126,6 +181,30 @@ export default function VendorLogin() {
                 Sign In
               </Button>
             </form>
+
+            {/* Test Vendor Login Button - Only in Development */}
+            {isDevelopment && (
+              <div className="mt-4">
+                <div className="relative">
+                  <div className="absolute inset-0 flex items-center">
+                    <span className="w-full border-t border-gray-300" />
+                  </div>
+                  <div className="relative flex justify-center text-xs uppercase">
+                    <span className="bg-white px-2 text-gray-500">Development Only</span>
+                  </div>
+                </div>
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  className="w-full mt-4" 
+                  onClick={handleTestVendorLogin}
+                  disabled={loading}
+                >
+                  {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Login as Test Vendor
+                </Button>
+              </div>
+            )}
 
             {error && (
               <Alert className="mt-4" variant="destructive">

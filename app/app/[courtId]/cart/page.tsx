@@ -1,371 +1,232 @@
 "use client"
+import { motion, AnimatePresence } from "framer-motion"
+import { ArrowLeft, Plus, Minus, Trash2 } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { useCart } from "@/contexts/cart-context"
+import Image from "next/image"
 
-import { useState, useEffect } from "react"
-import { useParams, useRouter } from "next/navigation"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Badge } from "@/components/ui/badge"
-import { ArrowLeft, Plus, Minus, Trash2, Clock, CreditCard, Banknote, Loader2 } from "lucide-react"
-import { useAuth } from "@/contexts/auth-context"
-import { api } from "@/lib/api"
-
-interface CartItem {
-  id: string
-  name: string
-  price: number
-  quantity: number
-  imageUrl: string
-  preparationTime: number
-  vendor: {
-    id: string
-    stallName: string
-  }
-  customizations?: Record<string, any>
+interface CartPageProps {
+  params: Promise<{ courtId: string }>
 }
 
-export default function CartPage() {
-  const params = useParams()
+export default function CartPage({ params }: CartPageProps) {
   const router = useRouter()
-  const { user } = useAuth()
-  const courtId = params.courtId as string
-
-  const [cart, setCart] = useState<CartItem[]>([])
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState("")
-  const [paymentMethod, setPaymentMethod] = useState("online")
-  const [specialInstructions, setSpecialInstructions] = useState("")
-  const [customerName, setCustomerName] = useState(user?.fullName || "")
-  const [customerPhone, setCustomerPhone] = useState(user?.phone || "")
-
-  useEffect(() => {
-    // Load cart from localStorage
-    const savedCart = localStorage.getItem(`cart_${courtId}`)
-    if (savedCart) {
-      setCart(JSON.parse(savedCart))
-    }
-  }, [courtId])
-
-  useEffect(() => {
-    // Save cart to localStorage whenever it changes
-    localStorage.setItem(`cart_${courtId}`, JSON.stringify(cart))
-  }, [cart, courtId])
-
-  const updateQuantity = (itemId: string, newQuantity: number) => {
-    if (newQuantity === 0) {
-      removeItem(itemId)
-      return
-    }
-
-    setCart((prev) => prev.map((item) => (item.id === itemId ? { ...item, quantity: newQuantity } : item)))
+  const { cart, updateQuantity, removeFromCart, clearCart, isLoading } = useCart()
+  
+  const handleGoBack = () => {
+    router.back()
   }
 
-  const removeItem = (itemId: string) => {
-    setCart((prev) => prev.filter((item) => item.id !== itemId))
-  }
-
-  const clearCart = () => {
-    setCart([])
-  }
-
-  const getSubtotal = () => {
-    return cart.reduce((total, item) => total + item.price * item.quantity, 0)
-  }
-
-  const getTaxAmount = () => {
-    return 0 // Configure as needed
-  }
-
-  const getTotal = () => {
-    return getSubtotal() + getTaxAmount()
-  }
-
-  const getTotalPreparationTime = () => {
-    return Math.max(...cart.map((item) => item.preparationTime))
-  }
-
-  const handlePlaceOrder = async () => {
-    if (!user) {
-      router.push(`/app/${courtId}/login`)
-      return
-    }
-
-    if (cart.length === 0) {
-      setError("Your cart is empty")
-      return
-    }
-
-    if (!customerName || !customerPhone) {
-      setError("Please provide your name and phone number")
-      return
-    }
-
-    setLoading(true)
-    setError("")
-
-    try {
-      // Group items by vendor
-      const vendorGroups = cart.reduce(
-        (groups, item) => {
-          const vendorId = item.vendor.id
-          if (!groups[vendorId]) {
-            groups[vendorId] = []
-          }
-          groups[vendorId].push(item)
-          return groups
-        },
-        {} as Record<string, CartItem[]>,
-      )
-
-      // Create separate orders for each vendor
-      const orderPromises = Object.entries(vendorGroups).map(([vendorId, items]) => {
-        return api.post(`/courts/${courtId}/orders`, {
-          vendorId,
-          items: items.map((item) => ({
-            menuItemId: item.id,
-            quantity: item.quantity,
-            customizations: item.customizations || {},
-            specialInstructions: "",
-          })),
-          customerName,
-          customerPhone,
-          paymentMethod,
-          specialInstructions,
-          type: "user_initiated",
-        })
-      })
-
-      const responses = await Promise.all(orderPromises)
-
-      // Check if all orders were created successfully
-      const failedOrders = responses.filter((response) => !response.data.success)
-      if (failedOrders.length > 0) {
-        throw new Error("Some orders failed to create")
-      }
-
-      // Clear cart and redirect to orders page
-      clearCart()
-      router.push(`/app/${courtId}/orders`)
-    } catch (error: any) {
-      setError(error.response?.data?.message || "Failed to place order")
-    } finally {
-      setLoading(false)
+  const handleQuantityChange = async (itemId: string, newQuantity: number) => {
+    if (newQuantity <= 0) {
+      await removeFromCart(itemId)
+    } else {
+      await updateQuantity(itemId, newQuantity)
     }
   }
 
-  const goBack = () => {
-    router.push(`/app/${courtId}`)
-  }
-
-  if (cart.length === 0) {
-    return (
-      <div className="min-h-screen bg-gray-50">
-        <div className="max-w-2xl mx-auto px-4 py-8">
-          <Button variant="ghost" onClick={goBack} className="mb-6">
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Menu
-          </Button>
-
-          <Card>
-            <CardContent className="text-center py-12">
-              <div className="text-gray-400 mb-4">
-                <svg className="mx-auto h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M3 3h2l.4 2M7 13h10l4-8H5.4m0 0L7 13m0 0l-1.5 6M7 13l-1.5-6m0 0h15M17 13v6a2 2 0 01-2 2H9a2 2 0 01-2-2v-6"
-                  />
-                </svg>
-              </div>
-              <h3 className="text-lg font-medium text-gray-900 mb-2">Your cart is empty</h3>
-              <p className="text-gray-600 mb-6">Add some delicious items from our menu</p>
-              <Button onClick={goBack}>Browse Menu</Button>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    )
+  const handleCheckout = async () => {
+    const { courtId } = await params
+    // Navigate to checkout page
+    router.push(`/app/${courtId}/checkout`)
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-4xl mx-auto px-4 py-8">
-        <Button variant="ghost" onClick={goBack} className="mb-6">
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          Back to Menu
-        </Button>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Cart Items */}
-          <div className="lg:col-span-2">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle>Your Order</CardTitle>
-                <Button variant="outline" size="sm" onClick={clearCart}>
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Clear Cart
-                </Button>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {cart.map((item) => (
-                  <div key={item.id} className="flex items-center space-x-4 p-4 border rounded-lg">
-                    <img
-                      src={item.imageUrl || "/placeholder.svg?height=80&width=80"}
-                      alt={item.name}
-                      className="w-16 h-16 object-cover rounded-md"
-                    />
-                    <div className="flex-1">
-                      <h4 className="font-medium">{item.name}</h4>
-                      <p className="text-sm text-gray-600">{item.vendor.stallName}</p>
-                      <div className="flex items-center space-x-2 mt-1">
-                        <Badge variant="outline" className="text-xs">
-                          <Clock className="h-3 w-3 mr-1" />
-                          {item.preparationTime}m
-                        </Badge>
-                      </div>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <Button variant="outline" size="sm" onClick={() => updateQuantity(item.id, item.quantity - 1)}>
-                        <Minus className="h-4 w-4" />
-                      </Button>
-                      <span className="w-8 text-center font-medium">{item.quantity}</span>
-                      <Button variant="outline" size="sm" onClick={() => updateQuantity(item.id, item.quantity + 1)}>
-                        <Plus className="h-4 w-4" />
-                      </Button>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-medium">₹{(item.price * item.quantity).toFixed(2)}</p>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => removeItem(item.id)}
-                        className="text-red-600 hover:text-red-700"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Order Summary */}
-          <div className="space-y-6">
-            {/* Customer Details */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Customer Details</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="customerName">Full Name</Label>
-                  <Input
-                    id="customerName"
-                    value={customerName}
-                    onChange={(e) => setCustomerName(e.target.value)}
-                    placeholder="Enter your full name"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="customerPhone">Phone Number</Label>
-                  <Input
-                    id="customerPhone"
-                    value={customerPhone}
-                    onChange={(e) => setCustomerPhone(e.target.value)}
-                    placeholder="Enter your phone number"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="specialInstructions">Special Instructions (Optional)</Label>
-                  <Textarea
-                    id="specialInstructions"
-                    value={specialInstructions}
-                    onChange={(e) => setSpecialInstructions(e.target.value)}
-                    placeholder="Any special requests..."
-                    rows={3}
-                  />
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Payment Method */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Payment Method</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <RadioGroup value={paymentMethod} onValueChange={setPaymentMethod}>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="online" id="online" />
-                    <Label htmlFor="online" className="flex items-center cursor-pointer">
-                      <CreditCard className="h-4 w-4 mr-2" />
-                      Online Payment
-                    </Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="cod" id="cod" />
-                    <Label htmlFor="cod" className="flex items-center cursor-pointer">
-                      <Banknote className="h-4 w-4 mr-2" />
-                      Cash on Delivery
-                    </Label>
-                  </div>
-                </RadioGroup>
-              </CardContent>
-            </Card>
-
-            {/* Order Summary */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Order Summary</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="flex justify-between">
-                  <span>Subtotal</span>
-                  <span>₹{getSubtotal().toFixed(2)}</span>
-                </div>
-                {getTaxAmount() > 0 && (
-                  <div className="flex justify-between">
-                    <span>Tax</span>
-                    <span>₹{getTaxAmount().toFixed(2)}</span>
-                  </div>
-                )}
-                <div className="border-t pt-3">
-                  <div className="flex justify-between font-semibold text-lg">
-                    <span>Total</span>
-                    <span>₹{getTotal().toFixed(2)}</span>
-                  </div>
-                </div>
-                <div className="text-sm text-gray-600 flex items-center">
-                  <Clock className="h-4 w-4 mr-1" />
-                  Estimated time: {getTotalPreparationTime()} minutes
-                </div>
-              </CardContent>
-            </Card>
-
-            {error && (
-              <Alert variant="destructive">
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
-            )}
-
-            <Button
-              onClick={handlePlaceOrder}
-              className="w-full"
-              size="lg"
-              disabled={loading || !customerName || !customerPhone}
-            >
-              {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Place Order - ₹{getTotal().toFixed(2)}
-            </Button>
+    <div className="min-h-screen bg-neutral-50 dark:bg-neutral-900 pb-24">
+      {/* Header */}
+      <div className="sticky top-0 z-10 bg-white dark:bg-neutral-950 border-b border-neutral-200 dark:border-neutral-800 px-4 py-4">
+        <div className="flex items-center gap-4">
+          <motion.button
+            onClick={handleGoBack}
+            className="p-2 rounded-full hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+          >
+            <ArrowLeft className="h-5 w-5 text-black dark:text-white" />
+          </motion.button>
+          <div>
+            <h1 className="text-xl font-bold text-black dark:text-white">Your Cart</h1>
+            <p className="text-sm text-neutral-600 dark:text-neutral-400">
+              {cart.items.length} {cart.items.length === 1 ? 'item' : 'items'}
+            </p>
           </div>
         </div>
       </div>
+
+      {/* Cart Content */}
+      <div className="px-4 py-6">
+        {cart.items.length === 0 ? (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="text-center py-12"
+          >
+            <div className="w-24 h-24 mx-auto mb-4 bg-neutral-200 dark:bg-neutral-800 rounded-full flex items-center justify-center">
+              <svg 
+                className="w-12 h-12 text-neutral-400"
+                fill="none" 
+                viewBox="0 0 24 24" 
+                stroke="currentColor"
+              >
+                <path 
+                  strokeLinecap="round" 
+                  strokeLinejoin="round" 
+                  strokeWidth={1.5} 
+                  d="M3 3h2l.4 2M7 13h10l4-8H5.4m0 0L7 13m0 0l-2.5 5M7 13l2.5 5m6-5v6a2 2 0 11-4 0v-6m-2-4h8a2 2 0 012 2v2a2 2 0 01-2 2h-8a2 2 0 01-2-2V9a2 2 0 012-2z" 
+                />
+              </svg>
+            </div>
+            <h3 className="text-lg font-semibold text-black dark:text-white mb-2">
+              Your cart is empty
+            </h3>
+            <p className="text-neutral-600 dark:text-neutral-400 mb-6">
+              Add some delicious items to get started
+            </p>
+            <motion.button
+              onClick={handleGoBack}
+              className="px-6 py-3 bg-orange-500 hover:bg-orange-600 text-white rounded-xl font-medium transition-colors"
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+            >
+              Start Shopping
+            </motion.button>
+          </motion.div>
+        ) : (
+          <div className="space-y-4">
+            <AnimatePresence>
+              {cart.items.map((item, index) => (
+                <motion.div
+                  key={item.menuItemId}
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: 20 }}
+                  transition={{ delay: index * 0.1 }}
+                  className="bg-white dark:bg-neutral-900 rounded-2xl p-4 border border-neutral-200 dark:border-neutral-800"
+                >
+                  <div className="flex gap-4">
+                    {/* Product Image */}
+                    <div className="w-16 h-16 bg-neutral-100 dark:bg-neutral-800 rounded-xl overflow-hidden flex-shrink-0">
+                      {item.imageUrl ? (
+                        <Image
+                          src={item.imageUrl}
+                          alt={item.name}
+                          width={64}
+                          height={64}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-neutral-400 text-xs">
+                          No Image
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Product Details */}
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-semibold text-black dark:text-white mb-1 truncate">
+                        {item.name}
+                      </h3>
+                      <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-2">
+                        ₹{item.price} each
+                      </p>
+                      
+                      {/* Quantity Controls */}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <motion.button
+                            onClick={() => handleQuantityChange(item.menuItemId, item.quantity - 1)}
+                            disabled={isLoading}
+                            className="w-8 h-8 rounded-full bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-colors disabled:opacity-50"
+                            whileHover={{ scale: 1.1 }}
+                            whileTap={{ scale: 0.9 }}
+                          >
+                            {item.quantity === 1 ? (
+                              <Trash2 className="h-4 w-4 text-red-500" />
+                            ) : (
+                              <Minus className="h-4 w-4 text-black dark:text-white" />
+                            )}
+                          </motion.button>
+                          
+                          <span className="text-lg font-semibold text-black dark:text-white min-w-[2rem] text-center">
+                            {item.quantity}
+                          </span>
+                          
+                          <motion.button
+                            onClick={() => handleQuantityChange(item.menuItemId, item.quantity + 1)}
+                            disabled={isLoading}
+                            className="w-8 h-8 rounded-full bg-black dark:bg-white flex items-center justify-center hover:bg-neutral-800 dark:hover:bg-neutral-200 transition-colors disabled:opacity-50"
+                            whileHover={{ scale: 1.1 }}
+                            whileTap={{ scale: 0.9 }}
+                          >
+                            <Plus className="h-4 w-4 text-white dark:text-black" />
+                          </motion.button>
+                        </div>
+                        
+                        {/* Item Total */}
+                        <div className="text-right">
+                          <p className="text-lg font-bold text-black dark:text-white">
+                            ₹{item.subtotal}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
+            </AnimatePresence>
+
+            {/* Order Summary */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-white dark:bg-neutral-900 rounded-2xl p-4 border border-neutral-200 dark:border-neutral-800 mt-6"
+            >
+              <h3 className="text-lg font-bold text-black dark:text-white mb-4">Order Summary</h3>
+              
+              <div className="space-y-2">
+                <div className="flex justify-between">
+                  <span className="text-neutral-600 dark:text-neutral-400">Subtotal</span>
+                  <span className="text-black dark:text-white">₹{cart.total}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-neutral-600 dark:text-neutral-400">Delivery Fee</span>
+                  <span className="text-black dark:text-white">₹20</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-neutral-600 dark:text-neutral-400">Taxes</span>
+                  <span className="text-black dark:text-white">₹{Math.round(cart.total * 0.05)}</span>
+                </div>
+                <hr className="border-neutral-200 dark:border-neutral-800" />
+                <div className="flex justify-between text-lg font-bold">
+                  <span className="text-black dark:text-white">Total</span>
+                  <span className="text-black dark:text-white">
+                    ₹{cart.total + 20 + Math.round(cart.total * 0.05)}
+                  </span>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </div>
+
+      {/* Checkout Button - Fixed at bottom */}
+      {cart.items.length > 0 && (
+        <motion.div
+          initial={{ y: 100 }}
+          animate={{ y: 0 }}
+          className="fixed bottom-20 left-0 right-0 px-4 py-4 bg-white dark:bg-neutral-950 border-t border-neutral-200 dark:border-neutral-800"
+        >
+          <motion.button
+            onClick={handleCheckout}
+            disabled={isLoading}
+            className="w-full bg-orange-500 hover:bg-orange-600 text-white font-semibold py-4 px-6 rounded-2xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+          >
+            {isLoading ? "Processing..." : `Proceed to Checkout • ₹${cart.total + 20 + Math.round(cart.total * 0.05)}`}
+          </motion.button>
+        </motion.div>
+      )}
     </div>
   )
 }

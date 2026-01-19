@@ -260,8 +260,8 @@ export default function VendorInventory({ params }: { params: Promise<{ courtId:
     // Set new timer
     const timer = setTimeout(() => {
       handleStockUpdate(itemId, newQuantity)
-    }, 3000) // 3 seconds delay
-    
+    }, 1000) // 1.5 seconds delay
+
     setUpdateTimers(prev => ({ ...prev, [itemId]: timer }))
   }
 

@@ -67,6 +67,20 @@ class ApiClient {
     })
   }
 
+  async loginWithOTP(phone: string, otp: string, courtId: string) {
+    return this.request("/api/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ phone, otp, courtId, loginType: "otp" }),
+    })
+  }
+
+  async loginWithEmail(email: string, password: string, courtId: string) {
+    return this.request("/api/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ email, password, courtId, loginType: "password" }),
+    })
+  }
+
   // Court methods
   async getCourt(courtId: string) {
     return this.request(`/api/courts/${courtId}`)

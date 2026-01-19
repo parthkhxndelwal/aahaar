@@ -1,8 +1,6 @@
 "use client"
-
 import type React from "react"
-
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -10,7 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Loader2, Phone, Mail, ArrowLeft } from "lucide-react"
+import { Loader2, Phone, Mail, ArrowLeft, Building2 } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 import { api } from "@/lib/api"
 
@@ -21,9 +19,12 @@ export default function UserLogin() {
   const courtId = params.courtId as string
 
   const [loading, setLoading] = useState(false)
+  const [courtLoading, setCourtLoading] = useState(true)
   const [error, setError] = useState("")
+  const [courtError, setCourtError] = useState("")
   const [otpSent, setOtpSent] = useState(false)
   const [activeTab, setActiveTab] = useState("phone")
+  const [courtInfo, setCourtInfo] = useState<any>(null)
 
   // Phone/OTP Login State
   const [phone, setPhone] = useState("")
@@ -32,6 +33,49 @@ export default function UserLogin() {
   // Email Login State
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
+
+  // Validate court on mount
+  useEffect(() => {
+    if (courtId) {
+      validateCourt()
+    }
+  }, [courtId])
+
+  const validateCourt = async () => {
+    try {
+      setCourtLoading(true)
+      console.log("🏢 Validating court:", courtId)
+      
+      const response = await fetch(`/api/courts/${courtId}`)
+      
+      console.log("📡 Court API response status:", response.status)
+      
+      if (response.ok) {
+        const data = await response.json()
+        console.log("📥 Court API response data:", data)
+        
+        if (data.success) {
+          setCourtInfo(data.data.court)
+          setCourtError("")
+          console.log("✅ Court info set:", data.data.court)
+        } else {
+          setCourtError("Food court not found")
+          console.log("❌ Court not found in response")
+        }
+      } else if (response.status === 404) {
+        setCourtError("Food court not found")
+        console.log("❌ Court not found (404)")
+      } else {
+        setCourtError("Failed to load food court information")
+        console.log("❌ Failed to load court info, status:", response.status)
+      }
+    } catch (error) {
+      console.error("❌ Error validating court:", error)
+      setCourtError("Failed to load food court information")
+    } finally {
+      setCourtLoading(false)
+    }
+  }
 
   const handleSendOTP = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -44,20 +88,21 @@ export default function UserLogin() {
     setError("")
 
     try {
-      const response = await api.post("/auth/send-otp", {
-        phone,
-        courtId,
-      })
+      console.log("🚀 Sending OTP to:", phone, "for court:", courtId)
+      
+      const response = await api.sendOTP(phone, courtId)
 
-      if (response.data.success) {
+      console.log("📥 Send OTP response:", response)
+
+      if (response.success) {
         setOtpSent(true)
         setError("")
         // In development, show the OTP
-        if (response.data.data?.otp) {
-          setError(`Development OTP: ${response.data.data.otp}`)
+        if (response.data?.otp) {
+          setError(`Development OTP: ${response.data.otp}`)
         }
       } else {
-        setError(response.data.message || "Failed to send OTP")
+        setError(response.message || "Failed to send OTP")
       }
     } catch (error: any) {
       setError(error.response?.data?.message || "Failed to send OTP")
@@ -77,18 +122,17 @@ export default function UserLogin() {
     setError("")
 
     try {
-      const response = await api.post("/auth/login", {
-        phone,
-        otp,
-        courtId,
-        loginType: "otp",
-      })
+      console.log("🚀 Verifying OTP for:", phone, "courtId:", courtId)
+      
+      const response = await api.loginWithOTP(phone, otp, courtId)
 
-      if (response.data.success) {
-        login(response.data.data.token, response.data.data.user)
+      console.log("📥 OTP Login response:", response)
+
+      if (response.success) {
+        login(response.data.token, response.data.user)
         router.push(`/app/${courtId}`)
       } else {
-        setError(response.data.message || "Invalid OTP")
+        setError(response.message || "Invalid OTP")
       }
     } catch (error: any) {
       setError(error.response?.data?.message || "Login failed")
@@ -108,18 +152,17 @@ export default function UserLogin() {
     setError("")
 
     try {
-      const response = await api.post("/auth/login", {
-        email,
-        password,
-        courtId,
-        loginType: "password",
-      })
+      console.log("🚀 Email login for:", email, "courtId:", courtId)
+      
+      const response = await api.loginWithEmail(email, password, courtId)
 
-      if (response.data.success) {
-        login(response.data.data.token, response.data.data.user)
+      console.log("📥 Email Login response:", response)
+
+      if (response.success) {
+        login(response.data.token, response.data.user)
         router.push(`/app/${courtId}`)
       } else {
-        setError(response.data.message || "Invalid credentials")
+        setError(response.message || "Invalid credentials")
       }
     } catch (error: any) {
       setError(error.response?.data?.message || "Login failed")
@@ -129,17 +172,76 @@ export default function UserLogin() {
   }
 
   const goBack = () => {
-    router.push(`/app/${courtId}`)
+    router.push(`/app/login`)
+  }
+
+  // Show loading while validating court
+  if (courtLoading) {
+    return (
+      <div className="min-h-screen bg-neutral-950 flex items-center justify-center p-4">
+        <div className="flex items-center space-x-4">
+          <Loader2 className="h-8 w-8 animate-spin text-blue-400" />
+          <span className="text-lg text-white">Loading food court...</span>
+        </div>
+      </div>
+    )
+  }
+
+  // Show error if court not found
+  if (courtError) {
+    return (
+      <div className="min-h-screen bg-neutral-950 flex items-center justify-center p-4">
+        <div className="w-full max-w-md">
+          <Card>
+            <CardHeader className="text-center">
+              <CardTitle className="text-red-600">Food Court Not Found</CardTitle>
+              <CardDescription>{courtError}</CardDescription>
+            </CardHeader>
+            <CardContent className="text-center space-y-4">
+              <p className="text-sm text-gray-600">
+                The food court ID "{courtId}" could not be found or is no longer active.
+              </p>
+              <Button onClick={() => router.push('/app/login')} className="w-full">
+                Choose Different Food Court
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    )
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-neutral-950 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="mb-6">
           <Button variant="ghost" onClick={goBack} className="mb-4">
             <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Menu
+            Choose Different Court
           </Button>
+          
+          {/* Court Info Display */}
+          {courtInfo && (
+            <div className="p-4 bg-neutral-900 rounded-lg border border-neutral-800 mb-4">
+              <div className="flex items-center gap-3">
+                {courtInfo.logoUrl || courtInfo.imageUrl ? (
+                  <img
+                    src={courtInfo.logoUrl || courtInfo.imageUrl}
+                    alt={courtInfo.instituteName || courtInfo.name}
+                    className="w-12 h-12 rounded-lg object-cover"
+                  />
+                ) : (
+                  <div className="w-12 h-12 bg-blue-600/20 rounded-lg flex items-center justify-center">
+                    <Building2 className="h-6 w-6 text-blue-400" />
+                  </div>
+                )}
+                <div>
+                  <h3 className="font-medium text-white">{courtInfo.instituteName || courtInfo.name}</h3>
+                  <p className="text-sm text-neutral-400">{courtInfo.address || courtInfo.location || 'No location provided'}</p>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         <Card>
