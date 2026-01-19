@@ -7,6 +7,7 @@ export async function POST(request) {
     const authResult = await authenticateToken(request)
     if (authResult instanceof NextResponse) return authResult
 
+    const { user } = authResult
     const formData = await request.formData()
     const file = formData.get("file")
     const folder = formData.get("folder") || "aahaar"
@@ -14,6 +15,11 @@ export async function POST(request) {
 
     if (!file) {
       return NextResponse.json({ success: false, message: "No file provided" }, { status: 400 })
+    }
+
+    // Check if user has permission to upload to this folder
+    if (folder.includes("menu-items") && user.role !== "vendor" && user.role !== "admin") {
+      return NextResponse.json({ success: false, message: "Access denied for this folder" }, { status: 403 })
     }
 
     // Check file size (4MB limit)

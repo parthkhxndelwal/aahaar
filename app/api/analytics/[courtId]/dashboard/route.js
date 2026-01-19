@@ -1,12 +1,7 @@
 import { NextResponse } from "next/server"
-import { Order, Payment, Vendor, User } from "@/models"
+import { Order, Payment, Vendor, User, sequelize } from "@/models"
 import { authenticateToken } from "@/middleware/auth"
 import { Op, Sequelize } from "sequelize"
-
-const sequelize = new Sequelize(process.env.DB_NAME, process.env.DB_USER, process.env.DB_PASS, {
-  host: process.env.DB_HOST,
-  dialect: "mysql",
-})
 
 export async function GET(request, { params }) {
   try {

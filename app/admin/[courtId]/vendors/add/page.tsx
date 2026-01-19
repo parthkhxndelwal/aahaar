@@ -12,7 +12,7 @@ import { Switch } from "@/components/ui/switch"
 import { Separator } from "@/components/ui/separator"
 import { useToast } from "@/hooks/use-toast"
 import { useAuth } from "@/contexts/auth-context"
-import { ArrowLeft, Upload, Store, User, CreditCard, MapPin, Clock } from "lucide-react"
+import { ArrowLeft, Upload, Store, User, CreditCard, MapPin, Clock, Clipboard } from "lucide-react"
 
 interface VendorFormData {
   // Basic Information
@@ -89,7 +89,8 @@ export default function AddVendorPage({ params }: { params: Promise<{ courtId: s
   })
   
   const [loading, setLoading] = useState(false)
-  const [uploading, setUploading] = useState(false)
+  const [uploadingLogo, setUploadingLogo] = useState(false)
+  const [uploadingBanner, setUploadingBanner] = useState(false)
   const [currentStep, setCurrentStep] = useState(1)
 
   const daysOfWeek = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
@@ -124,7 +125,7 @@ export default function AddVendorPage({ params }: { params: Promise<{ courtId: s
     if (!file) return
 
     try {
-      setUploading(true)
+      setUploadingLogo(true)
       const uploadFormData = new FormData()
       uploadFormData.append("file", file)
       uploadFormData.append("upload_preset", "vendor_logos")
@@ -151,7 +152,60 @@ export default function AddVendorPage({ params }: { params: Promise<{ courtId: s
         variant: "destructive",
       })
     } finally {
-      setUploading(false)
+      setUploadingLogo(false)
+    }
+  }
+
+  const handleLogoFromClipboard = async () => {
+    try {
+      const clipboardItems = await navigator.clipboard.read()
+      const imageItem = clipboardItems.find(item => 
+        item.types.some(type => type.startsWith('image/'))
+      )
+      
+      if (!imageItem) {
+        toast({
+          title: "No image found",
+          description: "Please copy an image to your clipboard first",
+          variant: "destructive",
+        })
+        return
+      }
+
+      const imageBlob = await imageItem.getType(
+        imageItem.types.find(type => type.startsWith('image/')) || 'image/png'
+      )
+      
+      const file = new File([imageBlob], 'clipboard-image.png', { type: imageBlob.type })
+      
+      setUploadingLogo(true)
+      const uploadFormData = new FormData()
+      uploadFormData.append("file", file)
+      uploadFormData.append("upload_preset", "vendor_logos")
+
+      const response = await fetch(`/api/upload`, {
+        method: "POST",
+        body: uploadFormData,
+      })
+
+      const result = await response.json()
+      if (result.success) {
+        setFormData({ ...formData, logoUrl: result.data.url })
+        toast({
+          title: "Success",
+          description: "Logo uploaded from clipboard successfully",
+        })
+      } else {
+        throw new Error(result.message)
+      }
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to upload logo from clipboard",
+        variant: "destructive",
+      })
+    } finally {
+      setUploadingLogo(false)
     }
   }
 
@@ -160,7 +214,7 @@ export default function AddVendorPage({ params }: { params: Promise<{ courtId: s
     if (!file) return
 
     try {
-      setUploading(true)
+      setUploadingBanner(true)
       const uploadFormData = new FormData()
       uploadFormData.append("file", file)
       uploadFormData.append("upload_preset", "vendor_logos")
@@ -187,7 +241,60 @@ export default function AddVendorPage({ params }: { params: Promise<{ courtId: s
         variant: "destructive",
       })
     } finally {
-      setUploading(false)
+      setUploadingBanner(false)
+    }
+  }
+
+  const handleBannerFromClipboard = async () => {
+    try {
+      const clipboardItems = await navigator.clipboard.read()
+      const imageItem = clipboardItems.find(item => 
+        item.types.some(type => type.startsWith('image/'))
+      )
+      
+      if (!imageItem) {
+        toast({
+          title: "No image found",
+          description: "Please copy an image to your clipboard first",
+          variant: "destructive",
+        })
+        return
+      }
+
+      const imageBlob = await imageItem.getType(
+        imageItem.types.find(type => type.startsWith('image/')) || 'image/png'
+      )
+      
+      const file = new File([imageBlob], 'clipboard-banner.png', { type: imageBlob.type })
+      
+      setUploadingBanner(true)
+      const uploadFormData = new FormData()
+      uploadFormData.append("file", file)
+      uploadFormData.append("upload_preset", "vendor_logos")
+
+      const response = await fetch(`/api/upload`, {
+        method: "POST",
+        body: uploadFormData,
+      })
+
+      const result = await response.json()
+      if (result.success) {
+        setFormData({ ...formData, bannerUrl: result.data.url })
+        toast({
+          title: "Success",
+          description: "Banner uploaded from clipboard successfully",
+        })
+      } else {
+        throw new Error(result.message)
+      }
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to upload banner from clipboard",
+        variant: "destructive",
+      })
+    } finally {
+      setUploadingBanner(false)
     }
   }
 
@@ -195,9 +302,10 @@ export default function AddVendorPage({ params }: { params: Promise<{ courtId: s
     try {
       setLoading(true)
       
-      console.log("Submitting vendor data:", formData)
-      console.log("Logo URL:", formData.logoUrl)
-      console.log("Banner URL:", formData.bannerUrl)
+      console.log("📤 Submitting vendor data:", formData)
+      console.log("📤 Logo URL:", formData.logoUrl)
+      console.log("📤 Banner URL:", formData.bannerUrl)
+      console.log("📤 isActive value:", formData.isActive)
       
       const response = await fetch(`/api/courts/${courtId}/vendors`, {
         method: "POST",
@@ -383,25 +491,37 @@ export default function AddVendorPage({ params }: { params: Promise<{ courtId: s
                       />
                     </div>
                   )}
-                  <div>
-                    <Input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleLogoUpload}
-                      disabled={uploading}
-                      className="hidden"
-                      id="logo-upload"
-                    />
-                    <Label htmlFor="logo-upload" className="cursor-pointer">
-                      <Button variant="outline" disabled={uploading} asChild>
-                        <span>
-                          <Upload className="h-4 w-4 mr-2" />
-                          {uploading ? "Uploading..." : "Upload Logo"}
-                        </span>
-                      </Button>
-                    </Label>
+                  <div className="flex gap-2">
+                    <div>
+                      <Input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleLogoUpload}
+                        disabled={uploadingLogo}
+                        className="hidden"
+                        id="logo-upload"
+                      />
+                      <Label htmlFor="logo-upload" className="cursor-pointer">
+                        <Button variant="outline" disabled={uploadingLogo} asChild>
+                          <span>
+                            <Upload className="h-4 w-4 mr-2" />
+                            {uploadingLogo ? "Uploading..." : "Upload Logo"}
+                          </span>
+                        </Button>
+                      </Label>
+                    </div>
+                    <Button 
+                      variant="outline" 
+                      onClick={handleLogoFromClipboard}
+                      disabled={uploadingLogo}
+                      type="button"
+                    >
+                      <Clipboard className="h-4 w-4 mr-2" />
+                      {uploadingLogo ? "Uploading..." : "Paste from Clipboard"}
+                    </Button>
                   </div>
                 </div>
+                <p className="text-xs text-gray-500 mt-1">Upload a file or paste an image from your clipboard</p>
               </div>
 
               <div>
@@ -416,25 +536,37 @@ export default function AddVendorPage({ params }: { params: Promise<{ courtId: s
                       />
                     </div>
                   )}
-                  <div>
-                    <Input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleBannerUpload}
-                      disabled={uploading}
-                      className="hidden"
-                      id="banner-upload"
-                    />
-                    <Label htmlFor="banner-upload" className="cursor-pointer">
-                      <Button variant="outline" disabled={uploading} asChild>
-                        <span>
-                          <Upload className="h-4 w-4 mr-2" />
-                          {uploading ? "Uploading..." : "Upload Banner"}
-                        </span>
-                      </Button>
-                    </Label>
+                  <div className="flex gap-2">
+                    <div>
+                      <Input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleBannerUpload}
+                        disabled={uploadingBanner}
+                        className="hidden"
+                        id="banner-upload"
+                      />
+                      <Label htmlFor="banner-upload" className="cursor-pointer">
+                        <Button variant="outline" disabled={uploadingBanner} asChild>
+                          <span>
+                            <Upload className="h-4 w-4 mr-2" />
+                            {uploadingBanner ? "Uploading..." : "Upload Banner"}
+                          </span>
+                        </Button>
+                      </Label>
+                    </div>
+                    <Button 
+                      variant="outline" 
+                      onClick={handleBannerFromClipboard}
+                      disabled={uploadingBanner}
+                      type="button"
+                    >
+                      <Clipboard className="h-4 w-4 mr-2" />
+                      {uploadingBanner ? "Uploading..." : "Paste from Clipboard"}
+                    </Button>
                   </div>
                 </div>
+                <p className="text-xs text-gray-500 mt-1">Upload a file or paste an image from your clipboard</p>
               </div>
 
               <Separator />
@@ -639,19 +771,22 @@ export default function AddVendorPage({ params }: { params: Promise<{ courtId: s
       {/* Header */}
       <div className="flex items-center gap-4">
         <Button variant="ghost" onClick={() => router.back()}>
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          Back
+          <ArrowLeft className="h-4 w-4 text-white" />
         </Button>
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Add New Vendor</h1>
-          <p className="text-gray-600">Add a new vendor to your food court</p>
+          <h1 className="text-3xl font-bold text-neutral-100">Add New Vendor</h1>
+          <p className="text-neutral-400">Add a new vendor to your food court</p>
         </div>
+      </div>
+      {/* Note div */}
+      <div className="flex items-center gap-4 bg-neutral-900 rounded-xl p-4 text-white">
+        Note: Upon creation, you won't be able to delete a Vendor's Account, as per RBI Guidelines.<span><a href="#" className=" hover:text-blue-500 transition-all duration-100">Learn more</a></span>
       </div>
 
       {/* Progress Steps */}
       <div className="flex items-center justify-between mb-8">
-        {[1, 2, 3, 4].map((step) => (
-          <div key={step} className="flex items-center">
+        {[1, 2, 3].map((step) => (
+          <div key={step} className="flex w-full items-center">
             <div
               className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
                 step <= currentStep
@@ -663,11 +798,24 @@ export default function AddVendorPage({ params }: { params: Promise<{ courtId: s
             </div>
             {step < 4 && (
               <div
-                className={`w-20 h-1 mx-2 ${
+                className={`w-full h-1 mx-2 ${
                   step < currentStep ? "bg-blue-600" : "bg-gray-200"
                 }`}
               />
             )}
+          </div>
+        ))}
+        {[4].map((step) => (
+          <div key={step} className="flex items-center">
+            <div
+              className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
+                step <= currentStep
+                  ? "bg-blue-600 text-white"
+                  : "bg-gray-200 text-gray-600"
+              }`}
+            >
+              {step}
+            </div>
           </div>
         ))}
       </div>

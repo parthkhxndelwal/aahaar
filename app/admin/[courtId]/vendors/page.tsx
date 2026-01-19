@@ -6,10 +6,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
-import { Plus, Search, MoreVertical, Edit, Trash2 } from "lucide-react"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Plus, Search, MoreVertical, Edit, Trash2, Eye, Copy } from "lucide-react"
 import Link from "next/link"
 import { useAuth } from "@/contexts/auth-context"
 
@@ -25,6 +27,7 @@ interface Vendor {
   bannerUrl?: string
   rating?: number
   totalRatings?: number
+  userId?: string
 }
 
 export default function AdminVendorsPage({ params }: { params: Promise<{ courtId: string }> }) {
@@ -32,6 +35,7 @@ export default function AdminVendorsPage({ params }: { params: Promise<{ courtId
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
   const [deletingVendor, setDeletingVendor] = useState<string | null>(null)
+  const [selectedVendorCredentials, setSelectedVendorCredentials] = useState<Vendor | null>(null)
   const { toast } = useToast()
   const { token } = useAuth()
   const { courtId } = use(params)
@@ -50,6 +54,7 @@ export default function AdminVendorsPage({ params }: { params: Promise<{ courtId
       const result = await response.json()
 
       if (result.success) {
+        console.log("🔍 Fetched vendors:", result.data.vendors.map((v: Vendor) => ({ name: v.stallName, status: v.status })))
         setVendors(result.data.vendors)
       } else {
         throw new Error(result.message)
@@ -94,6 +99,32 @@ export default function AdminVendorsPage({ params }: { params: Promise<{ courtId
       })
     } finally {
       setDeletingVendor(null)
+    }
+  }
+
+  const copyCredentialsToClipboard = async (vendor: Vendor) => {
+    const credentials = `Login Credentials for ${vendor.stallName}
+
+Email: ${vendor.contactEmail}
+Stall Name: ${vendor.stallName}
+Vendor Name: ${vendor.vendorName}
+
+Dashboard URL: ${window.location.origin}/vendor/${courtId}/login
+
+Please use your email to login. If you need to reset your password, use the "Forgot Password" option on the login page.`
+
+    try {
+      await navigator.clipboard.writeText(credentials)
+      toast({
+        title: "Copied!",
+        description: "Vendor credentials copied to clipboard",
+      })
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to copy credentials",
+        variant: "destructive",
+      })
     }
   }
 
@@ -182,6 +213,70 @@ export default function AdminVendorsPage({ params }: { params: Promise<{ courtId
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
+                      <Dialog>
+                        <DialogTrigger asChild>
+                          <DropdownMenuItem onSelect={(e) => {
+                            e.preventDefault()
+                            setSelectedVendorCredentials(vendor)
+                          }}>
+                            <Eye className="mr-2 h-4 w-4" />
+                            View Credentials
+                          </DropdownMenuItem>
+                        </DialogTrigger>
+                        <DialogContent className="sm:max-w-md">
+                          <DialogHeader>
+                            <DialogTitle>Vendor Login Credentials</DialogTitle>
+                            <DialogDescription>
+                              Share these credentials with the vendor so they can access their dashboard.
+                            </DialogDescription>
+                          </DialogHeader>
+                          {selectedVendorCredentials && (
+                            <div className="space-y-4">
+                              <div className="bg-neutral-50 rounded-lg p-4 space-y-3">
+                                <div>
+                                  <Label className="text-sm font-medium text-neutral-700">Stall Name</Label>
+                                  <p className="text-sm font-mono bg-white px-2 py-1 rounded border">
+                                    {selectedVendorCredentials.stallName}
+                                  </p>
+                                </div>
+                                <div>
+                                  <Label className="text-sm font-medium text-neutral-700">Login Email</Label>
+                                  <p className="text-sm font-mono bg-white px-2 py-1 rounded border">
+                                    {selectedVendorCredentials.contactEmail}
+                                  </p>
+                                </div>
+                                <div>
+                                  <Label className="text-sm font-medium text-neutral-700">Vendor Name</Label>
+                                  <p className="text-sm font-mono bg-white px-2 py-1 rounded border">
+                                    {selectedVendorCredentials.vendorName}
+                                  </p>
+                                </div>
+                                <div>
+                                  <Label className="text-sm font-medium text-neutral-700">Dashboard URL</Label>
+                                  <p className="text-sm font-mono bg-white px-2 py-1 rounded border break-all">
+                                    {typeof window !== 'undefined' ? `${window.location.origin}/vendor/${courtId}/login` : ''}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="bg-blue-50 rounded-lg p-4">
+                                <p className="text-sm text-blue-800">
+                                  <strong>Note:</strong> The vendor should use their email address to login. 
+                                  If they need to reset their password, they can use the "Forgot Password" option on the login page.
+                                </p>
+                              </div>
+                              <div className="flex justify-end space-x-2">
+                                <Button 
+                                  variant="outline" 
+                                  onClick={() => copyCredentialsToClipboard(selectedVendorCredentials)}
+                                >
+                                  <Copy className="mr-2 h-4 w-4" />
+                                  Copy All
+                                </Button>
+                              </div>
+                            </div>
+                          )}
+                        </DialogContent>
+                      </Dialog>
                       <DropdownMenuItem onClick={(e) => e.stopPropagation()}>
                         <Link 
                           href={`/admin/${courtId}/vendors/${vendor.id}?mode=edit`}

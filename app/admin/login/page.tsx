@@ -61,19 +61,19 @@ export default function AdminLoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center py-12 px-4">
-      <Card className="w-full max-w-md">
+    <div className="min-h-screen bg-neutral-950 flex items-center justify-center py-12 px-4">
+      <Card className="w-full max-w-md bg-neutral-900">
         <CardHeader>
-          <CardTitle>Admin Login</CardTitle>
+          <CardTitle ><span className="text-white">Admin Login</span></CardTitle>
           <CardDescription>Access your food court management dashboard</CardDescription>
         </CardHeader>
         <CardContent>
           {/* Demo credentials info */}
-          <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
-            <p className="text-sm font-medium text-blue-800 mb-1">Demo Credentials:</p>
-            <p className="text-xs text-blue-600">Court ID: democourt</p>
-            <p className="text-xs text-blue-600">Email: admin@democourt.com</p>
-            <p className="text-xs text-blue-600">Password: admin123</p>
+          <div className="mb-4 p-3 bg-neutral-800 border border-blue-200 rounded-md">
+            <p className="text-sm font-medium text-neutral-200 mb-1">Demo Credentials:</p>
+            <p className="text-xs text-neutral-400">Court ID: democourt</p>
+            <p className="text-xs text-neutral-400">Email: admin@democourt.com</p>
+            <p className="text-xs text-neutral-400">Password: admin123</p>
           </div>
           
           <form onSubmit={handleSubmit} className="space-y-4">

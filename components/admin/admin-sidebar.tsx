@@ -16,7 +16,9 @@ import {
   UserCheck,
   ChevronLeft,
   ChevronRight,
+  LogOut,
 } from "lucide-react"
+import { useAuth } from "@/contexts/auth-context"
 
 interface AdminSidebarProps {
   courtId: string
@@ -26,6 +28,7 @@ export function AdminSidebar({ courtId }: AdminSidebarProps) {
   const [collapsed, setCollapsed] = useState(false)
   const [showTitle, setShowTitle] = useState(true)
   const [showLink, setShowLink] = useState(true)
+  const { logout } = useAuth()
 
   const pathname = usePathname()
 
@@ -82,7 +85,7 @@ export function AdminSidebar({ courtId }: AdminSidebarProps) {
   }, [collapsed])
 
   return (
-    <div className={cn("transition-all duration-300 bg-black", collapsed ? "w-24" : "w-64")}>
+    <div className={cn("transition-all duration-300 bg-black flex flex-col h-full", collapsed ? "w-24" : "w-64")}>
       <div className="flex items-center justify-between p-4 mt-2">
         <Image src="/logo.png" alt="Logo" width={32} height={32}></Image>
         {!collapsed && showTitle && <h2 className="text-xl font-semibold text-neutral-50">Admin Panel</h2>}
@@ -94,7 +97,7 @@ export function AdminSidebar({ courtId }: AdminSidebarProps) {
         </button>
       </div>
 
-      <nav className="mt-6">
+      <nav className="mt-6 flex-1">
         {navigation.map((item) => {
           const isActive = pathname === item.href
           return (
@@ -113,6 +116,21 @@ export function AdminSidebar({ courtId }: AdminSidebarProps) {
           )
         })}
       </nav>
+
+      {/* Logout Button */}
+      <div className="p-4 mt-auto">
+        <Button
+          variant="ghost"
+          onClick={logout}
+          className={cn(
+            "w-full justify-start text-neutral-400 hover:text-neutral-200 hover:bg-neutral-900 transition-colors",
+            collapsed ? "px-2" : "px-4"
+          )}
+        >
+          <LogOut className={cn("h-5 w-5", !collapsed && showLink ? "mr-3" : "")} />
+          {!collapsed && showLink && "Logout"}
+        </Button>
+      </div>
     </div>
   )
 }

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
-import { User } from "@/models"
+import { User, Order } from "@/models"
 import { authenticateToken } from "@/middleware/auth"
-import { Op } from "sequelize"
+import { Op, fn, col, literal } from "sequelize"
 
 export async function GET(request, { params }) {
   try {
@@ -27,15 +27,27 @@ export async function GET(request, { params }) {
     if (status) whereClause.status = status
     if (search) {
       whereClause[Op.or] = [
-        { fullName: { [Op.iLike]: `%${search}%` } },
-        { email: { [Op.iLike]: `%${search}%` } },
-        { phone: { [Op.iLike]: `%${search}%` } },
+        { fullName: { [Op.like]: `%${search}%` } },
+        { email: { [Op.like]: `%${search}%` } },
+        { phone: { [Op.like]: `%${search}%` } },
       ]
     }
 
     const users = await User.findAndCountAll({
       where: whereClause,
-      attributes: { exclude: ["password"] },
+      attributes: { 
+        exclude: ["password"],
+        include: [
+          [
+            literal('(SELECT COUNT(*) FROM orders WHERE orders.userId = User.id AND orders.paymentStatus = \'paid\')'),
+            'totalOrders'
+          ],
+          [
+            literal('(SELECT COALESCE(SUM(orders.totalAmount), 0) FROM orders WHERE orders.userId = User.id AND orders.paymentStatus = \'paid\')'),
+            'totalSpent'
+          ]
+        ]
+      },
       limit,
       offset,
       order: [["createdAt", "DESC"]],

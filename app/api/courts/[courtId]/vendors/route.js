@@ -43,11 +43,15 @@ export async function GET(request, { params }) {
     })
 
     // Transform vendor data to ensure proper numeric values
-    const transformedVendors = vendors.rows.map(vendor => ({
-      ...vendor.toJSON(),
-      rating: typeof vendor.rating === 'number' ? vendor.rating : 0.0,
-      totalRatings: typeof vendor.totalRatings === 'number' ? vendor.totalRatings : 0,
-    }))
+    const transformedVendors = vendors.rows.map(vendor => {
+      const transformed = {
+        ...vendor.toJSON(),
+        rating: typeof vendor.rating === 'number' ? vendor.rating : 0.0,
+        totalRatings: typeof vendor.totalRatings === 'number' ? vendor.totalRatings : 0,
+      }
+      console.log("📊 Vendor status in GET:", vendor.stallName, "status:", transformed.status)
+      return transformed
+    })
 
     return NextResponse.json({
       success: true,
@@ -188,8 +192,9 @@ export async function POST(request, { params }) {
       password: hashedPassword,
       role: "vendor",
       courtId,
-      isEmailVerified: false,
-      isPhoneVerified: false,
+      status: "active", // Set status to active so they can login
+      emailVerified: false, // Fixed field name
+      phoneVerified: false, // Fixed field name
     })
 
     // Create vendor profile
@@ -217,6 +222,8 @@ export async function POST(request, { params }) {
       status: isActive ? "active" : "inactive",
       isOnline: false,
     })
+
+    console.log("📝 Vendor created with status:", vendor.status, "isActive was:", isActive)
 
     // Create Razorpay Route Account
     let razorpayAccountId = null

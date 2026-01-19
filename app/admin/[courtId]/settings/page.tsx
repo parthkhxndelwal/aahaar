@@ -292,8 +292,8 @@ export default function AdminSettingsPage({ params }: { params: Promise<{ courtI
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Settings</h1>
-          <p className="text-gray-600">Configure your food court settings and preferences</p>
+          <h1 className="text-3xl font-bold text-neutral-100">Settings</h1>
+          <p className="text-neutral-400">Configure your food court settings and preferences</p>
         </div>
         <Button onClick={saveSettings} disabled={saving}>
           {saving ? "Saving..." : "Save Changes"}

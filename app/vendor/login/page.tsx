@@ -34,27 +34,34 @@ export default function VendorLogin() {
     setError("")
 
     try {
-      const response = await api.post("/auth/login", {
-        email,
-        password,
-        courtId,
-        loginType: "password",
-      })
+      console.log("🚀 Attempting login with:", { email, courtId, hasPassword: !!password })
+      
+      const response = await api.login(email, password, courtId)
 
-      if (response.data.success) {
-        const userData = response.data.data.user
+      console.log("📥 Login response:", response)
+
+      if (response.success) {
+        const userData = response.data.user
         if (userData.role !== "vendor") {
           setError("Access denied. Vendor account required.")
           return
         }
 
-        login(response.data.data.token, userData)
+        login(response.data.token, userData)
         router.push(`/vendor/${courtId}`)
       } else {
-        setError(response.data.message || "Invalid credentials")
+        setError(response.message || "Invalid credentials")
       }
     } catch (error: any) {
-      setError(error.response?.data?.message || "Login failed")
+      console.error("❌ Login error:", error)
+      // Better error handling for different types of errors
+      if (error.message) {
+        setError(error.message)
+      } else if (typeof error === 'string') {
+        setError(error)
+      } else {
+        setError("Login failed. Please check your credentials and try again.")
+      }
     } finally {
       setLoading(false)
     }

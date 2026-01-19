@@ -69,8 +69,8 @@ export default function AdminRegisterPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center py-12 px-4">
-      <Card className="w-full max-w-md">
+    <div className="min-h-screen bg-neutral-950 flex items-center justify-center py-12 px-4">
+      <Card className="w-full max-w-md bg-neutral-900">
         <CardHeader>
           <CardTitle>Create Admin Account</CardTitle>
           <CardDescription>Set up your food court management system</CardDescription>
@@ -78,55 +78,60 @@ export default function AdminRegisterPage() {
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <Label htmlFor="fullName">Full Name</Label>
               <Input
                 id="fullName"
                 type="text"
+                placeholder="Enter Name"
                 required
                 value={formData.fullName}
+                className="bg-neutral-800 text-neutral-100"
                 onChange={(e) => handleInputChange("fullName", e.target.value)}
               />
             </div>
 
             <div>
-              <Label htmlFor="email">Email</Label>
               <Input
                 id="email"
                 type="email"
+                placeholder="Enter Email ID"
                 required
+                className="bg-neutral-800 text-neutral-100"
                 value={formData.email}
                 onChange={(e) => handleInputChange("email", e.target.value)}
               />
             </div>
 
             <div>
-              <Label htmlFor="phone">Phone Number</Label>
               <Input
                 id="phone"
                 type="tel"
+                className="bg-neutral-800 text-neutral-100"
                 required
+                placeholder="Enter Phone Number"
                 value={formData.phone}
                 onChange={(e) => handleInputChange("phone", e.target.value)}
               />
             </div>
 
             <div>
-              <Label htmlFor="instituteName">Institute Name</Label>
               <Input
                 id="instituteName"
                 type="text"
                 required
+                className="bg-neutral-800 text-neutral-100"
                 value={formData.instituteName}
+                placeholder="Institute Name"
                 onChange={(e) => handleInputChange("instituteName", e.target.value)}
               />
             </div>
 
             <div>
-              <Label htmlFor="courtId">Court ID</Label>
               <Input
                 id="courtId"
                 type="text"
-                placeholder="e.g., vbs-ghamroj"
+                className="bg-neutral-800 text-neutral-100"
+                placeholder="Enter Court ID, e.g. vbs-ghamroj"
+                
                 required
                 value={formData.courtId}
                 onChange={(e) => handleInputChange("courtId", e.target.value.toLowerCase())}
@@ -134,44 +139,46 @@ export default function AdminRegisterPage() {
             </div>
 
             <div>
-              <Label htmlFor="instituteType">Institute Type</Label>
               <Select
                 value={formData.instituteType}
+                
                 onValueChange={(value) => handleInputChange("instituteType", value)}
               >
-                <SelectTrigger>
-                  <SelectValue />
+                <SelectTrigger className="bg-neutral-800 text-neutral-100">
+                  <SelectValue className="bg-neutral-800 text-neutral-100" />
                 </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="school">School</SelectItem>
-                  <SelectItem value="college">College</SelectItem>
-                  <SelectItem value="office">Office</SelectItem>
-                  <SelectItem value="hospital">Hospital</SelectItem>
-                  <SelectItem value="other">Other</SelectItem>
+                <SelectContent className="bg-neutral-800 text-neutral-100">
+                  <SelectItem className="bg-neutral-800 text-neutral-100" value="school">School</SelectItem>
+                  <SelectItem className="bg-neutral-800 text-neutral-100" value="college">College</SelectItem>
+                  <SelectItem className="bg-neutral-800 text-neutral-100" value="office">Office</SelectItem>
+                  <SelectItem className="bg-neutral-800 text-neutral-100" value="hospital">Hospital</SelectItem>
+                  <SelectItem className="bg-neutral-800 text-neutral-100" value="other">Other</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
             <div>
-              <Label htmlFor="password">Password</Label>
               <Input
                 id="password"
                 type="password"
                 required
+                placeholder="Enter Password"
+                className="bg-neutral-800 text-neutral-100"
                 value={formData.password}
                 onChange={(e) => handleInputChange("password", e.target.value)}
               />
             </div>
 
             <div>
-              <Label htmlFor="confirmPassword">Confirm Password</Label>
               <Input
                 id="confirmPassword"
                 type="password"
                 required
+                className="bg-neutral-800 text-neutral-100"
                 value={formData.confirmPassword}
                 onChange={(e) => handleInputChange("confirmPassword", e.target.value)}
-              />
+                placeholder="Confirm Password"/>
+
             </div>
 
             <Button type="submit" className="w-full" disabled={loading}>

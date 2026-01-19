@@ -130,7 +130,7 @@ export default function AdminUsersPage({ params }: { params: Promise<{ courtId: 
       const now = new Date()
       return userDate.getMonth() === now.getMonth() && userDate.getFullYear() === now.getFullYear()
     }).length,
-    totalSpent: users.reduce((sum, u) => sum + u.totalSpent, 0)
+    totalSpent: users.reduce((sum, u) => sum + (Number(u.totalSpent) || 0), 0)
   }
 
   if (loading) {
@@ -146,8 +146,8 @@ export default function AdminUsersPage({ params }: { params: Promise<{ courtId: 
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">User Management</h1>
-          <p className="text-gray-600">Manage users and their access to the food court</p>
+          <h1 className="text-3xl font-bold text-neutral-100">User Management</h1>
+          <p className="text-neutral-400">Manage users and their access to the food court</p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline">
@@ -191,7 +191,7 @@ export default function AdminUsersPage({ params }: { params: Promise<{ courtId: 
             <CardTitle className="text-sm font-medium">Total Spent</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">₹{stats.totalSpent.toLocaleString()}</div>
+            <div className="text-2xl font-bold">₹{(stats.totalSpent || 0).toLocaleString()}</div>
             <p className="text-xs text-muted-foreground">By all users</p>
           </CardContent>
         </Card>
@@ -285,8 +285,8 @@ export default function AdminUsersPage({ params }: { params: Promise<{ courtId: 
                       {user.status}
                     </Badge>
                   </TableCell>
-                  <TableCell>{user.totalOrders}</TableCell>
-                  <TableCell>₹{user.totalSpent}</TableCell>
+                  <TableCell>{user.totalOrders || 0}</TableCell>
+                  <TableCell>₹{(Number(user.totalSpent) || 0).toLocaleString()}</TableCell>
                   <TableCell>
                     {user.lastLoginAt ? new Date(user.lastLoginAt).toLocaleDateString() : "Never"}
                   </TableCell>

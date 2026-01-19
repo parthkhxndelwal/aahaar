@@ -1,30 +1,48 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || ""
 
 class ApiClient {
-  private getAuthHeaders() {
-    const token = localStorage.getItem("token")
+  private getAuthHeaders(): Record<string, string> {
+    const token = typeof window !== 'undefined' ? localStorage.getItem("token") : null
     return token ? { Authorization: `Bearer ${token}` } : {}
   }
 
   async request(endpoint: string, options: RequestInit = {}) {
-    const url = `${API_BASE}${endpoint}`
-    const config = {
-      headers: {
-        "Content-Type": "application/json",
-        ...this.getAuthHeaders(),
-        ...options.headers,
-      },
+    // Construct the URL properly for both absolute and relative API calls
+    const url = API_BASE ? `${API_BASE}${endpoint}` : endpoint
+    
+    // Build headers, but don't add Content-Type if body is FormData
+    const isFormData = options.body instanceof FormData
+    const headers: Record<string, string> = {
+      ...this.getAuthHeaders(),
+      ...(options.headers as Record<string, string> || {}),
+    }
+    
+    if (!isFormData) {
+      headers["Content-Type"] = "application/json"
+    }
+    
+    const config: RequestInit = {
       ...options,
+      headers,
     }
 
-    const response = await fetch(url, config)
-    const data = await response.json()
+    console.log("🌐 API Request:", { url, method: config.method || 'GET', isFormData })
 
-    if (!response.ok) {
-      throw new Error(data.message || "API request failed")
+    try {
+      const response = await fetch(url, config)
+      const data = await response.json()
+
+      console.log("📡 API Response:", { status: response.status, ok: response.ok, data })
+
+      if (!response.ok) {
+        throw new Error(data.message || `API request failed with status ${response.status}`)
+      }
+
+      return data
+    } catch (error) {
+      console.error("🚨 API Error:", error)
+      throw error
     }
-
-    return data
   }
 
   // Auth methods
@@ -134,9 +152,7 @@ class ApiClient {
     return this.request("/api/upload/image", {
       method: "POST",
       body: formData,
-      headers: {
-        ...this.getAuthHeaders(),
-      },
+      // Headers will be handled automatically in request method
     })
   }
 }
