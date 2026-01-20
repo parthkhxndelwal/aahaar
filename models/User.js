@@ -60,6 +60,18 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: false,
         defaultValue: false,
       },
+      dateOfBirth: {
+        type: DataTypes.DATEONLY,
+        allowNull: true,
+      },
+      gender: {
+        type: DataTypes.ENUM("male", "female", "other", "prefer-not-to-say"),
+        allowNull: true,
+      },
+      profilePicture: {
+        type: DataTypes.TEXT,
+        allowNull: true,
+      },
       lastLoginAt: {
         type: DataTypes.DATE,
         allowNull: true,

@@ -28,6 +28,7 @@ const AuditLog = require("./AuditLog")(sequelize, Sequelize.DataTypes)
 const CourtSettings = require("./CourtSettings")(sequelize, Sequelize.DataTypes)
 const Cart = require("./Cart")(sequelize, Sequelize.DataTypes)
 const CartItem = require("./CartItem")(sequelize, Sequelize.DataTypes)
+const OTP = require("./OTP")(sequelize, Sequelize.DataTypes)
 
 // Define associations
 Court.hasMany(User, { foreignKey: "courtId", sourceKey: "courtId", as: "users" })
@@ -88,6 +89,10 @@ CartItem.belongsTo(Cart, { foreignKey: "cartId", as: "cart" })
 MenuItem.hasMany(CartItem, { foreignKey: "menuItemId", as: "cartItems" })
 CartItem.belongsTo(MenuItem, { foreignKey: "menuItemId", as: "menuItem" })
 
+// OTP associations
+User.hasMany(OTP, { foreignKey: "userId", as: "otps" })
+OTP.belongsTo(User, { foreignKey: "userId", as: "user" })
+
 module.exports = {
   sequelize,
   Court,
@@ -102,4 +107,5 @@ module.exports = {
   CourtSettings,
   Cart,
   CartItem,
+  OTP,
 }
