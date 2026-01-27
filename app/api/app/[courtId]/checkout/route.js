@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { Order, OrderItem, User, Vendor, MenuItem, Payment, Cart, CartItem } from "@/models"
 import { authenticateTokenNextJS } from "@/middleware/auth"
+import { notifyVendorNewOrder } from "@/lib/socket-server"
 import { Op } from "sequelize"
 
 export async function POST(request, { params }) {
@@ -171,6 +172,18 @@ export async function POST(request, { params }) {
         items: group.items,
       })
       createdPayments.push(payment)
+
+      // Emit socket event for new order to vendor
+      try {
+        notifyVendorNewOrder(vendorId, {
+          ...order.toJSON(),
+          vendor: group.vendor,
+          items: group.items,
+        })
+      } catch (socketError) {
+        console.error('Failed to emit new order socket event:', socketError)
+        // Don't fail the entire request if socket emission fails
+      }
     }
 
     // Clear the user's cart after successful order creation

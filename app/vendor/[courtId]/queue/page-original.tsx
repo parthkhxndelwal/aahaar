@@ -1,5 +1,5 @@
 "use client"
-import { use, useEffect, useState, useCallback } from "react"
+import { use, useEffect, useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { 
   Clock, 
@@ -13,9 +13,7 @@ import {
   User,
   Phone,
   Hash,
-  Eye,
-  Wifi,
-  WifiOff
+  Eye
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -27,7 +25,6 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useAuth } from "@/contexts/auth-context"
 import { useRouter } from "next/navigation"
-import { useVendorSocket } from "@/hooks/use-vendor-socket"
 import Image from "next/image"
 
 interface OrderItem {
@@ -94,40 +91,42 @@ export default function VendorQueuePage({ params }: { params: Promise<{ courtId:
   })
   const [enteredOtp, setEnteredOtp] = useState("")
 
-  // Socket event handlers
-  const handleNewOrder = useCallback(async (order: Order) => {
-    console.log("New order received via socket:", order)
-    // Refresh queue data to get the most up-to-date information
-    await fetchQueueData()
-  }, [])
+  useEffect(() => {
+    if (!user || !token) {
+      router.push(`/vendor/login`)
+      return
+    }
 
-  const handleOrderUpdate = useCallback(async (order: Order) => {
-    console.log("Order updated via socket:", order)
-    // Refresh queue data to get the most up-to-date information
-    await fetchQueueData()
-  }, [])
+    // Get vendor ID from user
+    fetchVendorInfo()
+  }, [user, token, courtId])
 
-  const handleQueueUpdate = useCallback((queueUpdate: QueueData) => {
-    console.log("Queue updated via socket:", queueUpdate)
-    setQueueData(queueUpdate)
-  }, [])
+  useEffect(() => {
+    if (vendorId) {
+      fetchQueueData()
+    }
+  }, [vendorId, activeTab])
 
-  const handleOrderStatusChange = useCallback(async (data: any) => {
-    console.log("Order status changed via socket:", data)
-    // Refresh queue data to get the most up-to-date information
-    await fetchQueueData()
-  }, [])
+  const fetchVendorInfo = async () => {
+    try {
+      const response = await fetch(`/api/vendors/me`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
 
-  // Initialize socket connection
-  const { socket, isConnected } = useVendorSocket({
-    vendorId,
-    onNewOrder: handleNewOrder,
-    onOrderUpdate: handleOrderUpdate,
-    onQueueUpdate: handleQueueUpdate,
-    onOrderStatusChange: handleOrderStatusChange
-  })
+      if (response.ok) {
+        const data = await response.json()
+        if (data.success && data.data.vendor) {
+          setVendorId(data.data.vendor.id)
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching vendor info:", error)
+    }
+  }
 
-  const fetchQueueData = useCallback(async () => {
+  const fetchQueueData = async () => {
     if (!vendorId) return
 
     try {
@@ -148,41 +147,6 @@ export default function VendorQueuePage({ params }: { params: Promise<{ courtId:
       console.error("Error fetching queue data:", error)
     } finally {
       setLoading(false)
-    }
-  }, [vendorId, activeTab, token])
-
-  useEffect(() => {
-    if (!user || !token) {
-      router.push(`/vendor/login`)
-      return
-    }
-
-    // Get vendor ID from user
-    fetchVendorInfo()
-  }, [user, token, courtId])
-
-  useEffect(() => {
-    if (vendorId) {
-      fetchQueueData()
-    }
-  }, [vendorId, activeTab, fetchQueueData])
-
-  const fetchVendorInfo = async () => {
-    try {
-      const response = await fetch(`/api/vendors/me`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        if (data.success && data.data.vendor) {
-          setVendorId(data.data.vendor.id)
-        }
-      }
-    } catch (error) {
-      console.error("Error fetching vendor info:", error)
     }
   }
 
@@ -208,7 +172,7 @@ export default function VendorQueuePage({ params }: { params: Promise<{ courtId:
         if (response.ok) {
           const data = await response.json()
           if (data.success) {
-            // Socket will handle the update, but we can also refresh manually
+            // Refresh queue data
             await fetchQueueData()
             
             if (action === "reject") {
@@ -234,7 +198,7 @@ export default function VendorQueuePage({ params }: { params: Promise<{ courtId:
         if (response.ok) {
           const data = await response.json()
           if (data.success) {
-            // Socket will handle the update, but we can also refresh manually
+            // Refresh queue data
             await fetchQueueData()
             
             if (action === "complete") {
@@ -453,35 +417,12 @@ export default function VendorQueuePage({ params }: { params: Promise<{ courtId:
   return (
     <div className="min-h-screen bg-neutral-50 dark:bg-neutral-950 p-4">
       <div className="max-w-6xl mx-auto space-y-6">
-        {/* Header with Socket Status */}
+        {/* Header */}
         <div className="bg-white dark:bg-neutral-900 rounded-2xl p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold mb-2">Order Queue Management</h1>
-              <p className="text-neutral-600 dark:text-neutral-400">
-                Manage your incoming orders and track their progress
-              </p>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className={`flex items-center gap-2 px-3 py-2 rounded-lg ${
-                isConnected 
-                  ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400' 
-                  : 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400'
-              }`}>
-                {isConnected ? (
-                  <>
-                    <Wifi className="h-4 w-4" />
-                    <span className="text-sm font-medium">Live Updates Active</span>
-                  </>
-                ) : (
-                  <>
-                    <WifiOff className="h-4 w-4" />
-                    <span className="text-sm font-medium">Connection Lost</span>
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
+          <h1 className="text-2xl font-bold mb-2">Order Queue Management</h1>
+          <p className="text-neutral-600 dark:text-neutral-400">
+            Manage your incoming orders and track their progress
+          </p>
         </div>
 
         {/* Queue Tabs */}
@@ -517,25 +458,10 @@ export default function VendorQueuePage({ params }: { params: Promise<{ courtId:
           <TabsContent value="upcoming" className="space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-semibold">Upcoming Orders</h2>
-              <div className="flex items-center gap-2">
-                <div className="flex items-center gap-2 text-sm">
-                  {isConnected ? (
-                    <>
-                      <Wifi className="h-4 w-4 text-green-500" />
-                      <span className="text-green-600">Live Updates</span>
-                    </>
-                  ) : (
-                    <>
-                      <WifiOff className="h-4 w-4 text-red-500" />
-                      <span className="text-red-600">Disconnected</span>
-                    </>
-                  )}
-                </div>
-                <Button onClick={fetchQueueData} variant="outline" size="sm">
-                  <RefreshCw className="h-4 w-4 mr-2" />
-                  Refresh
-                </Button>
-              </div>
+              <Button onClick={fetchQueueData} variant="outline" size="sm">
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Refresh
+              </Button>
             </div>
             
             {loading ? (
@@ -547,7 +473,7 @@ export default function VendorQueuePage({ params }: { params: Promise<{ courtId:
               <div className="text-center py-12">
                 <Clock className="h-12 w-12 mx-auto mb-4 text-neutral-400" />
                 <div className="text-lg font-medium">No upcoming orders</div>
-                <div className="text-neutral-500">New orders will appear here automatically</div>
+                <div className="text-neutral-500">New orders will appear here</div>
               </div>
             ) : (
               <div className="space-y-4">
@@ -561,25 +487,10 @@ export default function VendorQueuePage({ params }: { params: Promise<{ courtId:
           <TabsContent value="queue" className="space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-semibold">Orders in Queue</h2>
-              <div className="flex items-center gap-2">
-                <div className="flex items-center gap-2 text-sm">
-                  {isConnected ? (
-                    <>
-                      <Wifi className="h-4 w-4 text-green-500" />
-                      <span className="text-green-600">Live Updates</span>
-                    </>
-                  ) : (
-                    <>
-                      <WifiOff className="h-4 w-4 text-red-500" />
-                      <span className="text-red-600">Disconnected</span>
-                    </>
-                  )}
-                </div>
-                <Button onClick={fetchQueueData} variant="outline" size="sm">
-                  <RefreshCw className="h-4 w-4 mr-2" />
-                  Refresh
-                </Button>
-              </div>
+              <Button onClick={fetchQueueData} variant="outline" size="sm">
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Refresh
+              </Button>
             </div>
             
             {loading ? (
@@ -591,7 +502,7 @@ export default function VendorQueuePage({ params }: { params: Promise<{ courtId:
               <div className="text-center py-12">
                 <Package className="h-12 w-12 mx-auto mb-4 text-neutral-400" />
                 <div className="text-lg font-medium">No orders in queue</div>
-                <div className="text-neutral-500">Accepted orders will appear here automatically</div>
+                <div className="text-neutral-500">Accepted orders will appear here</div>
               </div>
             ) : (
               <div className="space-y-4">
@@ -605,25 +516,10 @@ export default function VendorQueuePage({ params }: { params: Promise<{ courtId:
           <TabsContent value="ready" className="space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-semibold">Ready for Pickup</h2>
-              <div className="flex items-center gap-2">
-                <div className="flex items-center gap-2 text-sm">
-                  {isConnected ? (
-                    <>
-                      <Wifi className="h-4 w-4 text-green-500" />
-                      <span className="text-green-600">Live Updates</span>
-                    </>
-                  ) : (
-                    <>
-                      <WifiOff className="h-4 w-4 text-red-500" />
-                      <span className="text-red-600">Disconnected</span>
-                    </>
-                  )}
-                </div>
-                <Button onClick={fetchQueueData} variant="outline" size="sm">
-                  <RefreshCw className="h-4 w-4 mr-2" />
-                  Refresh
-                </Button>
-              </div>
+              <Button onClick={fetchQueueData} variant="outline" size="sm">
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Refresh
+              </Button>
             </div>
             
             {loading ? (
@@ -635,7 +531,7 @@ export default function VendorQueuePage({ params }: { params: Promise<{ courtId:
               <div className="text-center py-12">
                 <CheckCircle className="h-12 w-12 mx-auto mb-4 text-neutral-400" />
                 <div className="text-lg font-medium">No orders ready</div>
-                <div className="text-neutral-500">Completed orders will appear here automatically</div>
+                <div className="text-neutral-500">Completed orders will appear here</div>
               </div>
             ) : (
               <div className="space-y-4">
@@ -653,7 +549,7 @@ export default function VendorQueuePage({ params }: { params: Promise<{ courtId:
             <DialogHeader>
               <DialogTitle>Reject Order</DialogTitle>
               <DialogDescription>
-                Please provide a reason for rejecting this order. The customer will be notified.
+                Please provide a reason for rejecting this order. The customer will be refunded automatically.
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
@@ -661,29 +557,30 @@ export default function VendorQueuePage({ params }: { params: Promise<{ courtId:
                 <Label htmlFor="rejection-reason">Rejection Reason</Label>
                 <Textarea
                   id="rejection-reason"
-                  placeholder="e.g., Item out of stock, Unable to fulfill request..."
                   value={rejectionReason}
                   onChange={(e) => setRejectionReason(e.target.value)}
+                  placeholder="e.g., Out of stock, Kitchen closed, etc."
                   className="mt-1"
                 />
               </div>
             </div>
             <DialogFooter>
-              <Button
-                variant="outline"
+              <Button 
+                variant="outline" 
                 onClick={() => setRejectDialog({ open: false, orderId: null })}
               >
                 Cancel
               </Button>
               <Button
                 variant="destructive"
-                onClick={() => {
-                  if (rejectDialog.orderId) {
-                    handleOrderAction(rejectDialog.orderId, "reject", { reason: rejectionReason })
-                  }
-                }}
-                disabled={!rejectionReason.trim()}
+                onClick={() => rejectDialog.orderId && handleOrderAction(rejectDialog.orderId, "reject", { reason: rejectionReason })}
+                disabled={!rejectionReason.trim() || actionLoading === rejectDialog.orderId}
               >
+                {actionLoading === rejectDialog.orderId ? (
+                  <RefreshCw className="h-4 w-4 animate-spin mr-2" />
+                ) : (
+                  <XCircle className="h-4 w-4 mr-2" />
+                )}
                 Reject Order
               </Button>
             </DialogFooter>
@@ -696,37 +593,39 @@ export default function VendorQueuePage({ params }: { params: Promise<{ courtId:
             <DialogHeader>
               <DialogTitle>Complete Order</DialogTitle>
               <DialogDescription>
-                Please enter the OTP provided by the customer to complete this order.
+                Enter the 4-digit OTP provided by the customer to complete this order.
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
               <div>
-                <Label htmlFor="customer-otp">Customer OTP</Label>
+                <Label htmlFor="otp-input">Customer OTP</Label>
                 <Input
-                  id="customer-otp"
-                  placeholder="Enter 4-digit OTP"
+                  id="otp-input"
                   value={enteredOtp}
-                  onChange={(e) => setEnteredOtp(e.target.value)}
+                  onChange={(e) => setEnteredOtp(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                  placeholder="Enter 4-digit OTP"
+                  className="mt-1 text-center text-2xl tracking-wider"
                   maxLength={4}
-                  className="mt-1"
                 />
               </div>
             </div>
             <DialogFooter>
-              <Button
-                variant="outline"
+              <Button 
+                variant="outline" 
                 onClick={() => setOtpDialog({ open: false, orderId: null })}
               >
                 Cancel
               </Button>
               <Button
-                onClick={() => {
-                  if (otpDialog.orderId) {
-                    handleOrderAction(otpDialog.orderId, "complete", { otp: enteredOtp })
-                  }
-                }}
-                disabled={enteredOtp.length !== 4}
+                onClick={() => otpDialog.orderId && handleOrderAction(otpDialog.orderId, "complete", { otp: enteredOtp })}
+                disabled={enteredOtp.length !== 4 || actionLoading === otpDialog.orderId}
+                className="bg-emerald-600 hover:bg-emerald-700"
               >
+                {actionLoading === otpDialog.orderId ? (
+                  <RefreshCw className="h-4 w-4 animate-spin mr-2" />
+                ) : (
+                  <CheckCircle className="h-4 w-4 mr-2" />
+                )}
                 Complete Order
               </Button>
             </DialogFooter>

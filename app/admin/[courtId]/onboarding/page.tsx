@@ -176,10 +176,10 @@ export default function AdminOnboardingPage({ params }: { params: Promise<{ cour
       case 2:
         return (
           <div className="space-y-4">
-            <h3 className="text-lg font-medium">Operating Hours</h3>
+            <h3 className="text-lg font-medium text-neutral-900 dark:text-neutral-100">Operating Hours</h3>
             {Object.entries(courtData.operatingHours).map(([day, hours]) => (
-              <div key={day} className="flex items-center space-x-4 p-4 border rounded-lg">
-                <div className="w-24 capitalize font-medium">{day}</div>
+              <div key={day} className="flex items-center space-x-4 p-4 border border-neutral-200 dark:border-neutral-700 rounded-lg bg-white dark:bg-neutral-800">
+                <div className="w-24 capitalize font-medium text-neutral-900 dark:text-neutral-100">{day}</div>
                 <Switch
                   checked={!hours.closed}
                   onCheckedChange={(checked) =>
@@ -234,7 +234,7 @@ export default function AdminOnboardingPage({ params }: { params: Promise<{ cour
         return (
           <div className="space-y-6">
             <div className="space-y-4">
-              <h3 className="text-lg font-medium">Payment Settings</h3>
+              <h3 className="text-lg font-medium text-neutral-900 dark:text-neutral-100">Payment Settings</h3>
               <div className="flex items-center justify-between">
                 <Label htmlFor="allowOnlinePayments">Allow Online Payments</Label>
                 <Switch
@@ -254,7 +254,7 @@ export default function AdminOnboardingPage({ params }: { params: Promise<{ cour
             </div>
 
             <div className="space-y-4">
-              <h3 className="text-lg font-medium">Order Limits</h3>
+              <h3 className="text-lg font-medium text-neutral-900 dark:text-neutral-100">Order Limits</h3>
               <div>
                 <Label htmlFor="maxOrdersPerUser">Max Orders Per User</Label>
                 <Input
@@ -281,8 +281,8 @@ export default function AdminOnboardingPage({ params }: { params: Promise<{ cour
         return (
           <div className="text-center space-y-4">
             <CheckCircle className="h-16 w-16 text-green-500 mx-auto" />
-            <h3 className="text-2xl font-bold">Setup Complete!</h3>
-            <p className="text-gray-600">
+            <h3 className="text-2xl font-bold text-neutral-900 dark:text-neutral-100">Setup Complete!</h3>
+            <p className="text-neutral-600 dark:text-neutral-400">
               Your food court is now configured and ready to use. You can start adding vendors and managing orders.
             </p>
           </div>
@@ -294,11 +294,11 @@ export default function AdminOnboardingPage({ params }: { params: Promise<{ cour
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-12 px-4">
+    <div className="min-h-screen bg-neutral-50 dark:bg-neutral-900 py-12 px-4">
       <div className="max-w-4xl mx-auto">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold mb-2">Food Court Setup</h1>
-          <p className="text-gray-600">Let's get your food court configured and ready to use.</p>
+          <h1 className="text-3xl font-bold mb-2 text-neutral-900 dark:text-neutral-100">Food Court Setup</h1>
+          <p className="text-neutral-600 dark:text-neutral-400">Let's get your food court configured and ready to use.</p>
         </div>
 
         {/* Progress Steps */}
@@ -311,20 +311,20 @@ export default function AdminOnboardingPage({ params }: { params: Promise<{ cour
                     currentStep > step.id
                       ? "bg-green-500 text-white"
                       : currentStep === step.id
-                        ? "bg-blue-500 text-white"
-                        : "bg-gray-300 text-gray-600"
+                        ? "bg-neutral-800 dark:bg-neutral-200 text-white dark:text-neutral-900"
+                        : "bg-neutral-300 dark:bg-neutral-600 text-neutral-600 dark:text-neutral-400"
                   }`}
                 >
                   {currentStep > step.id ? <CheckCircle className="h-5 w-5" /> : step.id}
                 </div>
                 {index < steps.length - 1 && (
-                  <div className={`w-24 h-1 mx-2 ${currentStep > step.id ? "bg-green-500" : "bg-gray-300"}`} />
+                  <div className={`w-24 h-1 mx-2 ${currentStep > step.id ? "bg-green-500" : "bg-neutral-300 dark:bg-neutral-600"}`} />
                 )}
               </div>
             ))}
           </div>
           <Progress value={(currentStep / steps.length) * 100} className="mb-2" />
-          <p className="text-sm text-gray-600">
+          <p className="text-sm text-neutral-600 dark:text-neutral-400">
             Step {currentStep} of {steps.length}: {steps[currentStep - 1]?.description}
           </p>
         </div>

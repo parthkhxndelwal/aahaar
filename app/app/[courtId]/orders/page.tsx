@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { useAuth } from "@/contexts/auth-context"
 import { useRouter } from "next/navigation"
+import { useSmartOrderSocket } from "@/hooks/use-smart-order-socket"
 
 export default function OrdersPage({ params }: { params: Promise<{ courtId: string }> }) {
   const { courtId } = use(params)
@@ -15,6 +16,35 @@ export default function OrdersPage({ params }: { params: Promise<{ courtId: stri
   const [orderSummaries, setOrderSummaries] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+
+  // Smart socket connection for real-time updates (only when orders are active)
+  const { isConnected, hasActiveOrders, connectionState } = useSmartOrderSocket({
+    orders: orderSummaries, // Pass current orders to determine if socket is needed
+    onOrderUpdate: (data) => {
+      console.log('Real-time order update received on orders page:', data)
+      // Refresh the orders list when we receive any order update
+      fetchOrders(true)
+    },
+    onOrderStatusChange: (data) => {
+      console.log('Real-time order status change received on orders page:', data)
+      // Update the specific order in the summaries and refresh to get latest status
+      setOrderSummaries((prev) => {
+        const updated = prev.map((summary) => {
+          if (summary.parentOrderId === data.parentOrderId) {
+            return {
+              ...summary,
+              lastUpdated: new Date().toISOString()
+            }
+          }
+          return summary
+        })
+        // Also trigger a fresh fetch to get the latest status calculations
+        setTimeout(() => fetchOrders(true), 500)
+        return updated
+      })
+    },
+    enabled: !!user
+  })
 
   const pageVariants = {
     initial: { opacity: 0, x: 20 },
@@ -45,20 +75,32 @@ export default function OrdersPage({ params }: { params: Promise<{ courtId: stri
     }
 
     try {
+      console.log('Fetching orders for user:', user?.id, 'court:', courtId)
       const response = await fetch(`/api/app/${courtId}/orders/status`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
       })
 
+      console.log('Orders API response status:', response.status)
+      
       if (response.ok) {
         const data = await response.json()
+        console.log('Orders API response data:', data)
         if (data.success) {
-          setOrderSummaries(data.data.orderSummaries)
+          console.log('Setting order summaries:', data.data.orderSummaries)
+          setOrderSummaries(data.data.orderSummaries || [])
+        } else {
+          console.error('Orders API returned success: false', data.message)
+          setOrderSummaries([])
         }
+      } else {
+        console.error('Orders API response not ok:', response.status, response.statusText)
+        setOrderSummaries([])
       }
     } catch (error) {
       console.error("Error fetching orders:", error)
+      setOrderSummaries([])
     } finally {
       setLoading(false)
       setRefreshing(false)
@@ -135,9 +177,29 @@ export default function OrdersPage({ params }: { params: Promise<{ courtId: stri
             </motion.button>
             <div>
               <h1 className="text-xl font-semibold text-neutral-900 dark:text-white">My Orders</h1>
-              <p className="text-sm text-neutral-600 dark:text-neutral-400">
-                {orderSummaries.length} orders found
-              </p>
+              <div className="flex items-center gap-4">
+                <p className="text-sm text-neutral-600 dark:text-neutral-400">
+                  {orderSummaries.length} orders found
+                </p>
+                {/* Smart connection indicator */}
+                <div className="flex items-center gap-2">
+                  {connectionState === 'connected' && hasActiveOrders && (
+                    <Badge className="bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400 text-xs">
+                      Live updates
+                    </Badge>
+                  )}
+                  {connectionState === 'connecting' && hasActiveOrders && (
+                    <Badge className="bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400 text-xs">
+                      Connecting...
+                    </Badge>
+                  )}
+                  {!hasActiveOrders && (
+                    <Badge className="bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-400 text-xs">
+                      All complete
+                    </Badge>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
           <motion.button
@@ -164,10 +226,17 @@ export default function OrdersPage({ params }: { params: Promise<{ courtId: stri
               <span className="text-2xl">📦</span>
             </div>
             <h2 className="text-xl font-semibold text-neutral-900 dark:text-white mb-2">No orders yet</h2>
-            <p className="text-neutral-600 dark:text-neutral-400 mb-6">Start shopping to see your orders here</p>
-            <Button onClick={() => router.push(`/app/${courtId}`)}>
-              Start Shopping
-            </Button>
+            <p className="text-neutral-600 dark:text-neutral-400 mb-6">
+              {loading ? "Loading orders..." : "Start shopping to see your orders here"}
+            </p>
+            <div className="space-y-3">
+              <Button onClick={() => fetchOrders()} variant="outline">
+                Refresh Orders
+              </Button>
+              <Button onClick={() => router.push(`/app/${courtId}`)}>
+                Start Shopping
+              </Button>
+            </div>
           </motion.div>
         ) : (
           <div className="space-y-4">

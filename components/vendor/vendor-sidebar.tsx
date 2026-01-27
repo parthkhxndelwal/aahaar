@@ -5,6 +5,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
+import Image from "next/image"
 import { Home, Package, Menu, Settings, ChevronLeft, ChevronRight, Plus, LogOut, Clock } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 
@@ -15,6 +16,8 @@ interface VendorSidebarProps {
 export function VendorSidebar({ courtId }: VendorSidebarProps) {
   const [collapsed, setCollapsed] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
+  const [showTitle, setShowTitle] = useState(true)
+  const [showLink, setShowLink] = useState(true)
   const pathname = usePathname()
   const { logout } = useAuth()
 
@@ -58,10 +61,23 @@ export function VendorSidebar({ courtId }: VendorSidebarProps) {
     return () => window.removeEventListener('resize', checkIsMobile)
   }, [])
 
+  useEffect(() => {
+    if (collapsed) {
+      setShowTitle(false)
+      setShowLink(false)
+    } else {
+      const timer = setTimeout(() => {
+        setShowTitle(true)
+        setShowLink(true)
+      }, 210)
+      return () => clearTimeout(timer)
+    }
+  }, [collapsed])
+
   // Mobile Bottom Navigation
   if (isMobile) {
     return (
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-50">
+      <div className="fixed bottom-0 left-0 right-0 bg-black border-t border-neutral-800 z-50">
         <div className="flex items-center justify-around py-2">
           {navigation.map((item) => {
             const isActive = pathname === item.href
@@ -72,8 +88,8 @@ export function VendorSidebar({ courtId }: VendorSidebarProps) {
                 className={cn(
                   "flex flex-col items-center py-2 px-3 text-xs font-medium transition-colors rounded-lg",
                   isActive
-                    ? "text-blue-600 bg-blue-50"
-                    : "text-gray-600 hover:text-gray-900 hover:bg-gray-50"
+                    ? "text-neutral-300 bg-neutral-900"
+                    : "text-neutral-500 hover:text-neutral-300 hover:bg-neutral-950"
                 )}
               >
                 <item.icon className="h-6 w-6 mb-1" />
@@ -85,7 +101,7 @@ export function VendorSidebar({ courtId }: VendorSidebarProps) {
             variant="ghost" 
             size="sm"
             onClick={logout}
-            className="flex flex-col items-center py-2 px-3 text-xs font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-lg"
+            className="flex flex-col items-center py-2 px-3 text-xs font-medium text-neutral-500 hover:text-neutral-300 hover:bg-neutral-950 rounded-lg"
           >
             <LogOut className="h-6 w-6 mb-1" />
             <span className="truncate">Logout</span>
@@ -97,12 +113,16 @@ export function VendorSidebar({ courtId }: VendorSidebarProps) {
 
   // Desktop Sidebar
   return (
-    <div className={cn("bg-white shadow-lg transition-all duration-300 flex flex-col h-full", collapsed ? "w-16" : "w-64")}>
-      <div className="flex items-center justify-between p-4 border-b">
-        {!collapsed && <h2 className="text-xl font-semibold text-gray-800">Vendor Panel</h2>}
-        <Button variant="ghost" size="sm" onClick={() => setCollapsed(!collapsed)}>
+    <div className={cn("transition-all duration-300 bg-black flex flex-col h-full", collapsed ? "w-24" : "w-64")}>
+      <div className="flex items-center justify-between p-4 mt-2">
+        <Image src="/logo.png" alt="Logo" width={32} height={32}></Image>
+        {!collapsed && showTitle && <h2 className="text-xl font-semibold text-neutral-50">Vendor Panel</h2>}
+        <button 
+          className="p-2 hover:bg-neutral-900 rounded-md transition-colors"
+          onClick={() => setCollapsed(!collapsed)}
+        >
           {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
-        </Button>
+        </button>
       </div>
 
       <nav className="mt-6 flex-1">
@@ -113,50 +133,45 @@ export function VendorSidebar({ courtId }: VendorSidebarProps) {
               key={item.name}
               href={item.href}
               className={cn(
-                "flex items-center px-4 py-3 text-sm font-medium transition-colors",
+                "flex items-center px-4 py-2.5 my-1 text-sm font-medium transition-colors ml-2 mr-4 rounded-xl",
                 isActive
-                  ? "bg-blue-50 text-blue-700 border-r-2 border-blue-700"
-                  : "text-gray-600 hover:bg-gray-50 hover:text-gray-900",
+                  ? " text-neutral-300 border-r-2 bg-neutral-900 hover:bg-neutral-800 border-neutral-300"
+                  : "text-neutral-500 hover:bg-neutral-950",
               )}
             >
-              <item.icon className="h-5 w-5 mr-3" />
-              {!collapsed && item.name}
+              <item.icon className={cn("h-5 w-5 mr-3 p-0")} />
+              {!collapsed && showLink && item.name}
             </Link>
           )
         })}
       </nav>
 
-      {!collapsed && (
-        <div className="p-4 space-y-2">
-          <Button asChild className="w-full">
+      {/* Quick Order Button - only in expanded mode */}
+      {!collapsed && showLink && (
+        <div className="px-6 pb-4">
+          <Button asChild className="w-full bg-neutral-800 hover:bg-neutral-700 text-neutral-100">
             <Link href={`/vendor/${courtId}/orders/manual`}>
               <Plus className="h-4 w-4 mr-2" />
               Quick Order
             </Link>
           </Button>
-          <Button 
-            variant="outline" 
-            onClick={logout}
-            className="w-full text-gray-600 hover:text-gray-900"
-          >
-            <LogOut className="h-4 w-4 mr-2" />
-            Logout
-          </Button>
         </div>
       )}
 
-      {collapsed && (
-        <div className="p-2 space-y-2">
-          <Button 
-            variant="ghost" 
-            size="sm"
-            onClick={logout}
-            className="w-full p-2"
-          >
-            <LogOut className="h-4 w-4" />
-          </Button>
-        </div>
-      )}
+      {/* Logout Button */}
+      <div className="p-4 mt-auto">
+        <Button
+          variant="ghost"
+          onClick={logout}
+          className={cn(
+            "w-full justify-start text-neutral-400 hover:text-neutral-200 hover:bg-neutral-900 transition-colors",
+            collapsed ? "px-2" : "px-4"
+          )}
+        >
+          <LogOut className={cn("h-5 w-5", !collapsed && showLink ? "mr-3" : "")} />
+          {!collapsed && showLink && "Logout"}
+        </Button>
+      </div>
     </div>
   )
 }

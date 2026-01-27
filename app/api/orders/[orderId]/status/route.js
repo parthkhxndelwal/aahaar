@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server"
-import { Order, AuditLog } from "@/models"
+import { Order, AuditLog, User, OrderItem, MenuItem } from "@/models"
 import { authenticateTokenNextJS } from "@/middleware/auth"
+import { 
+  notifyOrderStatusChange, 
+  notifyCustomerOrderStatusChange, 
+  notifyCustomerOrderUpdate,
+  notifyCustomerOrdersUpdate 
+} from "@/lib/socket-server"
 
 export async function PATCH(request, { params }) {
   try {
@@ -88,6 +94,56 @@ export async function PATCH(request, { params }) {
       newValues: { status },
       metadata: { note },
     })
+
+    // Emit socket events for order status change
+    try {
+      const updatedOrder = await Order.findOne({
+        where: { id: orderId },
+        include: [
+          {
+            model: User,
+            as: "user",
+            attributes: ["id", "fullName", "phone", "email"],
+          },
+          {
+            model: OrderItem,
+            as: "items",
+            include: [
+              {
+                model: MenuItem,
+                as: "menuItem",
+                attributes: ["name", "price", "imageUrl"],
+              },
+            ],
+          },
+        ],
+      })
+
+      const orderData = updatedOrder.toJSON()
+      
+      // Notify vendor (if vendor is involved)
+      if (orderData.vendorId) {
+        notifyOrderStatusChange(orderData.vendorId, orderId, order.status, status, orderData)
+      }
+      
+      // Notify customer about their specific order status change
+      if (orderData.parentOrderId) {
+        notifyCustomerOrderStatusChange(
+          orderData.parentOrderId, 
+          orderId, 
+          order.status, 
+          status, 
+          orderData
+        )
+        
+        // Also notify customer's general orders room for updates
+        if (orderData.user?.id) {
+          notifyCustomerOrdersUpdate(orderData.user.id, orderData)
+        }
+      }
+    } catch (socketError) {
+      console.error('Failed to emit order status change socket event:', socketError)
+    }
 
     // TODO: Send notifications to user and admin
     // TODO: Update payment status if needed
