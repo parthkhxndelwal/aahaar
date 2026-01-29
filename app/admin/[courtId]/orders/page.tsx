@@ -8,9 +8,8 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useToast } from "@/hooks/use-toast"
-import { Search, Filter, Download, Eye, RefreshCw, Store, Plus } from "lucide-react"
+import { Search, Filter, Download, Eye, RefreshCw } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
-import { useRouter } from "next/navigation"
 
 interface Order {
   id: string
@@ -41,52 +40,17 @@ const statusColors = {
 
 export default function AdminOrdersPage({ params }: { params: Promise<{ courtId: string }> }) {
   const [orders, setOrders] = useState<Order[]>([])
-  const [vendors, setVendors] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
-  const [vendorsLoading, setVendorsLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
   const [dateFilter, setDateFilter] = useState("today")
   const { toast } = useToast()
   const { token } = useAuth()
   const { courtId } = use(params)
-  const router = useRouter()
 
   useEffect(() => {
-    fetchVendors()
-  }, [])
-
-  useEffect(() => {
-    if (vendors.length > 0) {
-      fetchOrders()
-    }
-  }, [statusFilter, dateFilter, vendors])
-
-  const fetchVendors = async () => {
-    try {
-      setVendorsLoading(true)
-      const response = await fetch(`/api/courts/${courtId}/vendors`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
-      
-      const result = await response.json()
-      if (result.success) {
-        setVendors(result.data.vendors || [])
-      } else {
-        throw new Error(result.message)
-      }
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to fetch vendors",
-        variant: "destructive",
-      })
-    } finally {
-      setVendorsLoading(false)
-    }
-  }
+    fetchOrders()
+  }, [statusFilter, dateFilter])
 
   const fetchOrders = async () => {
     try {
@@ -139,42 +103,6 @@ export default function AdminOrdersPage({ params }: { params: Promise<{ courtId:
       title: "Export",
       description: "Orders export feature coming soon",
     })
-  }
-
-  if (vendorsLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
-      </div>
-    )
-  }
-
-  // Show no vendors message if no vendors exist
-  if (vendors.length === 0) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <Card className="w-full max-w-md mx-auto">
-          <CardHeader className="text-center">
-            <div className="mx-auto mb-4 w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center">
-              <Store className="h-8 w-8 text-blue-600" />
-            </div>
-            <CardTitle className="text-xl">No Vendors Found</CardTitle>
-            <CardDescription className="text-center">
-              You need to create a vendor first to access this page. Orders can only be placed when vendors are available to fulfill them.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="text-center">
-            <Button 
-              onClick={() => router.push(`/admin/${courtId}/vendors/add`)}
-              className="w-full"
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Create Your First Vendor
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    )
   }
 
   if (loading) {

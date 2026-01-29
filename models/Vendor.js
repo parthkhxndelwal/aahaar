@@ -163,11 +163,11 @@ module.exports = (sequelize, DataTypes) => {
       // Legal Information
       panNumber: {
         type: DataTypes.STRING,
-        allowNull: true, // Make PAN optional for now
+        allowNull: false,
         validate: {
           is: /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/,
         },
-        comment: "PAN number for tax compliance (optional during creation)",
+        comment: "PAN number for tax compliance",
       },
       gstin: {
         type: DataTypes.STRING,

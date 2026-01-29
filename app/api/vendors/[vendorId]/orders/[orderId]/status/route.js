@@ -1,12 +1,6 @@
 import { NextResponse } from "next/server"
 import { Order, User, Payment, OrderItem, MenuItem, Vendor } from "@/models"
 import { authenticateToken } from "@/middleware/auth"
-import { 
-  notifyOrderStatusChange, 
-  notifyCustomerOrderStatusChange, 
-  notifyCustomerOrderUpdate,
-  notifyCustomerOrdersUpdate 
-} from "@/lib/socket-server"
 
 export async function PATCH(request, { params }) {
   try {
@@ -102,7 +96,6 @@ export async function PATCH(request, { params }) {
     }
 
     // Update order status
-    const oldStatus = order.status
     await order.update({
       status: newStatus,
       ...updateData,
@@ -116,54 +109,6 @@ export async function PATCH(request, { params }) {
         },
       ],
     })
-
-    // Emit socket events for order status change
-    try {
-      const updatedOrder = await Order.findOne({
-        where: { id: orderId },
-        include: [
-          {
-            model: User,
-            as: "user",
-            attributes: ["id", "fullName", "phone", "email"],
-          },
-          {
-            model: OrderItem,
-            as: "items",
-            include: [
-              {
-                model: MenuItem,
-                as: "menuItem",
-                attributes: ["name", "price", "imageUrl"],
-              },
-            ],
-          },
-        ],
-      })
-
-      const orderData = updatedOrder.toJSON()
-      
-      // Notify vendor (existing functionality)
-      notifyOrderStatusChange(vendorId, orderId, oldStatus, newStatus, orderData)
-      
-      // Notify customer about their specific order status change
-      if (orderData.parentOrderId) {
-        notifyCustomerOrderStatusChange(
-          orderData.parentOrderId, 
-          orderId, 
-          oldStatus, 
-          newStatus, 
-          orderData
-        )
-        
-        // Also notify customer's general orders room for updates
-        if (orderData.user?.id) {
-          notifyCustomerOrdersUpdate(orderData.user.id, orderData)
-        }
-      }
-    } catch (socketError) {
-      console.error('Failed to emit order status change socket event:', socketError)
-    }
 
     return NextResponse.json({
       success: true,

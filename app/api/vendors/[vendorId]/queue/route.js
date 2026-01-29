@@ -2,13 +2,6 @@ import { NextResponse } from "next/server"
 import { Order, User, Payment, OrderItem, MenuItem, Vendor } from "@/models"
 import { authenticateToken } from "@/middleware/auth"
 import { Op } from "sequelize"
-import { 
-  notifyVendorOrderUpdate, 
-  notifyOrderStatusChange, 
-  notifyCustomerOrderStatusChange, 
-  notifyCustomerOrderUpdate,
-  notifyCustomerOrdersUpdate 
-} from "@/lib/socket-server"
 
 export async function GET(request, { params }) {
   try {
@@ -241,54 +234,6 @@ export async function PATCH(request, { params }) {
         ],
       })
 
-      // Emit socket events for order update
-      try {
-        const updatedOrder = await Order.findOne({
-          where: { id: orderId },
-          include: [
-            {
-              model: User,
-              as: "user",
-              attributes: ["id", "fullName", "phone", "email"],
-            },
-            {
-              model: OrderItem,
-              as: "items",
-              include: [
-                {
-                  model: MenuItem,
-                  as: "menuItem",
-                  attributes: ["name", "price", "imageUrl"],
-                },
-              ],
-            },
-          ],
-        })
-
-        const orderData = updatedOrder.toJSON()
-        
-        // Notify vendor (existing functionality)
-        notifyOrderStatusChange(vendorId, orderId, "pending", "accepted", orderData)
-        
-        // Notify customer about their specific order status change
-        if (orderData.parentOrderId) {
-          notifyCustomerOrderStatusChange(
-            orderData.parentOrderId, 
-            orderId, 
-            "pending", 
-            "accepted", 
-            orderData
-          )
-          
-          // Also notify customer's general orders room for updates
-          if (orderData.user?.id) {
-            notifyCustomerOrdersUpdate(orderData.user.id, orderData)
-          }
-        }
-      } catch (socketError) {
-        console.error('Failed to emit order status change socket event:', socketError)
-      }
-
       return NextResponse.json({
         success: true,
         message: "Order accepted successfully",
@@ -319,54 +264,6 @@ export async function PATCH(request, { params }) {
           },
         ],
       })
-
-      // Emit socket events for order rejection
-      try {
-        const updatedOrder = await Order.findOne({
-          where: { id: orderId },
-          include: [
-            {
-              model: User,
-              as: "user",
-              attributes: ["id", "fullName", "phone", "email"],
-            },
-            {
-              model: OrderItem,
-              as: "items",
-              include: [
-                {
-                  model: MenuItem,
-                  as: "menuItem",
-                  attributes: ["name", "price", "imageUrl"],
-                },
-              ],
-            },
-          ],
-        })
-
-        const orderData = updatedOrder.toJSON()
-        
-        // Notify vendor (existing functionality)
-        notifyOrderStatusChange(vendorId, orderId, "pending", "rejected", orderData)
-        
-        // Notify customer about their specific order status change
-        if (orderData.parentOrderId) {
-          notifyCustomerOrderStatusChange(
-            orderData.parentOrderId, 
-            orderId, 
-            "pending", 
-            "rejected", 
-            orderData
-          )
-          
-          // Also notify customer's general orders room for updates
-          if (orderData.user?.id) {
-            notifyCustomerOrdersUpdate(orderData.user.id, orderData)
-          }
-        }
-      } catch (socketError) {
-        console.error('Failed to emit order rejection socket event:', socketError)
-      }
 
       // TODO: Process refund credits to user
       // TODO: Send notification to user about rejection and refund

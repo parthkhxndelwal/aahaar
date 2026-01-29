@@ -1,5 +1,5 @@
 "use client"
-import { use, useEffect, useState, useCallback } from "react"
+import { use, useEffect, useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { 
   ArrowLeft, 
@@ -19,8 +19,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { useAuth } from "@/contexts/auth-context"
 import { useRouter } from "next/navigation"
-import { useSmartOrderSocket } from "@/hooks/use-smart-order-socket"
-import { useToast } from "@/hooks/use-toast"
 import Image from "next/image"
 
 interface OrderItem {
@@ -61,7 +59,6 @@ interface OrderDetailsData {
   orderOtp: string
   orders: VendorOrder[]
   totalAmount: number
-  connect: boolean  // Flag from API to indicate if socket connection is needed
   summary: {
     totalVendors: number
     completedVendors: number
@@ -81,128 +78,10 @@ export default function OrderDetailsPage({
   const { courtId, parentOrderId } = use(params)
   const { user, token } = useAuth()
   const router = useRouter()
-  const { toast } = useToast()
   const [orderDetails, setOrderDetails] = useState<OrderDetailsData | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [otpCopied, setOtpCopied] = useState(false)
-
-  // Debug: Log when orderDetails changes
-  useEffect(() => {
-    console.log('[OrderDetail] orderDetails changed:', {
-      orderDetails: orderDetails,
-      orders: orderDetails?.orders,
-      ordersLength: orderDetails?.orders?.length,
-      connect: orderDetails?.connect
-    })
-  }, [orderDetails])
-
-  // Smart socket connection for real-time updates (only when order is active)
-  const { isConnected, hasActiveOrders, connectionState } = useSmartOrderSocket({
-    parentOrderId,
-    orders: orderDetails?.orders || [],
-    connect: orderDetails?.connect,
-    onOrderUpdate: (data: any) => {
-      console.log('Real-time order update received on details page:', data)
-      if (data.parentOrderId === parentOrderId) {
-        setOrderDetails(data.order)
-        toast({
-          title: "Order Updated",
-          description: "Your order has been updated in real-time",
-          duration: 3000,
-        })
-      }
-    },
-    onOrderStatusChange: (data: any) => {
-      console.log('Real-time order status change received on details page:', data)
-      if (data.parentOrderId === parentOrderId) {
-        // Update the specific vendor order in the current data
-        setOrderDetails((prev) => {
-          if (!prev) return prev
-          
-          const updatedOrders = prev.orders.map((order) => 
-            order.id === data.vendorOrderId 
-              ? { ...order, status: data.newStatus }
-              : order
-          )
-          
-          // Recalculate summary based on updated orders
-          const completedVendors = updatedOrders.filter(o => o.status === "completed").length
-          const pendingVendors = updatedOrders.filter(o => ["pending", "accepted", "preparing"].includes(o.status)).length
-          const preparingVendors = updatedOrders.filter(o => o.status === "preparing").length
-          const readyVendors = updatedOrders.filter(o => o.status === "ready").length
-          const rejectedVendors = updatedOrders.filter(o => o.status === "rejected").length
-          
-          return {
-            ...prev,
-            orders: updatedOrders,
-            summary: {
-              ...prev.summary,
-              completedVendors,
-              pendingVendors,
-              preparingVendors,
-              readyVendors,
-              rejectedVendors
-            }
-          }
-        })
-        
-        // Show toast notification
-        const statusMessages = {
-          accepted: "Order accepted by vendor",
-          preparing: "Order is being prepared",
-          ready: "Order is ready for pickup",
-          completed: "Order completed",
-          rejected: "Order was rejected"
-        }
-        
-        toast({
-          title: "Status Update",
-          description: statusMessages[data.newStatus as keyof typeof statusMessages] || `Order status changed to ${data.newStatus}`,
-          duration: 4000,
-        })
-      }
-    },
-    enabled: !!parentOrderId  // Just need parentOrderId, loading state shouldn't disable the hook
-  })
-
-  // Debug: Log socket connection state
-  useEffect(() => {
-    console.log('[OrderDetail] Socket state:', {
-      isConnected,
-      hasActiveOrders, 
-      connectionState,
-      parentOrderId,
-      connect: orderDetails?.connect,
-      enabled: !!parentOrderId && !loading
-    })
-  }, [isConnected, hasActiveOrders, connectionState, orderDetails?.connect, parentOrderId, loading])
-
-  // Debug: Log socket connection state
-  useEffect(() => {
-    console.log('[OrderDetail] Socket connection state:', {
-      isConnected,
-      hasActiveOrders,
-      connectionState,
-      parentOrderId,
-      ordersCount: orderDetails?.orders?.length,
-      connectFlag: orderDetails?.connect,  // Add connect flag to debug
-      user: user?.id,
-      userRole: user?.role,
-      token: !!token
-    })
-  }, [isConnected, hasActiveOrders, connectionState, parentOrderId, orderDetails?.orders?.length, orderDetails?.connect, user?.id, user?.role, token])
-
-  // Test socket connection manually
-  const testSocketConnection = () => {
-    console.log('[OrderDetail] Manual socket test initiated')
-    console.log('[OrderDetail] Current state:', {
-      user: user,
-      token: token ? `${token.substring(0, 20)}...` : null,
-      parentOrderId,
-      orders: orderDetails?.orders
-    })
-  }
 
   const pageVariants = {
     initial: { opacity: 0, x: 20 },
@@ -216,7 +95,16 @@ export default function OrderDetailsPage({
     duration: 0.4
   }
 
-  const fetchOrderDetails = useCallback(async (isRefresh = false) => {
+  useEffect(() => {
+    if (!user || !token || !parentOrderId) {
+      router.push(`/app/${courtId}/login`)
+      return
+    }
+
+    fetchOrderDetails()
+  }, [user, token, parentOrderId, courtId])
+
+  const fetchOrderDetails = async (isRefresh = false) => {
     if (isRefresh) {
       setRefreshing(true)
     } else {
@@ -245,16 +133,7 @@ export default function OrderDetailsPage({
       setLoading(false)
       setRefreshing(false)
     }
-  }, [courtId, token, parentOrderId])
-
-  useEffect(() => {
-    if (!user || !token || !parentOrderId) {
-      router.push(`/app/${courtId}/login`)
-      return
-    }
-
-    fetchOrderDetails()
-  }, [user, token, parentOrderId, courtId, fetchOrderDetails])
+  }
 
   const copyOtp = () => {
     if (orderDetails?.orderOtp) {
@@ -383,29 +262,9 @@ export default function OrderDetailsPage({
             </motion.button>
             <div>
               <h1 className="text-xl font-semibold text-neutral-900 dark:text-white">Order Details</h1>
-              <div className="flex items-center gap-4">
-                <p className="text-sm text-neutral-600 dark:text-neutral-400">
-                  {getOverallStatus(orderDetails.orders)}
-                </p>
-                {/* Smart connection indicator */}
-                <div className="flex items-center gap-2">
-                  {connectionState === 'connected' && hasActiveOrders && (
-                    <Badge className="bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400 text-xs">
-                      Live updates
-                    </Badge>
-                  )}
-                  {connectionState === 'connecting' && hasActiveOrders && (
-                    <Badge className="bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400 text-xs">
-                      Connecting...
-                    </Badge>
-                  )}
-                  {!hasActiveOrders && (
-                    <Badge className="bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-400 text-xs">
-                      All complete
-                    </Badge>
-                  )}
-                </div>
-              </div>
+              <p className="text-sm text-neutral-600 dark:text-neutral-400">
+                {getOverallStatus(orderDetails.orders)}
+              </p>
             </div>
           </div>
           <motion.button
@@ -416,15 +275,6 @@ export default function OrderDetailsPage({
             whileTap={{ scale: 0.95 }}
           >
             <RefreshCw className={`h-5 w-5 text-neutral-700 dark:text-neutral-300 ${refreshing ? 'animate-spin' : ''}`} />
-          </motion.button>
-          <motion.button
-            onClick={testSocketConnection}
-            className="p-2 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            title="Test Socket Connection"
-          >
-            <Eye className="h-5 w-5 text-neutral-700 dark:text-neutral-300" />
           </motion.button>
         </div>
       </motion.div>

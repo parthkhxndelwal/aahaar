@@ -123,7 +123,7 @@ export async function POST(request) {
       return NextResponse.json(
         {
           success: false,
-          message: "Your account has been temporarily deactivated. Contact Admin for more information.",
+          message: "Account is not active. Please contact your admin.",
         },
         { status: 401 },
       )

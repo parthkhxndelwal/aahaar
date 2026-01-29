@@ -634,7 +634,6 @@ export default function VendorMenuPage({ params }: { params: Promise<{ courtId: 
                   }}
                   categories={categories}
                   isMobile={true}
-                  onCreateCategory={() => setIsCategoryDialogOpen(true)}
                 />
               </div>
             </DrawerContent>
@@ -1086,15 +1085,13 @@ function MenuItemForm({
   onSave, 
   onCancel, 
   categories,
-  isMobile = false,
-  onCreateCategory
+  isMobile = false
 }: { 
   item: Partial<MenuItem>
   onSave: (data: Partial<MenuItem>) => Promise<void>
   onCancel: () => void
   categories: MenuCategory[]
   isMobile?: boolean
-  onCreateCategory?: () => void
 }) {
   const [formData, setFormData] = useState<Partial<MenuItem>>(item)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -1227,48 +1224,36 @@ function MenuItemForm({
         <div className="grid grid-cols-2 gap-4">
           <div>
             <Label htmlFor="category">Category *</Label>
-            {categories.length === 0 ? (
-              <Button
-                type="button"
-                variant="outline"
-                onClick={onCreateCategory}
-                className="w-full justify-start h-10 px-3 text-left"
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Create a Category
-              </Button>
-            ) : (
-              <Select
-                value={formData.categoryId || ""}
-                onValueChange={(value) => {
-                  const selectedCategory = categories.find(cat => cat.id === value)
-                  setFormData(prev => ({ 
-                    ...prev, 
-                    categoryId: value,
-                    category: selectedCategory?.name || ""
-                  }))
-                }}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a category" />
-                </SelectTrigger>
-                <SelectContent>
-                  {categories.map((category) => (
-                    <SelectItem key={category.id} value={category.id}>
-                      <div className="flex items-center gap-2">
-                        {category.color && (
-                          <div 
-                            className="w-3 h-3 rounded-full" 
-                            style={{ backgroundColor: category.color }}
-                          />
-                        )}
-                        {category.name}
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
+            <Select
+              value={formData.categoryId || ""}
+              onValueChange={(value) => {
+                const selectedCategory = categories.find(cat => cat.id === value)
+                setFormData(prev => ({ 
+                  ...prev, 
+                  categoryId: value,
+                  category: selectedCategory?.name || ""
+                }))
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select a category" />
+              </SelectTrigger>
+              <SelectContent>
+                {categories.map((category) => (
+                  <SelectItem key={category.id} value={category.id}>
+                    <div className="flex items-center gap-2">
+                      {category.color && (
+                        <div 
+                          className="w-3 h-3 rounded-full" 
+                          style={{ backgroundColor: category.color }}
+                        />
+                      )}
+                      {category.name}
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           <div>

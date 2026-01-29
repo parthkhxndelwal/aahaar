@@ -8,7 +8,6 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { Switch } from "@/components/ui/switch"
 import { useToast } from "@/hooks/use-toast"
 import { Search, UserPlus, Mail, Phone, MoreVertical, Ban, CheckCircle } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
@@ -19,7 +18,7 @@ interface User {
   email?: string
   phone?: string
   role: "user" | "vendor" | "admin"
-  status: "active" | "inactive" | "pending" | "suspended"
+  status: "active" | "inactive" | "blocked"
   createdAt: string
   lastLoginAt?: string
   totalOrders: number
@@ -29,8 +28,7 @@ interface User {
 const statusColors = {
   active: "bg-green-100 text-green-800",
   inactive: "bg-gray-100 text-gray-800",
-  pending: "bg-yellow-100 text-yellow-800",
-  suspended: "bg-red-100 text-red-800"
+  blocked: "bg-red-100 text-red-800"
 }
 
 const roleColors = {
@@ -103,7 +101,7 @@ export default function AdminUsersPage({ params }: { params: Promise<{ courtId: 
         ))
         toast({
           title: "Success",
-          description: `User ${newStatus === "active" ? "activated" : "deactivated"}`,
+          description: `User ${newStatus === "active" ? "activated" : newStatus === "blocked" ? "blocked" : "deactivated"}`,
         })
       } else {
         throw new Error(result.message)
@@ -230,8 +228,7 @@ export default function AdminUsersPage({ params }: { params: Promise<{ courtId: 
                 <SelectItem value="all">All Status</SelectItem>
                 <SelectItem value="active">Active</SelectItem>
                 <SelectItem value="inactive">Inactive</SelectItem>
-                <SelectItem value="pending">Pending</SelectItem>
-                <SelectItem value="suspended">Suspended</SelectItem>
+                <SelectItem value="blocked">Blocked</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -255,7 +252,7 @@ export default function AdminUsersPage({ params }: { params: Promise<{ courtId: 
                 <TableHead>Orders</TableHead>
                 <TableHead>Total Spent</TableHead>
                 <TableHead>Last Login</TableHead>
-                <TableHead>Active</TableHead>
+                <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -294,18 +291,24 @@ export default function AdminUsersPage({ params }: { params: Promise<{ courtId: 
                     {user.lastLoginAt ? new Date(user.lastLoginAt).toLocaleDateString() : "Never"}
                   </TableCell>
                   <TableCell>
-                    <div className="flex items-center gap-2">
-                      <Switch
-                        checked={user.status === "active"}
-                        onCheckedChange={(checked) => {
-                          const newStatus = checked ? "active" : "inactive"
-                          updateUserStatus(user.id, newStatus)
-                        }}
-                        disabled={user.role === "admin"} // Don't allow disabling admin accounts
-                      />
-                      <span className="text-sm text-muted-foreground">
-                        {user.status === "active" ? "Active" : "Inactive"}
-                      </span>
+                    <div className="flex gap-2">
+                      {user.status === "active" ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => updateUserStatus(user.id, "blocked")}
+                        >
+                          <Ban className="h-4 w-4" />
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => updateUserStatus(user.id, "active")}
+                        >
+                          <CheckCircle className="h-4 w-4" />
+                        </Button>
+                      )}
                     </div>
                   </TableCell>
                 </TableRow>

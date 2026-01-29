@@ -34,10 +34,10 @@ interface Vendor {
   maxConcurrentOrders: number
   maxOrdersPerHour: number
   averagePreparationTime: number
-  operatingHours?: {
+  operatingHours: {
     [key: string]: { open: string; close: string; closed: boolean }
   }
-  breakTimes?: Array<{ start: string; end: string; description?: string }>
+  breakTimes: Array<{ start: string; end: string; description?: string }>
   bankAccountNumber?: string
   bankIfscCode?: string
   bankAccountHolderName?: string
@@ -45,7 +45,7 @@ interface Vendor {
   panNumber?: string
   gstin?: string
   razorpayAccountId?: string
-  payoutSettings?: {
+  payoutSettings: {
     autoPayoutEnabled: boolean
     payoutFrequency: "daily" | "weekly" | "manual"
     minimumPayoutAmount: number
@@ -75,43 +75,22 @@ export default function VendorEditPage({
 
   const fetchVendor = async () => {
     try {
-      console.log("🔍 Fetching vendor:", { courtId, vendorId })
       const response = await fetch(`/api/courts/${courtId}/vendors/${vendorId}`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
       })
-      
-      console.log("📡 Response status:", response.status)
-      console.log("📡 Response headers:", Object.fromEntries(response.headers.entries()))
-      
       const result = await response.json()
-      console.log("📊 Full API result:", result)
 
       if (result.success) {
-        console.log("✅ Vendor data loaded successfully")
-        console.log("� Raw API data:", result.data)
-        
-        // The API returns data nested under 'vendor' key
-        const vendorData = result.data.vendor || result.data
-        
-        console.log("�📋 Vendor details:", {
-          id: vendorData.id,
-          stallName: vendorData.stallName,
-          vendorName: vendorData.vendorName,
-          status: vendorData.status,
-          hasOperatingHours: !!vendorData.operatingHours,
-          hasPayoutSettings: !!vendorData.payoutSettings
-        })
-        console.log("🖼️ Logo URL:", vendorData.logoUrl)
-        console.log("🖼️ Banner URL:", vendorData.bannerUrl)
-        setVendor(vendorData)
+        console.log("Vendor data loaded:", result.data)
+        console.log("Logo URL:", result.data.logoUrl)
+        console.log("Banner URL:", result.data.bannerUrl)
+        setVendor(result.data)
       } else {
-        console.error("❌ API returned error:", result.message)
         throw new Error(result.message)
       }
     } catch (error: any) {
-      console.error("💥 Fetch error:", error)
       toast({
         title: "Error",
         description: "Failed to load vendor details",
@@ -127,9 +106,8 @@ export default function VendorEditPage({
 
     setSaving(true)
     try {
-      console.log("💾 Saving vendor data:", vendor)
       const response = await fetch(`/api/courts/${courtId}/vendors/${vendorId}`, {
-        method: "PATCH",
+        method: "PUT",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
@@ -137,7 +115,6 @@ export default function VendorEditPage({
         body: JSON.stringify(vendor),
       })
       const result = await response.json()
-      console.log("💾 Save response:", result)
 
       if (result.success) {
         toast({
@@ -148,7 +125,6 @@ export default function VendorEditPage({
         throw new Error(result.message)
       }
     } catch (error: any) {
-      console.error("💥 Save error:", error)
       toast({
         title: "Error",
         description: "Failed to update vendor",
@@ -205,26 +181,16 @@ export default function VendorEditPage({
   }
 
   const updateOperatingHours = (day: string, field: "open" | "close" | "closed", value: string | boolean) => {
-    setVendor(prev => {
-      if (!prev) return null
-      
-      // Initialize operatingHours if it doesn't exist
-      const currentOperatingHours = prev.operatingHours || {}
-      
-      // Initialize the day if it doesn't exist
-      const currentDayHours = currentOperatingHours[day] || { open: "09:00", close: "21:00", closed: false }
-      
-      return {
-        ...prev,
-        operatingHours: {
-          ...currentOperatingHours,
-          [day]: {
-            ...currentDayHours,
-            [field]: value
-          }
+    setVendor(prev => prev ? {
+      ...prev,
+      operatingHours: {
+        ...prev.operatingHours,
+        [day]: {
+          ...prev.operatingHours[day],
+          [field]: value
         }
       }
-    })
+    } : null)
   }
 
   if (loading) {
@@ -246,8 +212,8 @@ export default function VendorEditPage({
             </Link>
           </Button>
           <div>
-            <h1 className="text-3xl font-bold text-neutral-100">{vendor.stallName}</h1>
-            <p className="text-neutral-400">{vendor.vendorName}</p>
+            <h1 className="text-3xl font-bold text-gray-100">{vendor.stallName}</h1>
+            <p className="text-gray-400">{vendor.vendorName}</p>
           </div>
         </div>
         <div className="flex items-center space-x-4">
@@ -427,7 +393,7 @@ export default function VendorEditPage({
               <CardDescription>Configure daily operating hours and break times</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              {vendor.operatingHours ? Object.entries(vendor.operatingHours).map(([day, hours]) => (
+              {Object.entries(vendor.operatingHours).map(([day, hours]) => (
                 <div key={day} className="flex items-center space-x-4 p-4 border rounded-lg">
                   <div className="w-24">
                     <Label className="capitalize font-medium">{day}</Label>
@@ -465,30 +431,7 @@ export default function VendorEditPage({
                     </>
                   )}
                 </div>
-              )) : (
-                <div className="text-center py-8 text-neutral-500">
-                  <p>Operating hours not configured</p>
-                  {editMode && (
-                    <Button 
-                      onClick={() => {
-                        const defaultHours = {
-                          monday: { open: "09:00", close: "21:00", closed: false },
-                          tuesday: { open: "09:00", close: "21:00", closed: false },
-                          wednesday: { open: "09:00", close: "21:00", closed: false },
-                          thursday: { open: "09:00", close: "21:00", closed: false },
-                          friday: { open: "09:00", close: "21:00", closed: false },
-                          saturday: { open: "09:00", close: "21:00", closed: false },
-                          sunday: { open: "09:00", close: "21:00", closed: false }
-                        }
-                        updateVendorField("operatingHours", defaultHours)
-                      }}
-                      className="mt-4"
-                    >
-                      Initialize Operating Hours
-                    </Button>
-                  )}
-                </div>
-              )}
+              ))}
             </CardContent>
           </Card>
         </TabsContent>
@@ -509,7 +452,6 @@ export default function VendorEditPage({
                     value={vendor.bankAccountNumber || ""}
                     onChange={(e) => updateVendorField("bankAccountNumber", e.target.value)}
                     placeholder="Enter bank account number"
-                    disabled={!editMode}
                   />
                 </div>
                 <div className="space-y-2">
@@ -519,7 +461,6 @@ export default function VendorEditPage({
                     value={vendor.bankIfscCode || ""}
                     onChange={(e) => updateVendorField("bankIfscCode", e.target.value)}
                     placeholder="Enter IFSC code"
-                    disabled={!editMode}
                   />
                 </div>
                 <div className="space-y-2">
@@ -529,7 +470,6 @@ export default function VendorEditPage({
                     value={vendor.bankAccountHolderName || ""}
                     onChange={(e) => updateVendorField("bankAccountHolderName", e.target.value)}
                     placeholder="Enter account holder name"
-                    disabled={!editMode}
                   />
                 </div>
                 <div className="space-y-2">
@@ -539,7 +479,6 @@ export default function VendorEditPage({
                     value={vendor.bankName || ""}
                     onChange={(e) => updateVendorField("bankName", e.target.value)}
                     placeholder="Enter bank name"
-                    disabled={!editMode}
                   />
                 </div>
               </div>
@@ -610,38 +549,26 @@ export default function VendorEditPage({
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="flex items-center space-x-2">
                     <Switch
-                      checked={vendor.payoutSettings?.autoPayoutEnabled ?? false}
-                      onCheckedChange={(checked) => {
-                        const currentSettings = vendor.payoutSettings || {
-                          autoPayoutEnabled: false,
-                          payoutFrequency: "manual" as const,
-                          minimumPayoutAmount: 100
-                        }
+                      checked={vendor.payoutSettings.autoPayoutEnabled}
+                      onCheckedChange={(checked) => 
                         updateVendorField("payoutSettings", {
-                          ...currentSettings,
+                          ...vendor.payoutSettings,
                           autoPayoutEnabled: checked
                         })
-                      }}
-                      disabled={!editMode}
+                      }
                     />
                     <Label>Auto Payout Enabled</Label>
                   </div>
                   <div className="space-y-2">
                     <Label>Payout Frequency</Label>
                     <Select
-                      value={vendor.payoutSettings?.payoutFrequency ?? "manual"}
-                      onValueChange={(value) => {
-                        const currentSettings = vendor.payoutSettings || {
-                          autoPayoutEnabled: false,
-                          payoutFrequency: "manual" as const,
-                          minimumPayoutAmount: 100
-                        }
+                      value={vendor.payoutSettings.payoutFrequency}
+                      onValueChange={(value) => 
                         updateVendorField("payoutSettings", {
-                          ...currentSettings,
+                          ...vendor.payoutSettings,
                           payoutFrequency: value as "daily" | "weekly" | "manual"
                         })
-                      }}
-                      disabled={!editMode}
+                      }
                     >
                       <SelectTrigger>
                         <SelectValue />
@@ -657,19 +584,13 @@ export default function VendorEditPage({
                     <Label>Minimum Payout Amount (₹)</Label>
                     <Input
                       type="number"
-                      value={vendor.payoutSettings?.minimumPayoutAmount ?? 100}
-                      onChange={(e) => {
-                        const currentSettings = vendor.payoutSettings || {
-                          autoPayoutEnabled: false,
-                          payoutFrequency: "manual" as const,
-                          minimumPayoutAmount: 100
-                        }
+                      value={vendor.payoutSettings.minimumPayoutAmount}
+                      onChange={(e) => 
                         updateVendorField("payoutSettings", {
-                          ...currentSettings,
+                          ...vendor.payoutSettings,
                           minimumPayoutAmount: Number(e.target.value)
                         })
-                      }}
-                      disabled={!editMode}
+                      }
                     />
                   </div>
                 </div>

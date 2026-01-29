@@ -281,9 +281,7 @@ export async function POST(request, { params }) {
         rejectedVendors: orders.filter(o => o.status === 'rejected').length,
         grandTotal: orders.reduce((sum, o) => sum + parseFloat(o.totalAmount), 0),
         totalRefunds: orders.reduce((sum, o) => sum + parseFloat(o.refundAmount || 0), 0),
-      },
-      // Add connect flag to tell frontend whether to connect to socket
-      connect: orders.some(o => o.status !== 'completed')
+      }
     }
 
     return NextResponse.json({

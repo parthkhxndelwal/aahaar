@@ -7,8 +7,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { useAuth } from "@/contexts/auth-context"
 import { useRouter } from "next/navigation"
-import { useSmartOrderSocket } from "@/hooks/use-smart-order-socket"
-import { useToast } from "@/hooks/use-toast"
 
 export default function OrderSuccessPage({ 
   params, 
@@ -21,69 +19,9 @@ export default function OrderSuccessPage({
   const { parentOrderId, otp } = use(searchParams)
   const { user, token } = useAuth()
   const router = useRouter()
-  const { toast } = useToast()
   const [orderDetails, setOrderDetails] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [otpCopied, setOtpCopied] = useState(false)
-
-  // Smart socket connection for real-time updates (only when order is active)
-  const { isConnected, hasActiveOrders, connectionState } = useSmartOrderSocket({
-    parentOrderId,
-    orders: orderDetails?.orders || [],
-    onOrderUpdate: (data: any) => {
-      console.log('[OrderSuccess] Real-time order update received:', data)
-      console.log('[OrderSuccess] Current parentOrderId:', parentOrderId)
-      if (data.parentOrderId === parentOrderId) {
-        console.log('[OrderSuccess] Updating order details with:', data.order)
-        setOrderDetails(data.order)
-        toast({
-          title: "Order Updated",
-          description: "Your order has been updated in real-time",
-          duration: 3000,
-        })
-      } else {
-        console.log('[OrderSuccess] Order update ignored - parentOrderId mismatch')
-      }
-    },
-    onOrderStatusChange: (data: any) => {
-      console.log('[OrderSuccess] Real-time order status change received:', data)
-      console.log('[OrderSuccess] Current parentOrderId:', parentOrderId)
-      if (data.parentOrderId === parentOrderId) {
-        console.log('[OrderSuccess] Updating vendor order status:', data.vendorOrderId, 'to', data.newStatus)
-        // Update the specific vendor order in the current data
-        setOrderDetails((prev: any) => {
-          if (!prev) return prev
-          
-          const updatedOrders = prev.orders?.map((order: any) => 
-            order.id === data.vendorOrderId 
-              ? { ...order, status: data.newStatus }
-              : order
-          ) || []
-          
-          return {
-            ...prev,
-            orders: updatedOrders
-          }
-        })
-        
-        // Show toast notification
-        const statusMessages = {
-          accepted: "Order accepted by vendor",
-          preparing: "Order is being prepared",
-          ready: "Order is ready for pickup",
-          completed: "Order completed",
-          rejected: "Order was rejected"
-        }
-        
-        toast({
-          title: "Status Update",
-          description: statusMessages[data.newStatus as keyof typeof statusMessages] || `Order status changed to ${data.newStatus}`,
-          duration: 4000,
-        })
-      }
-    },
-    enabled: !!parentOrderId
-  })
 
   const pageVariants = {
     initial: { opacity: 0, y: 20 },
@@ -108,7 +46,6 @@ export default function OrderSuccessPage({
 
   const fetchOrderDetails = async () => {
     try {
-      console.log('Fetching order details for parentOrderId:', parentOrderId)
       const response = await fetch(`/api/app/${courtId}/orders/status`, {
         method: "POST",
         headers: {
@@ -118,19 +55,11 @@ export default function OrderSuccessPage({
         body: JSON.stringify({ parentOrderId }),
       })
 
-      console.log('Order details API response status:', response.status)
-      
       if (response.ok) {
         const data = await response.json()
-        console.log('Order details API response data:', data)
         if (data.success) {
-          console.log('Setting order details:', data.data)
           setOrderDetails(data.data)
-        } else {
-          console.error('Order details API returned success: false', data.message)
         }
-      } else {
-        console.error('Order details API response not ok:', response.status, response.statusText)
       }
     } catch (error) {
       console.error("Error fetching order details:", error)
@@ -214,27 +143,7 @@ export default function OrderSuccessPage({
           >
             <ArrowLeft className="h-5 w-5 text-neutral-700 dark:text-neutral-300" />
           </motion.button>
-          <div className="flex-1">
-            <h1 className="text-xl font-semibold text-neutral-900 dark:text-white">Order Confirmed</h1>
-          </div>
-          {/* Real-time connection indicator */}
-          <div className="flex items-center gap-2">
-            {connectionState === 'connected' && hasActiveOrders && (
-              <Badge className="bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400 text-xs">
-                Live updates
-              </Badge>
-            )}
-            {connectionState === 'connecting' && hasActiveOrders && (
-              <Badge className="bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400 text-xs">
-                Connecting...
-              </Badge>
-            )}
-            {!hasActiveOrders && (
-              <Badge className="bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-400 text-xs">
-                All complete
-              </Badge>
-            )}
-          </div>
+          <h1 className="text-xl font-semibold text-neutral-900 dark:text-white">Order Confirmed</h1>
         </div>
       </motion.div>
 
@@ -308,25 +217,25 @@ export default function OrderSuccessPage({
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div>
                     <span className="text-neutral-600 dark:text-neutral-400">Order ID</span>
-                    <p className="font-mono text-neutral-900 dark:text-white">{orderDetails.parentOrderId || 'N/A'}</p>
+                    <p className="font-mono text-neutral-900 dark:text-white">{orderDetails.parentOrderId}</p>
                   </div>
                   <div>
                     <span className="text-neutral-600 dark:text-neutral-400">Total Amount</span>
-                    <p className="font-semibold text-neutral-900 dark:text-white">₹{Number(orderDetails.summary?.grandTotal || 0).toFixed(2)}</p>
+                    <p className="font-semibold text-neutral-900 dark:text-white">₹{Number(orderDetails.summary.grandTotal || 0).toFixed(2)}</p>
                   </div>
                   <div>
                     <span className="text-neutral-600 dark:text-neutral-400">Vendors</span>
-                    <p className="text-neutral-900 dark:text-white">{orderDetails.summary?.totalVendors || 0}</p>
+                    <p className="text-neutral-900 dark:text-white">{orderDetails.summary.totalVendors}</p>
                   </div>
                   <div>
                     <span className="text-neutral-600 dark:text-neutral-400">Status</span>
                     <div className="flex flex-wrap gap-1 mt-1">
                       <Badge className="bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400">
-                        {orderDetails.summary?.completedVendors || 0} Completed
+                        {orderDetails.summary.completedVendors} Completed
                       </Badge>
-                      {(orderDetails.summary?.pendingVendors || 0) > 0 && (
+                      {orderDetails.summary.pendingVendors > 0 && (
                         <Badge className="bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400">
-                          {orderDetails.summary?.pendingVendors || 0} Pending
+                          {orderDetails.summary.pendingVendors} Pending
                         </Badge>
                       )}
                     </div>
@@ -338,60 +247,52 @@ export default function OrderSuccessPage({
             {/* Vendor Orders */}
             <div className="space-y-3">
               <h3 className="font-semibold text-neutral-900 dark:text-white">Orders by Vendor</h3>
-              {orderDetails.orders && Array.isArray(orderDetails.orders) && orderDetails.orders.length > 0 ? (
-                orderDetails.orders.map((vendorOrder: any, index: number) => (
-                  <motion.div
-                    key={vendorOrder.id}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 0.6 + index * 0.1 }}
-                  >
-                    <Card>
-                      <CardContent className="p-4">
-                        <div className="flex justify-between items-start mb-3">
-                          <div>
-                            <h4 className="font-medium text-neutral-900 dark:text-white">
-                              {vendorOrder.vendor?.stallName || 'Unknown Vendor'}
-                            </h4>
-                            <p className="text-sm text-neutral-600 dark:text-neutral-400">
-                              {vendorOrder.items?.length || 0} items • ₹{Number(vendorOrder.totalAmount || 0).toFixed(2)}
-                            </p>
+              {orderDetails.vendors.map((vendorOrder: any, index: number) => (
+                <motion.div
+                  key={vendorOrder.id}
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.6 + index * 0.1 }}
+                >
+                  <Card>
+                    <CardContent className="p-4">
+                      <div className="flex justify-between items-start mb-3">
+                        <div>
+                          <h4 className="font-medium text-neutral-900 dark:text-white">
+                            {vendorOrder.vendor.stallName}
+                          </h4>
+                          <p className="text-sm text-neutral-600 dark:text-neutral-400">
+                            {vendorOrder.items.length} items • ₹{Number(vendorOrder.totalAmount || 0).toFixed(2)}
+                          </p>
+                        </div>
+                        <Badge className={getStatusColor(vendorOrder.status)}>
+                          {getStatusText(vendorOrder.status)}
+                        </Badge>
+                      </div>
+                      
+                      <div className="space-y-2">
+                        {vendorOrder.items.map((item: any) => (
+                          <div key={item.id} className="flex justify-between text-sm">
+                            <span className="text-neutral-700 dark:text-neutral-300">
+                              {item.name} × {item.quantity}
+                            </span>
+                            <span className="text-neutral-900 dark:text-white">
+                              ₹{Number(item.subtotal || 0).toFixed(2)}
+                            </span>
                           </div>
-                          <Badge className={getStatusColor(vendorOrder.status)}>
-                            {getStatusText(vendorOrder.status)}
-                          </Badge>
-                        </div>
-                        
-                        <div className="space-y-2">
-                          {vendorOrder.items && Array.isArray(vendorOrder.items) && vendorOrder.items.map((item: any) => (
-                            <div key={item.id} className="flex justify-between text-sm">
-                              <span className="text-neutral-700 dark:text-neutral-300">
-                                {item.name} × {item.quantity}
-                              </span>
-                              <span className="text-neutral-900 dark:text-white">
-                                ₹{Number(item.subtotal || 0).toFixed(2)}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
+                        ))}
+                      </div>
 
-                        {vendorOrder.queuePosition && (
-                          <div className="mt-3 flex items-center gap-2 text-sm text-neutral-600 dark:text-neutral-400">
-                            <Clock className="h-4 w-4" />
-                            Queue position: #{vendorOrder.queuePosition}
-                          </div>
-                        )}
-                      </CardContent>
-                    </Card>
-                  </motion.div>
-                ))
-              ) : (
-                <Card>
-                  <CardContent className="p-4 text-center">
-                    <p className="text-neutral-600 dark:text-neutral-400">No vendor orders found.</p>
-                  </CardContent>
-                </Card>
-              )}
+                      {vendorOrder.queuePosition && (
+                        <div className="mt-3 flex items-center gap-2 text-sm text-neutral-600 dark:text-neutral-400">
+                          <Clock className="h-4 w-4" />
+                          Queue position: #{vendorOrder.queuePosition}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              ))}
             </div>
           </motion.div>
         )}

@@ -4,17 +4,9 @@
   "private": true,
   "scripts": {
     "build": "next build",
-    "dev": "node server.js",
+    "dev": "next dev",
     "lint": "next lint",
-    "start": "NODE_ENV=production node server.js",
-    "db:backup": "node scripts/backup-database.js",
-    "db:backup:clear": "node scripts/backup-database.js --clear-after",
-    "db:clear": "node scripts/clear-database.js",
-    "db:clear:quick": "node scripts/clear-database-quick.js",
-    "db:clear:selective": "node scripts/clear-database-selective.js",
-    "db:clear:dev": "NODE_ENV=development node scripts/clear-database-quick.js",
-    "db:clear:orders": "node scripts/clear-database-selective.js --orders",
-    "db:clear:carts": "node scripts/clear-database-selective.js --carts"
+    "start": "next start"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",
@@ -71,8 +63,6 @@
     "react-resizable-panels": "^2.1.7",
     "recharts": "2.15.0",
     "sequelize": "latest",
-    "socket.io": "^4.8.1",
-    "socket.io-client": "^4.8.1",
     "sonner": "^1.7.1",
     "tailwind-merge": "^2.5.5",
     "tailwindcss-animate": "^1.0.7",
