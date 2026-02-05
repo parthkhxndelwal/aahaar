@@ -38,11 +38,11 @@ export function AdminSidebar({ courtId }: AdminSidebarProps) {
       href: `/admin/${courtId}`,
       icon: LayoutDashboard,
     },
-    {
-      name: "Vendors",
-      href: `/admin/${courtId}/vendors`,
-      icon: Users,
-    },
+    // {
+    //   name: "Vendors",
+    //   href: `/admin/${courtId}/vendors`,
+    //   icon: Users,
+    // },
     {
       name: "Orders",
       href: `/admin/${courtId}/orders`,
