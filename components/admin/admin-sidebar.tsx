@@ -17,6 +17,7 @@ import {
   ChevronLeft,
   ChevronRight,
   LogOut,
+  Store,
 } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 
@@ -38,11 +39,11 @@ export function AdminSidebar({ courtId }: AdminSidebarProps) {
       href: `/admin/${courtId}`,
       icon: LayoutDashboard,
     },
-    // {
-    //   name: "Vendors",
-    //   href: `/admin/${courtId}/vendors`,
-    //   icon: Users,
-    // },
+    {
+      name: "Vendors",
+      href: `/admin/${courtId}/vendors`,
+      icon: Store,
+    },
     {
       name: "Orders",
       href: `/admin/${courtId}/orders`,

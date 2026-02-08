@@ -173,7 +173,13 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.STRING,
         allowNull: true,
         validate: {
-          is: /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/,
+          customGstin(value) {
+            if (value && value.trim() !== "") {
+              if (!/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/.test(value)) {
+                throw new Error("Invalid GSTIN format");
+              }
+            }
+          },
         },
         comment: "GSTIN number for GST compliance (optional)",
       },
@@ -200,6 +206,28 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.JSON,
         allowNull: false,
         defaultValue: {},
+      },
+      // Onboarding tracking fields
+      onboardingStatus: {
+        type: DataTypes.ENUM("not_started", "in_progress", "completed", "suspended"),
+        allowNull: false,
+        defaultValue: "not_started",
+        comment: "Current onboarding status"
+      },
+      onboardingStep: {
+        type: DataTypes.ENUM("basic", "password", "stall", "hours", "bank", "legal", "account", "config", "success", "completed"),
+        allowNull: true,
+        comment: "Current step in onboarding process"
+      },
+      onboardingCompletedAt: {
+        type: DataTypes.DATE,
+        allowNull: true,
+        comment: "Timestamp when onboarding was completed"
+      },
+      onboardingStartedAt: {
+        type: DataTypes.DATE,
+        allowNull: true,
+        comment: "Timestamp when onboarding was started"
       },
       createdAt: {
         type: DataTypes.DATE,
