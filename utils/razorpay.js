@@ -1,287 +1,280 @@
-const Razorpay = require("razorpay")
+/**
+ * Razorpay utility functions for vendor onboarding
+ */
 
-const razorpay = new Razorpay({
-  key_id: process.env.RAZORPAY_KEY_ID,
-  key_secret: process.env.RAZORPAY_KEY_SECRET,
-})
-
-const createOrder = async (amount, currency = "INR", receipt, notes = {}) => {
+/**
+ * Create a Razorpay Route Account for a vendor
+ * @param {Object} vendorData - Vendor information for account creation
+ * @returns {Promise<Object>} - Account creation result
+ */
+export async function createRouteAccount(vendorData) {
   try {
-    const options = {
-      amount: Math.round(amount * 100), // Convert to paise
-      currency,
-      receipt,
-      notes,
-    }
-
-    const order = await razorpay.orders.create(options)
-    return { success: true, order }
-  } catch (error) {
-    console.error("Razorpay create order error:", error)
-    return { success: false, error: error.message }
-  }
-}
-
-const verifyPayment = (razorpayOrderId, razorpayPaymentId, razorpaySignature) => {
-  try {
-    const crypto = require("crypto")
-    const body = razorpayOrderId + "|" + razorpayPaymentId
-    const expectedSignature = crypto
-      .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
-      .update(body.toString())
-      .digest("hex")
-
-    return expectedSignature === razorpaySignature
-  } catch (error) {
-    console.error("Payment verification error:", error)
-    return false
-  }
-}
-
-const createFundAccount = async (contactId, accountDetails) => {
-  try {
-    const fundAccount = await razorpay.fundAccount.create({
-      contact_id: contactId,
-      account_type: "bank_account",
-      bank_account: {
-        name: accountDetails.accountHolderName,
-        ifsc: accountDetails.ifscCode,
-        account_number: accountDetails.accountNumber,
-      },
+    console.log('[RAZORPAY UTIL] Starting account creation with vendor data:', {
+      vendorId: vendorData.vendorId,
+      email: vendorData.email,
+      phone: vendorData.phone,
+      stallName: vendorData.stallName,
+      panNumber: vendorData.panNumber,
+      gstin: vendorData.gstin,
+      businessType: vendorData.businessType
     })
 
-    return { success: true, fundAccount }
-  } catch (error) {
-    console.error("Create fund account error:", error)
-    return { success: false, error: error.message }
-  }
-}
-
-const createContact = async (name, email, contact, type = "vendor") => {
-  try {
-    const contactData = await razorpay.contacts.create({
-      name,
+    const {
       email,
-      contact,
-      type,
-    })
-
-    return { success: true, contact: contactData }
-  } catch (error) {
-    console.error("Create contact error:", error)
-    return { success: false, error: error.message }
-  }
-}
-
-const createPayout = async (fundAccountId, amount, currency = "INR", mode = "IMPS", purpose = "payout") => {
-  try {
-    const payout = await razorpay.payouts.create({
-      account_number: process.env.RAZORPAY_ACCOUNT_NUMBER,
-      fund_account_id: fundAccountId,
-      amount: Math.round(amount * 100), // Convert to paise
-      currency,
-      mode,
-      purpose,
-    })
-
-    return { success: true, payout }
-  } catch (error) {
-    console.error("Create payout error:", error)
-    return { success: false, error: error.message }
-  }
-}
-
-const createRouteAccount = async (vendorData) => {
-  try {
-    const { 
-      email, 
-      phone, 
-      vendorName, 
-      stallName, 
+      phone,
+      vendorName,
+      stallName,
       courtId,
       vendorId,
       panNumber,
-      gstin
+      gstin,
+      accountHolderName,
+      accountNumber,
+      ifscCode,
+      businessType,
+      panDocFileId,
+      stallAddress
     } = vendorData
 
-    // Create a shorter reference ID (max 20 chars)
-    // Use timestamp + short hash of vendor ID
-    const timestamp = Date.now().toString().slice(-8) // Last 8 digits of timestamp
-    const vendorHash = vendorId.slice(0, 8) // First 8 chars of vendor UUID
-    const shortReferenceId = `v${timestamp}${vendorHash}`.slice(0, 20) // Ensure max 20 chars
+    // Create a short reference ID (max 20 characters)
+    const shortVendorId = vendorId.replace(/-/g, '').substring(0, 8) // Remove hyphens and take first 8 chars
+    const timestamp = Date.now().toString().slice(-6) // Last 6 digits of timestamp
+    const shortReferenceId = `v${shortVendorId}${timestamp}` // Format: v12345678123456 (max 15 chars)
+    
+    console.log(`[RAZORPAY UTIL] Generated reference_id: ${shortReferenceId} (${shortReferenceId.length} chars)`)
 
-    const accountData = {
-      email: email.toLowerCase(),
-      phone: phone,
+    // Ensure field length limits for Razorpay
+    const truncateString = (str, maxLength) => {
+      if (!str) return str
+      return str.length > maxLength ? str.substring(0, maxLength) : str
+    }
+
+    // Prepare the account creation payload
+    const accountPayload = {
+      email,
+      phone,
       type: "route",
       reference_id: shortReferenceId,
-      legal_business_name: stallName,
-      business_type: "proprietorship", // Default business type for food stalls
-      contact_name: vendorName,
+      legal_business_name: truncateString(stallName, 50), // Razorpay limit for business name
+      business_type: businessType || "partnership",
+      contact_name: truncateString(vendorName, 50), // Razorpay limit for contact name
       profile: {
         category: "food",
         subcategory: "restaurant",
         addresses: {
           registered: {
-            street1: "Food Court",
-            street2: `Court ID: ${courtId}`,
-            city: "Bangalore", // You might want to make this dynamic
-            state: "KARNATAKA",
-            postal_code: "560001", // You might want to make this dynamic
+            street1: truncateString(stallAddress || "Food Court Stall", 100),
+            street2: truncateString(`Court ID: ${courtId}`, 100),
+            city: "Mumbai",
+            state: "Maharashtra",
+            postal_code: "400001",
             country: "IN"
           }
         }
       },
       legal_info: {
-        pan: panNumber
+        pan: panNumber,
+        gst: gstin || undefined
+      },
+      brand: {
+        color: "000000"
+      },
+      notes: {
+        vendor_id: truncateString(vendorId, 50),
+        court_id: truncateString(courtId, 50),
+        created_via: "admin_panel"
       }
     }
 
-    // Add GSTIN if provided
-    if (gstin) {
-      accountData.legal_info.gst = gstin
-    }
-
-    console.log(`Creating Razorpay account with reference_id: ${shortReferenceId} (length: ${shortReferenceId.length})`)
-    console.log(`PAN: ${panNumber}${gstin ? `, GSTIN: ${gstin}` : ''}`)
-
-    // Make direct API call to Razorpay since the SDK might not support Route Accounts
-    const auth = Buffer.from(`${process.env.RAZORPAY_KEY_ID}:${process.env.RAZORPAY_KEY_SECRET}`).toString('base64')
+    console.log('[RAZORPAY UTIL] Account payload prepared:', JSON.stringify(accountPayload, null, 2))
     
-    const response = await fetch('https://api.razorpay.com/v2/accounts', {
-      method: 'POST',
+    // Log field lengths for debugging
+    console.log('[RAZORPAY UTIL] Field lengths:', {
+      reference_id: accountPayload.reference_id.length,
+      legal_business_name: accountPayload.legal_business_name.length,
+      contact_name: accountPayload.contact_name.length,
+      street1: accountPayload.profile.addresses.registered.street1.length,
+      street2: accountPayload.profile.addresses.registered.street2.length,
+      vendor_id: accountPayload.notes.vendor_id.length,
+      court_id: accountPayload.notes.court_id.length
+    })
+
+    // Make the API call to Razorpay
+    console.log('[RAZORPAY UTIL] Making API call to Razorpay accounts endpoint')
+    const response = await fetch("https://api.razorpay.com/v2/accounts", {
+      method: "POST",
       headers: {
-        'Authorization': `Basic ${auth}`,
-        'Content-Type': 'application/json'
+        "Authorization": `Basic ${Buffer.from(`${process.env.RAZORPAY_KEY_ID}:${process.env.RAZORPAY_KEY_SECRET}`).toString("base64")}`,
+        "Content-Type": "application/json"
       },
-      body: JSON.stringify(accountData)
+      body: JSON.stringify(accountPayload)
     })
 
     const responseData = await response.json()
+    
+    console.log('[RAZORPAY UTIL] Razorpay API response:', {
+      status: response.status,
+      statusText: response.statusText,
+      ok: response.ok,
+      responseData: JSON.stringify(responseData, null, 2)
+    })
 
     if (!response.ok) {
-      return { 
-        success: false, 
-        error: responseData.error?.description || 'Failed to create Razorpay account',
-        errorCode: responseData.error?.code,
-        errorDetails: responseData.error
+      console.error("[RAZORPAY UTIL] Razorpay account creation failed:", {
+        status: response.status,
+        statusText: response.statusText,
+        error: responseData
+      })
+      return {
+        success: false,
+        error: responseData.error?.description || responseData.message || "Failed to create Razorpay account"
       }
     }
 
-    return { success: true, account: responseData }
-  } catch (error) {
-    console.error("Create route account error:", error)
-    return { success: false, error: error.message }
-  }
-}
-
-const updateRouteAccount = async (accountId, updateData) => {
-  try {
-    const { 
-      vendorName, 
-      stallName, 
-      courtId,
-      panNumber,
-      gstin
-    } = updateData
-
-    const accountUpdateData = {
-      legal_business_name: stallName,
-      profile: {
-        addresses: {
-          operation: {
-            street1: "Food Court",
-            street2: `Court ID: ${courtId}`,
-            city: "Bangalore", // You might want to make this dynamic
-            state: "KARNATAKA",
-            postal_code: "560001", // You might want to make this dynamic
-            country: "IN"
-          }
+    // If bank account details are provided, add them to the account
+    if (accountNumber && ifscCode && accountHolderName) {
+      console.log('[RAZORPAY UTIL] Adding bank account details to Razorpay account:', {
+        accountId: responseData.id,
+        accountNumber: `****${accountNumber.slice(-4)}`,
+        ifscCode,
+        beneficiaryName: accountHolderName
+      })
+      
+      try {
+        const bankAccountPayload = {
+          account_number: accountNumber,
+          ifsc_code: ifscCode,
+          beneficiary_name: accountHolderName
         }
-      },
-      legal_info: {
-        pan: panNumber
+
+        const bankResponse = await fetch(`https://api.razorpay.com/v2/accounts/${responseData.id}/bank_account`, {
+          method: "POST",
+          headers: {
+            "Authorization": `Basic ${Buffer.from(`${process.env.RAZORPAY_KEY_ID}:${process.env.RAZORPAY_KEY_SECRET}`).toString("base64")}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify(bankAccountPayload)
+        })
+
+        const bankData = await bankResponse.json()
+        
+        console.log('[RAZORPAY UTIL] Bank account addition response:', {
+          status: bankResponse.status,
+          ok: bankResponse.ok,
+          bankData: JSON.stringify(bankData, null, 2)
+        })
+        
+        if (bankResponse.ok) {
+          responseData.bank_account = bankData
+          console.log('[RAZORPAY UTIL] Bank account successfully added to Razorpay account')
+        } else {
+          console.warn("[RAZORPAY UTIL] Bank account addition failed:", bankData)
+        }
+      } catch (bankError) {
+        console.warn("[RAZORPAY UTIL] Bank account addition error:", bankError)
       }
+    } else {
+      console.log('[RAZORPAY UTIL] No bank account details provided, skipping bank account addition')
     }
 
-    // Add GSTIN if provided
-    if (gstin) {
-      accountUpdateData.legal_info.gst = gstin
-    }
-
-    console.log(`Updating Razorpay account ${accountId} with data:`, accountUpdateData)
-
-    // Make direct API call to Razorpay
-    const auth = Buffer.from(`${process.env.RAZORPAY_KEY_ID}:${process.env.RAZORPAY_KEY_SECRET}`).toString('base64')
-    
-    const response = await fetch(`https://api.razorpay.com/v2/accounts/${accountId}`, {
-      method: 'PATCH',
-      headers: {
-        'Authorization': `Basic ${auth}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(accountUpdateData)
+    console.log('[RAZORPAY UTIL] Account creation completed successfully:', {
+      accountId: responseData.id,
+      status: responseData.status,
+      type: responseData.type
     })
 
-    const responseData = await response.json()
-
-    if (!response.ok) {
-      return { 
-        success: false, 
-        error: responseData.error?.description || 'Failed to update Razorpay account',
-        errorCode: responseData.error?.code,
-        errorDetails: responseData.error
-      }
+    return {
+      success: true,
+      account: responseData
     }
 
-    return { success: true, account: responseData }
   } catch (error) {
-    console.error("Update route account error:", error)
-    return { success: false, error: error.message }
+    console.error("[RAZORPAY UTIL] Create Razorpay account error:", {
+      error: error.message,
+      stack: error.stack,
+      vendorId: vendorData?.vendorId
+    })
+    return {
+      success: false,
+      error: error.message || "Internal server error"
+    }
   }
 }
 
-const fetchRouteAccount = async (accountId) => {
+/**
+ * Update a Razorpay Route Account
+ * @param {string} accountId - Razorpay account ID
+ * @param {Object} updateData - Data to update
+ * @returns {Promise<Object>} - Update result
+ */
+export async function updateRouteAccount(accountId, updateData) {
   try {
-    console.log(`Fetching Razorpay account details for: ${accountId}`)
-
-    // Make direct API call to Razorpay
-    const auth = Buffer.from(`${process.env.RAZORPAY_KEY_ID}:${process.env.RAZORPAY_KEY_SECRET}`).toString('base64')
-    
     const response = await fetch(`https://api.razorpay.com/v2/accounts/${accountId}`, {
-      method: 'GET',
+      method: "PATCH",
       headers: {
-        'Authorization': `Basic ${auth}`,
-        'Content-Type': 'application/json'
+        "Authorization": `Basic ${Buffer.from(`${process.env.RAZORPAY_KEY_ID}:${process.env.RAZORPAY_KEY_SECRET}`).toString("base64")}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(updateData)
+    })
+
+    const responseData = await response.json()
+
+    if (!response.ok) {
+      return {
+        success: false,
+        error: responseData.error?.description || "Failed to update Razorpay account"
+      }
+    }
+
+    return {
+      success: true,
+      account: responseData
+    }
+
+  } catch (error) {
+    console.error("Update Razorpay account error:", error)
+    return {
+      success: false,
+      error: error.message || "Internal server error"
+    }
+  }
+}
+
+/**
+ * Get Razorpay account details
+ * @param {string} accountId - Razorpay account ID
+ * @returns {Promise<Object>} - Account details
+ */
+export async function getRouteAccount(accountId) {
+  try {
+    const response = await fetch(`https://api.razorpay.com/v2/accounts/${accountId}`, {
+      method: "GET",
+      headers: {
+        "Authorization": `Basic ${Buffer.from(`${process.env.RAZORPAY_KEY_ID}:${process.env.RAZORPAY_KEY_SECRET}`).toString("base64")}`,
+        "Content-Type": "application/json"
       }
     })
 
     const responseData = await response.json()
 
     if (!response.ok) {
-      return { 
-        success: false, 
-        error: responseData.error?.description || 'Failed to fetch Razorpay account',
-        errorCode: responseData.error?.code,
-        errorDetails: responseData.error
+      return {
+        success: false,
+        error: responseData.error?.description || "Failed to fetch Razorpay account"
       }
     }
 
-    return { success: true, account: responseData }
-  } catch (error) {
-    console.error("Fetch route account error:", error)
-    return { success: false, error: error.message }
-  }
-}
+    return {
+      success: true,
+      account: responseData
+    }
 
-module.exports = {
-  razorpay,
-  createOrder,
-  verifyPayment,
-  createFundAccount,
-  createContact,
-  createPayout,
-  createRouteAccount,
-  updateRouteAccount,
-  fetchRouteAccount,
+  } catch (error) {
+    console.error("Get Razorpay account error:", error)
+    return {
+      success: false,
+      error: error.message || "Internal server error"
+    }
+  }
 }

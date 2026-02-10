@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation"
 import { useEffect } from "react"
 import { AdminSidebar } from "@/components/admin/admin-sidebar"
 import { AdminHeader } from "@/components/admin/admin-header"
+import { Spinner } from "@/components/ui/spinner"
 
 export default function AdminLayout({
   children,
@@ -26,7 +27,13 @@ export default function AdminLayout({
   }, [user, loading, courtId, router])
 
   if (loading) {
-    return <div className="flex items-center justify-center min-h-screen">Loading...</div>
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-neutral-950">
+        <div className="flex flex-col items-center gap-4">
+          <Spinner size={48} variant="dark" />
+        </div>
+      </div>
+    )
   }
 
   if (!user || user.role !== "admin") {

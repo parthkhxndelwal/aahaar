@@ -9,13 +9,12 @@ import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Loader2, Phone, Mail, ArrowLeft, Building2 } from "lucide-react"
-import { useAppAuth } from "@/contexts/app-auth-context"
-import { api } from "@/lib/api"
+import { useAuth } from "@/contexts/auth-context"
 
 export default function UserLogin() {
   const params = useParams()
   const router = useRouter()
-  const { login, user, token } = useAppAuth()
+  const { login, user, token } = useAuth()
   const courtId = params.courtId as string
 
   // Get return URL from query parameters
@@ -109,7 +108,13 @@ export default function UserLogin() {
     try {
       console.log("🚀 Sending OTP to:", phone, "for court:", courtId)
       
-      const response = await api.sendOTP(phone, courtId)
+      const response = await fetch("/api/auth/send-otp", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ phone, courtId }),
+      }).then(res => res.json())
 
       console.log("📥 Send OTP response:", response)
 
@@ -143,7 +148,13 @@ export default function UserLogin() {
     try {
       console.log("🚀 Verifying OTP for:", phone, "courtId:", courtId)
       
-      const response = await api.loginWithOTP(phone, otp, courtId)
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ phone, otp, courtId, loginType: "otp" }),
+      }).then(res => res.json())
 
       console.log("📥 OTP Login response:", response)
 
@@ -175,7 +186,13 @@ export default function UserLogin() {
     try {
       console.log("🚀 Email login for:", email, "courtId:", courtId)
       
-      const response = await api.loginWithEmail(email, password, courtId)
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email, password, courtId, loginType: "password" }),
+      }).then(res => res.json())
 
       console.log("📥 Email Login response:", response)
 

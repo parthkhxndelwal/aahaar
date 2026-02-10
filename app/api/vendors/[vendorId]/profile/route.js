@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server"
 import { Vendor, User } from "@/models"
 import { authenticateToken } from "@/middleware/auth"
-import { createFundAccount } from "@/utils/razorpay"
 
 export async function GET(request, { params }) {
   try {
@@ -63,26 +62,7 @@ export async function PATCH(request, { params }) {
       return NextResponse.json({ success: false, message: "Access denied" }, { status: 403 })
     }
 
-    // Handle bank account updates
-    if (updateData.bankAccountNumber || updateData.bankIfscCode || updateData.bankAccountHolderName) {
-      // Create/update Razorpay fund account
-      const fundAccountResult = await createFundAccount({
-        id: vendor.id,
-        vendorName: updateData.vendorName || vendor.vendorName,
-        contactEmail: updateData.contactEmail || vendor.contactEmail,
-        contactPhone: updateData.contactPhone || vendor.contactPhone,
-        bankAccountNumber: updateData.bankAccountNumber,
-        bankIfscCode: updateData.bankIfscCode,
-        bankAccountHolderName: updateData.bankAccountHolderName,
-        courtId: vendor.courtId,
-      })
-
-      if (fundAccountResult.success) {
-        updateData.razorpayFundAccountId = fundAccountResult.fundAccountId
-        updateData.razorpayContactId = fundAccountResult.contactId
-      }
-    }
-
+    // Update vendor profile
     await vendor.update(updateData)
 
     return NextResponse.json({

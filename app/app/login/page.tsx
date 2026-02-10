@@ -12,7 +12,6 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Loader2, Search, MapPin, ArrowRight, Building2, ArrowLeft } from "lucide-react"
-import { api } from "@/lib/api"
 
 interface Court {
   courtId: string
