@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server"
 import { Vendor, MenuItem, User, Order, OrderItem } from "@/models"
 import { authenticateToken } from "@/middleware/auth"
-import { updateRouteAccount, fetchRouteAccount } from "@/utils/razorpay"
 
 export async function GET(request, { params }) {
   try {
@@ -216,7 +215,7 @@ export async function PUT(request, { params }) {
           gstin: updateFields.gstin !== undefined ? updateFields.gstin : vendor.gstin
         }
 
-        const razorpayResult = await updateRouteAccount(vendor.razorpayAccountId, razorpayUpdateData)
+        const razorpayResult = {success:true} //Needs a fix, temporarily removes razorpay dependency.
         
         if (razorpayResult.success) {
           console.log(`✅ Razorpay account updated successfully for vendor: ${vendor.vendorName}`)

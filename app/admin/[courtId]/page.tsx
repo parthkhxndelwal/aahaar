@@ -1,6 +1,6 @@
 "use client"
 import { useEffect, useState, use } from "react"
-import { useAuth } from "@/contexts/auth-context"
+import { useAdminAuth } from "@/contexts/admin-auth-context"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -30,7 +30,7 @@ interface RecentOrder {
 }
 
 export default function AdminDashboard({ params }: { params: Promise<{ courtId: string }> }) {
-  const { user, token } = useAuth()
+  const { user, token } = useAdminAuth()
   const router = useRouter()
   const { courtId } = use(params)
   const [stats, setStats] = useState<DashboardStats | null>(null)
@@ -94,8 +94,6 @@ export default function AdminDashboard({ params }: { params: Promise<{ courtId: 
     switch (status) {
       case "pending":
         return "bg-yellow-100 text-yellow-800"
-      case "confirmed":
-        return "bg-blue-100 text-blue-800"
       case "preparing":
         return "bg-orange-100 text-orange-800"
       case "ready":

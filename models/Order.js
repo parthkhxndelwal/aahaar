@@ -63,7 +63,7 @@ module.exports = (sequelize, DataTypes) => {
         defaultValue: "user_initiated",
       },
       status: {
-        type: DataTypes.ENUM("pending", "confirmed", "preparing", "ready", "completed", "cancelled"),
+        type: DataTypes.ENUM("pending", "accepted", "rejected", "preparing", "ready", "completed", "cancelled"),
         allowNull: false,
         defaultValue: "pending",
       },
@@ -152,9 +152,53 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: false,
         defaultValue: {},
       },
-      confirmedAt: {
+      orderOtp: {
+        type: DataTypes.STRING(4),
+        allowNull: true,
+        comment: 'Shared OTP for the entire order across vendors',
+      },
+      parentOrderId: {
+        type: DataTypes.STRING(36),
+        allowNull: true,
+        comment: 'Groups sub-orders from the same original order',
+      },
+      isSubOrder: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
+        comment: 'Indicates if this is a sub-order split by vendor',
+      },
+      queuePosition: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        comment: 'Position in vendor queue when accepted',
+      },
+      acceptedAt: {
         type: DataTypes.DATE,
         allowNull: true,
+        comment: 'When vendor accepted the order',
+      },
+      rejectedAt: {
+        type: DataTypes.DATE,
+        allowNull: true,
+        comment: 'When vendor rejected the order',
+      },
+      rejectionReason: {
+        type: DataTypes.TEXT,
+        allowNull: true,
+        comment: 'Reason for order rejection',
+      },
+      refundAmount: {
+        type: DataTypes.DECIMAL(10, 2),
+        allowNull: false,
+        defaultValue: 0.00,
+        comment: 'Amount refunded for rejected items',
+      },
+      refundStatus: {
+        type: DataTypes.ENUM('none', 'pending', 'completed'),
+        allowNull: false,
+        defaultValue: 'none',
+        comment: 'Refund status for rejected items',
       },
       preparingAt: {
         type: DataTypes.DATE,

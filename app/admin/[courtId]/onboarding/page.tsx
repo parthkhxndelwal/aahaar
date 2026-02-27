@@ -12,7 +12,7 @@ import { useToast } from "@/hooks/use-toast"
 import { useRouter } from "next/navigation"
 import { Progress } from "@/components/ui/progress"
 import { CheckCircle } from "lucide-react"
-import { useAuth } from "@/contexts/auth-context"
+import { useAdminAuth } from "@/contexts/admin-auth-context"
 
 export default function AdminOnboardingPage({ params }: { params: Promise<{ courtId: string }> }) {
   const { courtId } = use(params)
@@ -20,7 +20,7 @@ export default function AdminOnboardingPage({ params }: { params: Promise<{ cour
   const [loading, setLoading] = useState(false)
   const { toast } = useToast()
   const router = useRouter()
-  const { token } = useAuth()
+  const { token } = useAdminAuth()
 
   const [courtData, setCourtData] = useState({
     instituteName: "",

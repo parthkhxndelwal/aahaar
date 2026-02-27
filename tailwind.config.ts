@@ -67,6 +67,12 @@ const config: Config = {
   			md: 'calc(var(--radius) - 2px)',
   			sm: 'calc(var(--radius) - 4px)'
   		},
+  		spacing: {
+  			'18': '4.5rem', // 72px for the circular logo
+  		},
+  		borderWidth: {
+  			'3': '3px',
+  		},
   		keyframes: {
   			'accordion-down': {
   				from: {
@@ -83,11 +89,20 @@ const config: Config = {
   				to: {
   					height: '0'
   				}
+  			},
+  			'logo-spin': {
+  				'0%': {
+  					transform: 'rotate(0deg)'
+  				},
+  				'100%': {
+  					transform: 'rotate(720deg)' // 720 degrees = 2 full turns
+  				}
   			}
   		},
   		animation: {
   			'accordion-down': 'accordion-down 0.2s ease-out',
-  			'accordion-up': 'accordion-up 0.2s ease-out'
+  			'accordion-up': 'accordion-up 0.2s ease-out',
+  			'logo-spin': 'logo-spin 3s linear infinite'
   		}
   	}
   },

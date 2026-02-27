@@ -4,7 +4,7 @@ import type React from "react"
 import { use } from "react"
 import { useState, useEffect } from "react"
 
-import { useAuth } from "@/contexts/auth-context"
+import { useVendorAuth } from "@/contexts/vendor-auth-context"
 import { useRouter } from "next/navigation"
 import { VendorSidebar } from "@/components/vendor/vendor-sidebar"
 import { VendorHeader } from "@/components/vendor/vendor-header"
@@ -16,7 +16,7 @@ export default function VendorLayout({
   children: React.ReactNode
   params: Promise<{ courtId: string }>
 }) {
-  const { user, loading } = useAuth()
+  const { user, loading } = useVendorAuth()
   const router = useRouter()
   const { courtId } = use(params)
   const [isMobile, setIsMobile] = useState(false)

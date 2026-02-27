@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server"
 import { Vendor, MenuItem, User } from "@/models"
 import { authenticateToken } from "@/middleware/auth"
-import { createRouteAccount } from "@/utils/razorpay"
 import bcrypt from "bcryptjs"
 
 export async function GET(request, { params }) {
@@ -182,7 +181,97 @@ export async function POST(request, { params }) {
       )
     }
 
-    // Create vendor user account first
+    // Create Razorpay Route Account first to ensure payment setup
+    console.log("🚀 Creating Razorpay account before vendor creation...")
+    let razorpayAccountId = null
+
+    try {
+      // Prepare Razorpay account data
+      const razorpayAccountData = {
+        email: email.toLowerCase(),
+        phone,
+        legal_business_name: stallName,
+        contact_name: vendorName,
+        business_type: 'proprietorship',
+        profile: {
+          category: 'food',
+          subcategory: 'restaurant',
+          addresses: {
+            registered: {
+              street1: stallLocation || 'Food Court',
+              city: 'Sohna',
+              state: 'Haryana',
+              postal_code: '122103',
+              country: 'IN'
+            }
+          }
+        },
+        bank_account: accountNumber && ifscCode && accountHolderName ? {
+          account_number: accountNumber,
+          ifsc_code: ifscCode,
+          beneficiary_name: accountHolderName
+        } : undefined,
+        courtId,
+        vendorId: null, // Will be updated after vendor creation
+        tnc_accepted: true
+      }
+
+      // Call the Razorpay API route
+      const razorpayResponse = await fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/razorpay/accounts`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': request.headers.get('Authorization'), // Forward the auth token
+        },
+        body: JSON.stringify(razorpayAccountData)
+      })
+
+      const razorpayResult = await razorpayResponse.json()
+
+      if (!razorpayResponse.ok || !razorpayResult.success) {
+        console.error(`❌ Razorpay account creation failed:`, {
+          status: razorpayResponse.status,
+          error: razorpayResult.error,
+          errorCode: razorpayResult.errorCode,
+          errorDetails: razorpayResult.errorDetails
+        })
+        
+        return NextResponse.json(
+          {
+            success: false,
+            message: `Vendor creation failed: ${razorpayResult.error || 'Unable to create payment account'}`,
+            razorpayError: {
+              message: razorpayResult.error,
+              code: razorpayResult.errorCode,
+              details: razorpayResult.errorDetails
+            }
+          },
+          { status: 400 }
+        )
+      }
+
+      razorpayAccountId = razorpayResult.account.id
+      console.log(`✅ Razorpay account created successfully: ${razorpayAccountId}`)
+      console.log(`Account status: ${razorpayResult.account.status}`)
+      
+    } catch (error) {
+      console.error(`❌ Exception while creating Razorpay account:`, error)
+      return NextResponse.json(
+        {
+          success: false,
+          message: `Vendor creation failed: ${error.message || 'Payment account creation error'}`,
+          razorpayError: {
+            message: error.message,
+            code: 'EXCEPTION_ERROR',
+            details: error.stack
+          }
+        },
+        { status: 500 }
+      )
+    }
+
+    // Only proceed with vendor creation if Razorpay account was created successfully
+    console.log("📝 Creating vendor user account and profile...")
     const hashedPassword = await bcrypt.hash(password, 12)
 
     const user = await User.create({
@@ -197,7 +286,7 @@ export async function POST(request, { params }) {
       phoneVerified: false, // Fixed field name
     })
 
-    // Create vendor profile
+    // Create vendor profile with Razorpay account ID
     const vendor = await Vendor.create({
       userId: user.id,
       courtId,
@@ -216,6 +305,7 @@ export async function POST(request, { params }) {
       bankName,
       panNumber,
       gstin: gstin || null,
+      razorpayAccountId: razorpayAccountId, // Store the Razorpay account ID
       operatingHours: operatingHours || undefined,
       maxOrdersPerHour: maxOrdersPerHour || 10,
       averagePreparationTime: averagePreparationTime || 15,
@@ -224,56 +314,7 @@ export async function POST(request, { params }) {
     })
 
     console.log("📝 Vendor created with status:", vendor.status, "isActive was:", isActive)
-
-    // Create Razorpay Route Account
-    let razorpayAccountId = null
-    let razorpayError = null
-
-    try {      
-      const razorpayResult = await createRouteAccount({
-        email: email.toLowerCase(),
-        phone,
-        vendorName,
-        stallName,
-        courtId,
-        vendorId: vendor.id,
-        panNumber,
-        gstin
-      })
-
-      if (razorpayResult.success) {
-        razorpayAccountId = razorpayResult.account.id
-        
-        // Update vendor with Razorpay account ID
-        await vendor.update({
-          razorpayAccountId: razorpayAccountId
-        })
-        
-        console.log(`✅ Razorpay account created for vendor ${vendor.id}: ${razorpayAccountId}`)
-        console.log(`Account status: ${razorpayResult.account.status}`)
-      } else {
-        console.error(`❌ Failed to create Razorpay account for vendor ${vendor.id}:`, {
-          error: razorpayResult.error,
-          errorCode: razorpayResult.errorCode,
-          errorDetails: razorpayResult.errorDetails
-        })
-        razorpayError = {
-          message: razorpayResult.error,
-          code: razorpayResult.errorCode,
-          details: razorpayResult.errorDetails
-        }
-        
-        // Log the error but don't fail vendor creation
-        // This allows manual retry later or alternative payment setup
-      }
-    } catch (error) {
-      console.error(`❌ Exception while creating Razorpay account for vendor ${vendor.id}:`, error)
-      razorpayError = {
-        message: error.message,
-        code: 'EXCEPTION_ERROR',
-        details: error.stack
-      }
-    }
+    console.log("💳 Vendor linked to Razorpay account:", razorpayAccountId)
 
     // TODO: Send invitation email to vendor
     const responseData = {
@@ -285,30 +326,18 @@ export async function POST(request, { params }) {
         id: user.id, 
         email: user.email, 
         fullName: user.fullName 
-      }
+      },
+      razorpaySuccess: true,
+      razorpayAccountId: razorpayAccountId
     }
-
-    // Include Razorpay information in response
-    if (razorpayError) {
-      responseData.razorpayError = razorpayError
-      responseData.razorpayWarning = "Vendor created successfully but Razorpay account creation failed. Please create manually or retry later."
-    } else if (razorpayAccountId) {
-      responseData.razorpaySuccess = true
-      responseData.razorpayAccountId = razorpayAccountId
-    }
-
-    const statusCode = 201
-    const message = razorpayError 
-      ? "Vendor created successfully but with Razorpay account creation error" 
-      : "Vendor and Razorpay account created successfully"
 
     return NextResponse.json(
       {
         success: true,
-        message,
+        message: "Vendor and Razorpay account created successfully",
         data: responseData,
       },
-      { status: statusCode },
+      { status: 201 },
     )
   } catch (error) {
     console.error("Create vendor error:", error)

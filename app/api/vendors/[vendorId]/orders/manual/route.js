@@ -59,11 +59,11 @@ export async function POST(request, { params }) {
       subtotal,
       totalAmount,
       estimatedPreparationTime: vendor.averagePreparationTime,
-      status: paymentMethod === "cod" ? "confirmed" : "pending",
+      status: paymentMethod === "cod" ? "preparing" : "pending",
       paymentStatus: paymentMethod === "cod" ? "pending" : "pending",
       statusHistory: [
         {
-          status: paymentMethod === "cod" ? "confirmed" : "pending",
+          status: paymentMethod === "cod" ? "preparing" : "pending",
           timestamp: new Date(),
           note: "Manual order created by vendor",
         },

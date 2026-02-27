@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, use } from "react"
-import { useAuth } from "@/contexts/auth-context"
+import { useVendorAuth } from "@/contexts/vendor-auth-context"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -44,7 +44,7 @@ interface InventoryStats {
 }
 
 export default function VendorInventory({ params }: { params: Promise<{ courtId: string }> }) {
-  const { user, token } = useAuth()
+  const { user, token } = useVendorAuth()
   const router = useRouter()
   const { toast } = useToast()
   const { courtId } = use(params)
@@ -260,8 +260,8 @@ export default function VendorInventory({ params }: { params: Promise<{ courtId:
     // Set new timer
     const timer = setTimeout(() => {
       handleStockUpdate(itemId, newQuantity)
-    }, 3000) // 3 seconds delay
-    
+    }, 1000) // 1.5 seconds delay
+
     setUpdateTimers(prev => ({ ...prev, [itemId]: timer }))
   }
 
@@ -542,7 +542,7 @@ export default function VendorInventory({ params }: { params: Promise<{ courtId:
             <TrendingUp className="h-4 w-4 text-blue-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-blue-600">₹{stats.totalStockValue.toFixed(2)}</div>
+            <div className="text-2xl font-bold text-blue-600">₹{Number(stats.totalStockValue || 0).toFixed(2)}</div>
           </CardContent>
         </Card>
       </div>

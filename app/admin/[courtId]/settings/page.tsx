@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { useToast } from "@/hooks/use-toast"
 import { Settings, Clock, CreditCard, Users, Shield, Upload, Building, Mail, Phone } from "lucide-react"
-import { useAuth } from "@/contexts/auth-context"
+import { useAdminAuth } from "@/contexts/admin-auth-context"
 
 interface CourtSettings {
   // General Settings
@@ -96,7 +96,7 @@ export default function AdminSettingsPage({ params }: { params: Promise<{ courtI
   const [uploading, setUploading] = useState(false)
   const [showLogoPreview, setShowLogoPreview] = useState(false)
   const { toast } = useToast()
-  const { token } = useAuth()
+  const { token } = useAdminAuth()
   const { courtId } = use(params)
 
   useEffect(() => {

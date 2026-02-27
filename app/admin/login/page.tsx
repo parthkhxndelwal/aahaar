@@ -8,8 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
-import { useAuth } from "@/contexts/auth-context"
-import { api } from "@/lib/api"
+import { useAdminAuth } from "@/contexts/admin-auth-context"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 
@@ -21,7 +20,7 @@ export default function AdminLoginPage() {
   })
   const [loading, setLoading] = useState(false)
   const { toast } = useToast()
-  const { login } = useAuth()
+  const { login } = useAdminAuth()
   const router = useRouter()
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -29,8 +28,17 @@ export default function AdminLoginPage() {
     setLoading(true)
 
     try {
-      // Call the API login endpoint
-      const response = await api.login(formData.email, formData.password, formData.courtId)
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        body: JSON.stringify({
+          email: formData.email,
+          password: formData.password,
+          courtId: formData.courtId,
+        }),
+        headers: {
+          "Content-Type": "application/json",
+        },
+      }).then(res => res.json())
       
       if (response.success) {
         // Extract token and user data from response
@@ -69,13 +77,7 @@ export default function AdminLoginPage() {
         </CardHeader>
         <CardContent>
           {/* Demo credentials info */}
-          <div className="mb-4 p-3 bg-neutral-800 border border-blue-200 rounded-md">
-            <p className="text-sm font-medium text-neutral-200 mb-1">Demo Credentials:</p>
-            <p className="text-xs text-neutral-400">Court ID: democourt</p>
-            <p className="text-xs text-neutral-400">Email: admin@democourt.com</p>
-            <p className="text-xs text-neutral-400">Password: admin123</p>
-          </div>
-          
+
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <Label htmlFor="courtId">Court ID</Label>
@@ -83,7 +85,7 @@ export default function AdminLoginPage() {
                 id="courtId"
                 type="text"
                 required
-                placeholder="democourt"
+                // placeholder="example-id"
                 value={formData.courtId}
                 onChange={(e) => setFormData((prev) => ({ ...prev, courtId: e.target.value }))}
               />
@@ -95,7 +97,7 @@ export default function AdminLoginPage() {
                 id="email"
                 type="email"
                 required
-                placeholder="admin@democourt.com"
+                // placeholder="admin@example.com"
                 value={formData.email}
                 onChange={(e) => setFormData((prev) => ({ ...prev, email: e.target.value }))}
               />
@@ -107,7 +109,7 @@ export default function AdminLoginPage() {
                 id="password"
                 type="password"
                 required
-                placeholder="admin123"
+                // placeholder="******"
                 value={formData.password}
                 onChange={(e) => setFormData((prev) => ({ ...prev, password: e.target.value }))}
               />

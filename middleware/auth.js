@@ -73,4 +73,32 @@ const authenticateToken = async (request) => {
   }
 }
 
-module.exports = { authenticateToken }
+// Wrapper function that provides error/success object instead of NextResponse
+const authenticateTokenNextJS = async (request) => {
+  try {
+    const result = await authenticateToken(request)
+    
+    // If result is a NextResponse (error case), extract error info
+    if (result instanceof NextResponse) {
+      const errorData = await result.json()
+      return {
+        error: errorData.message,
+        status: result.status
+      }
+    }
+    
+    // Success case - return user data
+    return {
+      user: result.user,
+      courtId: result.courtId
+    }
+  } catch (error) {
+    console.error("Auth wrapper error:", error)
+    return {
+      error: "Authentication error",
+      status: 500
+    }
+  }
+}
+
+module.exports = { authenticateToken, authenticateTokenNextJS }

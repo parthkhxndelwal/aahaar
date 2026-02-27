@@ -13,10 +13,24 @@ export async function POST(request) {
         return NextResponse.json({ success: false, message: "Phone, OTP, and court ID are required" }, { status: 400 })
       }
 
+      console.log("🔐 OTP Login attempt:", { phone, otp, courtId, isDevelopment: process.env.NODE_ENV === "development" })
+
       // TODO: Verify OTP from Redis/cache
-      // For demo purposes, accept "123456" as valid OTP
-      if (otp !== "123456") {
-        return NextResponse.json({ success: false, message: "Invalid OTP" }, { status: 401 })
+      // For demo purposes, accept any 6-digit OTP in development
+      if (process.env.NODE_ENV === "development") {
+        // In development, accept any 6-digit number as valid OTP
+        if (!/^\d{6}$/.test(otp)) {
+          console.log("❌ Invalid OTP format:", otp)
+          return NextResponse.json({ success: false, message: "Invalid OTP format" }, { status: 401 })
+        }
+        console.log("✅ OTP format valid in development mode")
+      } else {
+        // In production, you should verify against stored OTP
+        if (otp !== "123456") {
+          console.log("❌ Invalid OTP in production:", otp)
+          return NextResponse.json({ success: false, message: "Invalid OTP" }, { status: 401 })
+        }
+        console.log("✅ OTP valid in production mode")
       }
 
       // Find or create user with phone

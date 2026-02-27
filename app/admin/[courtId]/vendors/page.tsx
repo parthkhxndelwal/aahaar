@@ -1,19 +1,17 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { use } from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { useParams, useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { useToast } from "@/hooks/use-toast"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { Plus, Search, MoreVertical, Edit, Trash2, Eye, Copy } from "lucide-react"
-import Link from "next/link"
-import { useAuth } from "@/contexts/auth-context"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Plus, Search, Store, Phone, Mail, MapPin, Star, CheckCircle, Edit, Eye } from "lucide-react"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Spinner } from "@/components/ui/spinner"
+import Image from "next/image"
+import { motion, AnimatePresence } from "framer-motion"
 
 interface Vendor {
   id: string
@@ -21,340 +19,425 @@ interface Vendor {
   vendorName: string
   contactEmail: string
   contactPhone: string
-  status: string
+  stallLocation?: string
+  cuisineType?: string
+  status: "active" | "inactive" | "maintenance" | "suspended"
   isOnline: boolean
+  rating: number
+  totalRatings: number
   logoUrl?: string
-  bannerUrl?: string
-  rating?: number
-  totalRatings?: number
+  razorpayAccountId?: string
   userId?: string
+  operatingHours?: any
+  bankAccountNumber?: string
+  bankIfscCode?: string
+  bankAccountHolderName?: string
+  bankName?: string
+  panNumber?: string
+  gstin?: string
+  maxOrdersPerHour?: number
+  averagePreparationTime?: number
+  metadata?: {
+    businessType?: string
+    stakeholder?: {
+      name: string
+      pan: string
+    }
+  }
+  createdAt: string
+  updatedAt: string
 }
 
-export default function AdminVendorsPage({ params }: { params: Promise<{ courtId: string }> }) {
+interface VendorsListResponse {
+  vendors: Vendor[]
+  pagination: {
+    currentPage: number
+    totalPages: number
+    totalItems: number
+    hasNext: boolean
+    hasPrev: boolean
+  }
+}
+
+export default function VendorsPage() {
+  const params = useParams()
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const courtId = params.courtId as string
+
   const [vendors, setVendors] = useState<Vendor[]>([])
   const [loading, setLoading] = useState(true)
-  const [searchQuery, setSearchQuery] = useState("")
-  const [deletingVendor, setDeletingVendor] = useState<string | null>(null)
-  const [selectedVendorCredentials, setSelectedVendorCredentials] = useState<Vendor | null>(null)
-  const { toast } = useToast()
-  const { token } = useAuth()
-  const { courtId } = use(params)
+  const [buttonLoading, setButtonLoading] = useState<string | null>(null)
+  const [searchTerm, setSearchTerm] = useState("")
+  const [statusFilter, setStatusFilter] = useState<string>("all")
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pagination, setPagination] = useState({
+    totalPages: 1,
+    totalItems: 0,
+    hasNext: false,
+    hasPrev: false,
+  })
+
+  // Check for success message from onboarding
+  const successMessage = searchParams.get("success")
+  const newVendorId = searchParams.get("vendorId")
 
   useEffect(() => {
     fetchVendors()
-  }, [])
+  }, [courtId, currentPage, statusFilter])
+
+  // Show success message if vendor was just created
+  useEffect(() => {
+    if (successMessage && newVendorId) {
+      // You can add a toast notification here if you have one
+      console.log("Vendor created successfully:", newVendorId)
+    }
+  }, [successMessage, newVendorId])
 
   const fetchVendors = async () => {
     try {
-      const response = await fetch(`/api/courts/${courtId}/vendors`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+      setLoading(true)
+      const params = new URLSearchParams({
+        courtId,
+        page: currentPage.toString(),
+        limit: "10",
       })
+
+      if (statusFilter && statusFilter !== "all") {
+        params.append("status", statusFilter)
+      }
+
+      const response = await fetch(`/api/admin/vendors?${params}`)
       const result = await response.json()
 
       if (result.success) {
-        console.log("🔍 Fetched vendors:", result.data.vendors.map((v: Vendor) => ({ name: v.stallName, status: v.status })))
         setVendors(result.data.vendors)
-      } else {
-        throw new Error(result.message)
+        setPagination(result.data.pagination)
       }
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: "Failed to load vendors",
-        variant: "destructive",
-      })
+    } catch (error) {
+      console.error("Failed to fetch vendors:", error)
     } finally {
       setLoading(false)
     }
   }
 
-  const handleDeleteVendor = async (vendorId: string) => {
-    try {
-      setDeletingVendor(vendorId)
-      const response = await fetch(`/api/courts/${courtId}/vendors/${vendorId}`, {
-        method: 'DELETE',
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
-      const result = await response.json()
-
-      if (result.success) {
-        toast({
-          title: "Success",
-          description: "Vendor deleted permanently",
-        })
-        // Refresh the vendors list
-        fetchVendors()
-      } else {
-        throw new Error(result.message)
-      }
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: "Failed to delete vendor",
-        variant: "destructive",
-      })
-    } finally {
-      setDeletingVendor(null)
-    }
-  }
-
-  const copyCredentialsToClipboard = async (vendor: Vendor) => {
-    const credentials = `Login Credentials for ${vendor.stallName}
-
-Email: ${vendor.contactEmail}
-Stall Name: ${vendor.stallName}
-Vendor Name: ${vendor.vendorName}
-
-Dashboard URL: ${window.location.origin}/vendor/${courtId}/login
-
-Please use your email to login. If you need to reset your password, use the "Forgot Password" option on the login page.`
-
-    try {
-      await navigator.clipboard.writeText(credentials)
-      toast({
-        title: "Copied!",
-        description: "Vendor credentials copied to clipboard",
-      })
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to copy credentials",
-        variant: "destructive",
-      })
-    }
-  }
-
-  const filteredVendors = vendors.filter(
-    (vendor) =>
-      vendor.stallName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      vendor.vendorName.toLowerCase().includes(searchQuery.toLowerCase()),
+  const filteredVendors = vendors.filter((vendor) =>
+    vendor.stallName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    vendor.vendorName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    vendor.contactEmail.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
-  if (loading) {
-    return <div className="flex items-center justify-center h-64">Loading vendors...</div>
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "active":
+        return "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
+      case "inactive":
+        return "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200"
+      case "maintenance":
+        return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200"
+      case "suspended":
+        return "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
+      default:
+        return "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200"
+    }
+  }
+
+  const VendorCard = ({ vendor }: { vendor: Vendor }) => {
+    const viewButtonId = `view-${vendor.id}`
+    const editButtonId = `edit-${vendor.id}`
+    
+    return (
+      <Card className="hover:shadow-md transition-all duration-300 dark:bg-neutral-900 dark:border-neutral-800 hover:shadow-neutral-900/20">
+        <CardHeader className="pb-3">
+          <div className="flex items-start justify-between">
+            <div className="flex items-center gap-3">
+              {vendor.logoUrl ? (
+                <Image
+                  src={vendor.logoUrl}
+                  alt={vendor.stallName}
+                  width={48}
+                  height={48}
+                  className="rounded-lg object-cover"
+                />
+              ) : (
+                <div className="w-12 h-12 bg-neutral-200 dark:bg-neutral-700 rounded-lg flex items-center justify-center">
+                  <Store className="h-6 w-6 text-muted-foreground" />
+                </div>
+              )}
+              <div>
+                <CardTitle className="text-lg dark:text-white">{vendor.stallName}</CardTitle>
+                <CardDescription className="dark:text-neutral-400">{vendor.vendorName}</CardDescription>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Badge className={getStatusColor(vendor.status)}>
+                {vendor.status}
+              </Badge>
+              {vendor.isOnline && (
+                <Badge variant="outline" className="bg-green-50 text-green-700 dark:bg-green-900 dark:text-green-200">
+                  Online
+                </Badge>
+              )}
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+            <div className="flex items-center gap-2">
+              <Mail className="h-4 w-4 text-muted-foreground" />
+              <span className="truncate dark:text-neutral-300">{vendor.contactEmail}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Phone className="h-4 w-4 text-muted-foreground" />
+              <span className="dark:text-neutral-300">{vendor.contactPhone}</span>
+            </div>
+            {vendor.stallLocation && (
+              <div className="flex items-center gap-2">
+                <MapPin className="h-4 w-4 text-muted-foreground" />
+                <span className="truncate dark:text-neutral-300">{vendor.stallLocation}</span>
+              </div>
+            )}
+            {vendor.cuisineType && (
+              <div className="flex items-center gap-2">
+                <Store className="h-4 w-4 text-muted-foreground" />
+                <span className="dark:text-neutral-300">{vendor.cuisineType}</span>
+              </div>
+            )}
+          </div>
+
+          {vendor.totalRatings > 0 && (
+            <div className="flex items-center gap-2">
+              <Star className="h-4 w-4 text-yellow-500 fill-current" />
+              <span className="text-sm dark:text-neutral-300">
+                {vendor.rating.toFixed(1)} ({vendor.totalRatings} reviews)
+              </span>
+            </div>
+          )}
+
+          <div className="flex items-center justify-end pt-2 border-t dark:border-neutral-700">
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={buttonLoading === viewButtonId}
+                onClick={() => {
+                  setButtonLoading(viewButtonId)
+                  router.push(`/admin/${courtId}/vendors/${vendor.id}`)
+                }}
+                className="gap-2 dark:border-neutral-600 dark:text-neutral-300 dark:hover:bg-neutral-800"
+              >
+                {buttonLoading === viewButtonId ? (
+                  <Spinner size={16} variant="dark" />
+                ) : (
+                  <Eye className="h-4 w-4" />
+                )}
+                View
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={buttonLoading === editButtonId}
+                onClick={() => {
+                  setButtonLoading(editButtonId)
+                  router.push(`/admin/${courtId}/vendors/${vendor.id}/edit`)
+                }}
+                className="gap-2 dark:border-neutral-600 dark:text-neutral-300 dark:hover:bg-neutral-800"
+              >
+                {buttonLoading === editButtonId ? (
+                  <Spinner size={16} variant="dark" />
+                ) : (
+                  <Edit className="h-4 w-4" />
+                )}
+                Edit
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    )
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold text-neutral-100">Vendors</h1>
-        <Button asChild>
-          <Link href={`/admin/${courtId}/vendors/add`}>
-            <Plus className="h-4 w-4 mr-2" />
-            Add Vendor
-          </Link>
+    <motion.div 
+      className="space-y-6"
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5 }}
+    >
+      {/* Success Alert */}
+      <AnimatePresence>
+        {successMessage && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.3 }}
+          >
+            <Alert className="border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950">
+              <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
+              <AlertDescription className="text-green-800 dark:text-green-200">
+                <strong>Success!</strong> Vendor has been created and configured successfully.
+              </AlertDescription>
+            </Alert>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Header */}
+      <motion.div 
+        className="flex items-center justify-between"
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, delay: 0.1 }}
+      >
+        <div>
+          <h1 className="text-3xl font-bold dark:text-neutral-200">Vendors</h1>
+          <p className="text-muted-foreground dark:text-neutral-400">
+            Manage vendors and their configuration
+          </p>
+        </div>
+        <Button
+          disabled={buttonLoading === 'create-vendor'}
+          onClick={() => {
+            setButtonLoading('create-vendor')
+            router.push(`/admin/${courtId}/vendors/onboard`)
+          }}
+          className="gap-2 bg-neutral-100 hover:bg-neutral-700 text-black hover:text-white"
+        >
+          {buttonLoading === 'create-vendor' ? (
+            <Spinner size={16} variant="white" />
+          ) : (
+            <Plus className="h-4 w-4" />
+          )}
+          Create New Vendor
         </Button>
-      </div>
+      </motion.div>
 
-      {/* Search */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-neutral-400 h-4 w-4" />
-        <Input
-          placeholder="Search vendors..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="pl-10"
-        />
-      </div>
+      {/* Filters and Search */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, delay: 0.2 }}
+      >
+        <Card className="dark:bg-neutral-900 dark:border-neutral-800">
+        <CardContent className="pt-6">
+          <div className="flex flex-col md:flex-row gap-4">
+            <div className="relative flex-1">
+              <Search className="h-4 w-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Search vendors by name, email, or stall name..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10 dark:bg-neutral-800 dark:border-neutral-700 dark:text-white"
+              />
+            </div>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-full md:w-48 dark:bg-neutral-800 dark:border-neutral-700 dark:text-white">
+                <SelectValue placeholder="Filter by status" />
+              </SelectTrigger>
+              <SelectContent className="dark:bg-neutral-800 dark:border-neutral-700">
+                <SelectItem value="all" className="dark:text-white dark:hover:bg-neutral-700">All Statuses</SelectItem>
+                <SelectItem value="active" className="dark:text-white dark:hover:bg-neutral-700">Active</SelectItem>
+                <SelectItem value="inactive" className="dark:text-white dark:hover:bg-neutral-700">Inactive</SelectItem>
+                <SelectItem value="maintenance" className="dark:text-white dark:hover:bg-neutral-700">Maintenance</SelectItem>
+                <SelectItem value="suspended" className="dark:text-white dark:hover:bg-neutral-700">Suspended</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </CardContent>
+      </Card>
+      </motion.div>
 
-      {/* Vendors Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredVendors.map((vendor) => (
-          <Card key={vendor.id} className="hover:shadow-lg transition-shadow duration-200">
-            <CardHeader>
-              <div className="flex items-start justify-between">
-                <Link href={`/admin/${courtId}/vendors/${vendor.id}?mode=view`} className="flex items-center space-x-3 flex-1">
-                  {/* Logo */}
-                  <div className="w-12 h-12 rounded-lg bg-neutral-100 flex items-center justify-center overflow-hidden">
-                    {vendor.logoUrl ? (
-                      <img
-                        src={vendor.logoUrl}
-                        alt={`${vendor.stallName} logo`}
-                        className="w-full h-full object-cover"
-                        onError={(e) => {
-                          const target = e.currentTarget as HTMLImageElement
-                          const fallback = target.nextElementSibling as HTMLElement
-                          target.style.display = 'none'
-                          if (fallback) {
-                            fallback.style.display = 'flex'
-                          }
-                        }}
-                      />
-                    ) : null}
-                    <div 
-                      className={`w-full h-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-semibold text-sm ${vendor.logoUrl ? 'hidden' : 'flex'}`}
-                    >
-                      {vendor.stallName.charAt(0).toUpperCase()}
-                    </div>
-                  </div>
-                  
-                  {/* Vendor Info */}
-                  <div>
-                    <CardTitle className="text-lg">{vendor.stallName}</CardTitle>
-                    <CardDescription>{vendor.vendorName}</CardDescription>
-                  </div>
-                </Link>
-                
-                {/* Status and Actions */}
-                <div className="flex items-center space-x-2">
-                  <Badge variant={vendor.status === "active" ? "default" : "secondary"}>{vendor.status}</Badge>
-                  {vendor.isOnline && <div className="w-2 h-2 bg-green-500 rounded-full" />}
-                  
-                  {/* 3-dot menu */}
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" className="h-8 w-8 p-0">
-                        <span className="sr-only">Open menu</span>
-                        <MoreVertical className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <Dialog>
-                        <DialogTrigger asChild>
-                          <DropdownMenuItem onSelect={(e) => {
-                            e.preventDefault()
-                            setSelectedVendorCredentials(vendor)
-                          }}>
-                            <Eye className="mr-2 h-4 w-4" />
-                            View Credentials
-                          </DropdownMenuItem>
-                        </DialogTrigger>
-                        <DialogContent className="sm:max-w-md">
-                          <DialogHeader>
-                            <DialogTitle>Vendor Login Credentials</DialogTitle>
-                            <DialogDescription>
-                              Share these credentials with the vendor so they can access their dashboard.
-                            </DialogDescription>
-                          </DialogHeader>
-                          {selectedVendorCredentials && (
-                            <div className="space-y-4">
-                              <div className="bg-neutral-50 rounded-lg p-4 space-y-3">
-                                <div>
-                                  <Label className="text-sm font-medium text-neutral-700">Stall Name</Label>
-                                  <p className="text-sm font-mono bg-white px-2 py-1 rounded border">
-                                    {selectedVendorCredentials.stallName}
-                                  </p>
-                                </div>
-                                <div>
-                                  <Label className="text-sm font-medium text-neutral-700">Login Email</Label>
-                                  <p className="text-sm font-mono bg-white px-2 py-1 rounded border">
-                                    {selectedVendorCredentials.contactEmail}
-                                  </p>
-                                </div>
-                                <div>
-                                  <Label className="text-sm font-medium text-neutral-700">Vendor Name</Label>
-                                  <p className="text-sm font-mono bg-white px-2 py-1 rounded border">
-                                    {selectedVendorCredentials.vendorName}
-                                  </p>
-                                </div>
-                                <div>
-                                  <Label className="text-sm font-medium text-neutral-700">Dashboard URL</Label>
-                                  <p className="text-sm font-mono bg-white px-2 py-1 rounded border break-all">
-                                    {typeof window !== 'undefined' ? `${window.location.origin}/vendor/${courtId}/login` : ''}
-                                  </p>
-                                </div>
-                              </div>
-                              <div className="bg-blue-50 rounded-lg p-4">
-                                <p className="text-sm text-blue-800">
-                                  <strong>Note:</strong> The vendor should use their email address to login. 
-                                  If they need to reset their password, they can use the "Forgot Password" option on the login page.
-                                </p>
-                              </div>
-                              <div className="flex justify-end space-x-2">
-                                <Button 
-                                  variant="outline" 
-                                  onClick={() => copyCredentialsToClipboard(selectedVendorCredentials)}
-                                >
-                                  <Copy className="mr-2 h-4 w-4" />
-                                  Copy All
-                                </Button>
-                              </div>
-                            </div>
-                          )}
-                        </DialogContent>
-                      </Dialog>
-                      <DropdownMenuItem onClick={(e) => e.stopPropagation()}>
-                        <Link 
-                          href={`/admin/${courtId}/vendors/${vendor.id}?mode=edit`}
-                          className="flex items-center w-full"
-                        >
-                          <Edit className="mr-2 h-4 w-4" />
-                          Edit
-                        </Link>
-                      </DropdownMenuItem>
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <DropdownMenuItem 
-                            onSelect={(e) => e.preventDefault()}
-                            className="text-red-600 focus:text-red-600"
-                          >
-                            <Trash2 className="mr-2 h-4 w-4" />
-                            Delete
-                          </DropdownMenuItem>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Delete Vendor Permanently</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              Are you sure you want to permanently delete "{vendor.stallName}"? This action cannot be undone and will remove all vendor data including orders and menu items.
-                              <br /><br />
-                              <strong>Note:</strong> If you want to temporarily disable the vendor instead, you can suspend them from the edit page.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction
-                              onClick={() => handleDeleteVendor(vendor.id)}
-                              disabled={deletingVendor === vendor.id}
-                              className="bg-red-600 hover:bg-red-700"
-                            >
-                              {deletingVendor === vendor.id ? "Deleting..." : "Delete Permanently"}
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
+      {/* Vendors List */}
+      <motion.div 
+        className="space-y-4"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.6, delay: 0.3 }}
+      >
+        {loading ? (
+          <motion.div 
+            className="flex items-center justify-center py-12"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.3 }}
+          >
+            <div className="text-center">
+              <Spinner size={32} variant="white" className="mx-auto mb-4" />
+              <p className="text-muted-foreground dark:text-neutral-400">Loading vendors...</p>
+            </div>
+          </motion.div>
+        ) : filteredVendors.length === 0 ? (
+          <Card className="dark:bg-neutral-900 dark:border-neutral-800">
+            <CardContent className="py-12">
+              <div className="text-center">
+                <Store className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                <h3 className="text-lg font-semibold mb-2 dark:text-white">No vendors found</h3>
+                <p className="text-muted-foreground dark:text-neutral-400 mb-4">
+                  {searchTerm || (statusFilter !== "all")
+                    ? "No vendors match your current filters."
+                    : "Get started by creating your first vendor."}
+                </p>
+                <Button
+                  disabled={buttonLoading === 'create-first-vendor'}
+                  onClick={() => {
+                    setButtonLoading('create-first-vendor')
+                    router.push(`/admin/${courtId}/vendors/onboard`)
+                  }}
+                  className="gap-2 bg-blue-600 hover:bg-blue-700 text-white"
+                >
+                  {buttonLoading === 'create-first-vendor' ? (
+                    <Spinner size={16} variant="white" />
+                  ) : (
+                    <Plus className="h-4 w-4" />
+                  )}
+                  Create First Vendor
+                </Button>
               </div>
-            </CardHeader>
-            <Link href={`/admin/${courtId}/vendors/${vendor.id}?mode=view`}>
-              <CardContent>
-                <div className="space-y-2">
-                  <p className="text-sm text-neutral-400">
-                    <strong>Email:</strong> {vendor.contactEmail}
-                  </p>
-                  <p className="text-sm text-neutral-400">
-                    <strong>Phone:</strong> {vendor.contactPhone}
-                  </p>
-                  <p className="text-sm text-neutral-400">
-                    <strong>Rating:</strong> {
-                      typeof vendor.rating === 'number' && !isNaN(vendor.rating) 
-                        ? vendor.rating.toFixed(1) 
-                        : '0.0'
-                    } ({vendor.totalRatings || 0} reviews)
-                  </p>
-                </div>
-              </CardContent>
-            </Link>
+            </CardContent>
           </Card>
-        ))}
-      </div>
+        ) : (
+          <div className="grid gap-4">
+            {filteredVendors.map((vendor, index) => (
+              <motion.div
+                key={vendor.id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4, delay: 0.4 + index * 0.1 }}
+              >
+                <VendorCard vendor={vendor} />
+              </motion.div>
+            ))}
+          </div>
+        )}
+      </motion.div>
 
-      {filteredVendors.length === 0 && (
-        <Card>
-          <CardContent className="text-center py-12">
-            <p className="text-neutral-500 mb-4">No vendors found</p>
-            <Button asChild>
-              <Link href={`/admin/${courtId}/vendors/add`}>Add First Vendor</Link>
+      {/* Pagination */}
+      {pagination.totalPages > 1 && (
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-muted-foreground dark:text-neutral-400">
+            Showing {filteredVendors.length} of {pagination.totalItems} vendors
+          </p>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setCurrentPage(currentPage - 1)}
+              disabled={!pagination.hasPrev}
+              className="dark:border-neutral-600 dark:text-neutral-300 dark:hover:bg-neutral-800"
+            >
+              Previous
             </Button>
-          </CardContent>
-        </Card>
+            <Button
+              variant="outline"
+              onClick={() => setCurrentPage(currentPage + 1)}
+              disabled={!pagination.hasNext}
+              className="dark:border-neutral-600 dark:text-neutral-300 dark:hover:bg-neutral-800"
+            >
+              Next
+            </Button>
+          </div>
+        </div>
       )}
-    </div>
+    </motion.div>
   )
 }

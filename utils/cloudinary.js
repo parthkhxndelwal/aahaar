@@ -80,6 +80,11 @@ const transformationPresets = {
     { quality: "auto" },
     { fetch_format: "auto" }
   ],
+  profile: [
+    { width: 200, height: 200, crop: "fill", gravity: "face" },
+    { quality: "auto" },
+    { fetch_format: "auto" }
+  ],
   logo: [
     { width: 300, height: 300, crop: "fit", background: "transparent" },
     { quality: "auto" },

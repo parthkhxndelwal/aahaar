@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useToast } from "@/hooks/use-toast"
 import { BarChart3, TrendingUp, TrendingDown, DollarSign, ShoppingCart, Users, Store } from "lucide-react"
-import { useAuth } from "@/contexts/auth-context"
+import { useAdminAuth } from "@/contexts/admin-auth-context"
 
 interface AnalyticsData {
   summary: {
@@ -34,7 +34,7 @@ export default function AdminAnalyticsPage({ params }: { params: Promise<{ court
   const [loading, setLoading] = useState(true)
   const [period, setPeriod] = useState("7d")
   const { toast } = useToast()
-  const { token } = useAuth()
+  const { token } = useAdminAuth()
   const { courtId } = use(params)
 
   useEffect(() => {

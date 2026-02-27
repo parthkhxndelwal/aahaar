@@ -1,10 +1,10 @@
 "use client"
 
 import { use } from "react"
-import { useAuth } from "@/contexts/auth-context"
+import { useVendorAuth } from "@/contexts/vendor-auth-context"
 
 export default function QuickOrder({ params }: { params: Promise<{ courtId: string }> }) {
-  const { user } = useAuth()
+  const { user } = useVendorAuth()
   const { courtId } = use(params)
 
   return (

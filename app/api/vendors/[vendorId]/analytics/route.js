@@ -56,7 +56,7 @@ export async function GET(request, { params }) {
       where: {
         vendorId,
         status: {
-          [Op.in]: ["pending", "confirmed", "preparing"],
+          [Op.in]: ["pending", "preparing"],
         },
       },
     })

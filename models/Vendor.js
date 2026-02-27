@@ -34,7 +34,14 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.STRING,
         allowNull: true,
         validate: {
-          len: [2, 200],
+          customStallLocation(value) {
+            // Allow null or empty string, but validate length if provided
+            if (value && value.trim() !== "") {
+              if (value.length < 2 || value.length > 200) {
+                throw new Error("Stall location must be between 2 and 200 characters");
+              }
+            }
+          },
         },
       },
       vendorName: {
@@ -165,7 +172,14 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.STRING,
         allowNull: false,
         validate: {
-          is: /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/,
+          customPan(value) {
+            // Allow empty string during onboarding, but validate format if provided
+            if (value && value.trim() !== "") {
+              if (!/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(value)) {
+                throw new Error("Invalid PAN format. Expected format: AAAAA9999A");
+              }
+            }
+          },
         },
         comment: "PAN number for tax compliance",
       },
@@ -173,7 +187,13 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.STRING,
         allowNull: true,
         validate: {
-          is: /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/,
+          customGstin(value) {
+            if (value && value.trim() !== "") {
+              if (!/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/.test(value)) {
+                throw new Error("Invalid GSTIN format");
+              }
+            }
+          },
         },
         comment: "GSTIN number for GST compliance (optional)",
       },
@@ -200,6 +220,28 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.JSON,
         allowNull: false,
         defaultValue: {},
+      },
+      // Onboarding tracking fields
+      onboardingStatus: {
+        type: DataTypes.ENUM("not_started", "in_progress", "completed", "suspended"),
+        allowNull: false,
+        defaultValue: "not_started",
+        comment: "Current onboarding status"
+      },
+      onboardingStep: {
+        type: DataTypes.ENUM("basic", "password", "stall", "hours", "bank", "legal", "account", "stakeholder", "config", "success", "completed"),
+        allowNull: true,
+        comment: "Current step in onboarding process"
+      },
+      onboardingCompletedAt: {
+        type: DataTypes.DATE,
+        allowNull: true,
+        comment: "Timestamp when onboarding was completed"
+      },
+      onboardingStartedAt: {
+        type: DataTypes.DATE,
+        allowNull: true,
+        comment: "Timestamp when onboarding was started"
       },
       createdAt: {
         type: DataTypes.DATE,

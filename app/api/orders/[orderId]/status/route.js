@@ -14,7 +14,7 @@ export async function PATCH(request, { params }) {
     const { status, note } = await request.json()
 
     // Validate status
-    const validStatuses = ["pending", "confirmed", "preparing", "ready", "completed", "cancelled"]
+    const validStatuses = ["pending", "preparing", "ready", "completed", "cancelled"]
     if (!validStatuses.includes(status)) {
       return NextResponse.json({ success: false, message: "Invalid status" }, { status: 400 })
     }
@@ -58,9 +58,6 @@ export async function PATCH(request, { params }) {
 
     // Set timestamp fields based on status
     switch (status) {
-      case "confirmed":
-        updateData.confirmedAt = new Date()
-        break
       case "preparing":
         updateData.preparingAt = new Date()
         break

@@ -20,7 +20,7 @@ export async function GET(request, { params }) {
     const startDate = searchParams.get("startDate")
     const endDate = searchParams.get("endDate")
     const page = Number.parseInt(searchParams.get("page")) || 1
-    const limit = Number.parseInt(searchParams.get("limit")) || 20
+    const limit = Number.parseInt(searchParams.get("limit")) || 10
     const offset = (page - 1) * limit
 
     // Build where clause

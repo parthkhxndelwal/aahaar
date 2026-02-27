@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useToast } from "@/hooks/use-toast"
 import { Search, Download, RefreshCw, CreditCard, TrendingUp } from "lucide-react"
-import { useAuth } from "@/contexts/auth-context"
+import { useAdminAuth } from "@/contexts/admin-auth-context"
 
 interface Payment {
   id: string
@@ -58,7 +58,7 @@ export default function AdminPaymentsPage({ params }: { params: Promise<{ courtI
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
   const { toast } = useToast()
-  const { token } = useAuth()
+  const { token } = useAdminAuth()
   const { courtId } = use(params)
 
   useEffect(() => {

@@ -3,6 +3,9 @@ import { User } from "@/models"
 import { authenticateToken } from "@/middleware/auth"
 import bcrypt from "bcryptjs"
 
+// Import the database-backed OTP store
+const { otpStore } = require("@/lib/otp-store")
+
 export async function GET(request) {
   try {
     const authResult = await authenticateToken(request)
@@ -29,14 +32,61 @@ export async function PATCH(request) {
     if (authResult instanceof NextResponse) return authResult
 
     const { user: authenticatedUser } = authResult
-    const { fullName, phone, preferences, currentPassword, newPassword } = await request.json()
+    const { 
+      fullName, 
+      email, 
+      phone, 
+      dateOfBirth, 
+      gender, 
+      profilePicture, 
+      preferences, 
+      currentPassword, 
+      newPassword 
+    } = await request.json()
 
     const user = await User.findByPk(authenticatedUser.id)
-
     const updateData = {}
+
+    // Handle fields that don't require OTP
     if (fullName) updateData.fullName = fullName
-    if (phone) updateData.phone = phone
+    if (dateOfBirth) updateData.dateOfBirth = dateOfBirth
+    if (gender) updateData.gender = gender
+    if (profilePicture) updateData.profilePicture = profilePicture
     if (preferences) updateData.preferences = { ...user.preferences, ...preferences }
+
+    // Handle email update (requires OTP verification)
+    if (email && email !== user.email) {
+      const otpKey = `${authenticatedUser.id}-email-${email}`
+      const storedOTPData = await otpStore.get(otpKey)
+
+      if (!storedOTPData || !storedOTPData.verified) {
+        return NextResponse.json({ 
+          success: false, 
+          message: "Email change requires OTP verification. Please verify your new email first." 
+        }, { status: 400 })
+      }
+
+      updateData.email = email
+      updateData.emailVerified = false // Reset email verification status
+      await otpStore.delete(otpKey) // Clean up used OTP
+    }
+
+    // Handle phone update (requires OTP verification)
+    if (phone && phone !== user.phone) {
+      const otpKey = `${authenticatedUser.id}-phone-${phone}`
+      const storedOTPData = await otpStore.get(otpKey)
+
+      if (!storedOTPData || !storedOTPData.verified) {
+        return NextResponse.json({ 
+          success: false, 
+          message: "Phone change requires OTP verification. Please verify your new phone number first." 
+        }, { status: 400 })
+      }
+
+      updateData.phone = phone
+      updateData.phoneVerified = false // Reset phone verification status
+      await otpStore.delete(otpKey) // Clean up used OTP
+    }
 
     // Handle password change
     if (newPassword) {

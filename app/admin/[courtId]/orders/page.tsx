@@ -7,9 +7,11 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Spinner } from "@/components/ui/spinner"
 import { useToast } from "@/hooks/use-toast"
-import { Search, Filter, Download, Eye, RefreshCw } from "lucide-react"
-import { useAuth } from "@/contexts/auth-context"
+import { Search, Filter, Download, Eye, RefreshCw, ChevronLeft, ChevronRight } from "lucide-react"
+import { useAdminAuth } from "@/contexts/admin-auth-context"
+import { motion, AnimatePresence } from "framer-motion"
 
 interface Order {
   id: string
@@ -18,7 +20,7 @@ interface Order {
   customerPhone?: string
   vendorName: string
   totalAmount: number
-  status: "pending" | "confirmed" | "preparing" | "ready" | "completed" | "cancelled"
+  status: "pending" | "preparing" | "ready" | "completed" | "cancelled"
   paymentMethod: string
   paymentStatus: string
   createdAt: string
@@ -31,7 +33,6 @@ interface Order {
 
 const statusColors = {
   pending: "bg-yellow-100 text-yellow-800",
-  confirmed: "bg-blue-100 text-blue-800", 
   preparing: "bg-orange-100 text-orange-800",
   ready: "bg-purple-100 text-purple-800",
   completed: "bg-green-100 text-green-800",
@@ -44,18 +45,29 @@ export default function AdminOrdersPage({ params }: { params: Promise<{ courtId:
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
   const [dateFilter, setDateFilter] = useState("today")
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pagination, setPagination] = useState({
+    total: 0,
+    totalPages: 0,
+    page: 1,
+    limit: 10
+  })
   const { toast } = useToast()
-  const { token } = useAuth()
+  const { token } = useAdminAuth()
   const { courtId } = use(params)
 
   useEffect(() => {
     fetchOrders()
-  }, [statusFilter, dateFilter])
+  }, [statusFilter, dateFilter, currentPage])
 
   const fetchOrders = async () => {
     try {
       setLoading(true)
       const params = new URLSearchParams()
+      
+      // Add pagination parameters
+      params.append("page", currentPage.toString())
+      params.append("limit", "10")
       
       if (statusFilter !== "all") params.append("status", statusFilter)
       if (dateFilter !== "all") {
@@ -77,6 +89,7 @@ export default function AdminOrdersPage({ params }: { params: Promise<{ courtId:
       const result = await response.json()
       if (result.success) {
         setOrders(result.data.orders)
+        setPagination(result.data.pagination)
       } else {
         throw new Error(result.message)
       }
@@ -97,6 +110,21 @@ export default function AdminOrdersPage({ params }: { params: Promise<{ courtId:
     order.vendorName.toLowerCase().includes(searchQuery.toLowerCase())
   )
 
+  // Reset to page 1 when filters change
+  const handleStatusFilterChange = (value: string) => {
+    setStatusFilter(value)
+    setCurrentPage(1)
+  }
+
+  const handleDateFilterChange = (value: string) => {
+    setDateFilter(value)
+    setCurrentPage(1)
+  }
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page)
+  }
+
   const exportOrders = () => {
     // Implement CSV export
     toast({
@@ -105,24 +133,29 @@ export default function AdminOrdersPage({ params }: { params: Promise<{ courtId:
     })
   }
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
-      </div>
-    )
-  }
-
   return (
-    <div className="space-y-6">
+    <motion.div 
+      className="space-y-6"
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5 }}
+    >
       {/* Header */}
-      <div className="flex justify-between items-center">
+      <motion.div 
+        className="flex justify-between items-center"
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, delay: 0.1 }}
+      >
         <div>
           <h1 className="text-3xl font-bold text-neutral-100">Orders Management</h1>
           <p className="text-neutral-400">Monitor and manage all food court orders</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={fetchOrders}>
+          <Button variant="outline" onClick={() => {
+            setCurrentPage(1)
+            fetchOrders()
+          }}>
             <RefreshCw className="h-4 w-4 mr-2" />
             Refresh
           </Button>
@@ -131,52 +164,82 @@ export default function AdminOrdersPage({ params }: { params: Promise<{ courtId:
             Export
           </Button>
         </div>
-      </div>
+      </motion.div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Orders</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{orders.length}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pending Orders</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {orders.filter(o => ["pending", "confirmed", "preparing"].includes(o.status)).length}
+      <AnimatePresence mode="wait">
+        {loading ? (
+          <motion.div
+            key="loading"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="flex items-center justify-center py-20"
+          >
+            <div className="text-center">
+              <Spinner size={32} variant="white" className="mb-4" />
+              <p className="text-neutral-400">Loading orders data...</p>
             </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              ₹{orders.filter(o => o.status === "completed").reduce((sum, o) => sum + o.totalAmount, 0)}
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Completed Orders</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {orders.filter(o => o.status === "completed").length}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+          </motion.div>
+        ) : (
+          <motion.div
+            key="content"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.5 }}
+            className="space-y-6"
+          >
+            {/* Stats Cards */}
+            <motion.div 
+              className="grid grid-cols-1 md:grid-cols-4 gap-6"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.6, delay: 0.2 }}
+            >
+        {[
+          { title: "Total Orders", value: pagination.total, subtitle: "All time" },
+          { 
+            title: "Pending Orders", 
+            value: orders.filter(o => ["pending", "preparing"].includes(o.status)).length, 
+            subtitle: "Current page" 
+          },
+          { 
+            title: "Total Revenue", 
+            value: `₹${orders.filter(o => o.status === "completed").reduce((sum, o) => sum + Number(o.totalAmount || 0), 0).toFixed(2)}`, 
+            subtitle: "Current page" 
+          },
+          { 
+            title: "Completed Orders", 
+            value: orders.filter(o => o.status === "completed").length, 
+            subtitle: "Current page" 
+          }
+        ].map((stat, index) => (
+          <motion.div
+            key={stat.title}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: 0.3 + index * 0.1 }}
+          >
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">{stat.title}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{stat.value}</div>
+                <p className="text-xs text-muted-foreground">{stat.subtitle}</p>
+              </CardContent>
+            </Card>
+          </motion.div>
+        ))}
+      </motion.div>
 
       {/* Filters */}
-      <Card>
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, delay: 0.7 }}
+      >
+        <Card>
         <CardHeader>
           <CardTitle>Filter Orders</CardTitle>
         </CardHeader>
@@ -190,21 +253,20 @@ export default function AdminOrdersPage({ params }: { params: Promise<{ courtId:
                 className="max-w-sm"
               />
             </div>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <Select value={statusFilter} onValueChange={handleStatusFilterChange}>
               <SelectTrigger className="w-[180px]">
                 <SelectValue placeholder="Filter by status" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Status</SelectItem>
                 <SelectItem value="pending">Pending</SelectItem>
-                <SelectItem value="confirmed">Confirmed</SelectItem>
                 <SelectItem value="preparing">Preparing</SelectItem>
                 <SelectItem value="ready">Ready</SelectItem>
                 <SelectItem value="completed">Completed</SelectItem>
                 <SelectItem value="cancelled">Cancelled</SelectItem>
               </SelectContent>
             </Select>
-            <Select value={dateFilter} onValueChange={setDateFilter}>
+            <Select value={dateFilter} onValueChange={handleDateFilterChange}>
               <SelectTrigger className="w-[180px]">
                 <SelectValue placeholder="Filter by date" />
               </SelectTrigger>
@@ -218,12 +280,29 @@ export default function AdminOrdersPage({ params }: { params: Promise<{ courtId:
           </div>
         </CardContent>
       </Card>
+      </motion.div>
 
       {/* Orders Table */}
-      <Card>
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, delay: 0.8 }}
+      >
+        <Card>
         <CardHeader>
-          <CardTitle>Orders</CardTitle>
-          <CardDescription>Complete list of orders in your food court</CardDescription>
+          <div className="flex justify-between items-start">
+            <div>
+              <CardTitle>Orders</CardTitle>
+              <CardDescription>
+                Complete list of orders in your food court
+                {pagination.total > 0 && (
+                  <span className="ml-2">
+                    ({pagination.total} total orders)
+                  </span>
+                )}
+              </CardDescription>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           <Table>
@@ -241,53 +320,134 @@ export default function AdminOrdersPage({ params }: { params: Promise<{ courtId:
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredOrders.map((order) => (
-                <TableRow key={order.id}>
-                  <TableCell className="font-medium">{order.orderNumber}</TableCell>
-                  <TableCell>
-                    <div>
-                      <div className="font-medium">{order.customerName}</div>
-                      {order.customerPhone && (
-                        <div className="text-sm text-neutral-500">{order.customerPhone}</div>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell>{order.vendorName}</TableCell>
-                  <TableCell>
-                    <div className="max-w-[200px]">
-                      {order.items.map((item, idx) => (
-                        <div key={idx} className="text-sm">
-                          {item.quantity}x {item.itemName}
-                        </div>
-                      ))}
-                    </div>
-                  </TableCell>
-                  <TableCell>₹{order.totalAmount}</TableCell>
-                  <TableCell>
-                    <Badge className={statusColors[order.status]}>
-                      {order.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <div>
-                      <div className="text-sm">{order.paymentMethod}</div>
-                      <div className="text-xs text-neutral-500">{order.paymentStatus}</div>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    {new Date(order.createdAt).toLocaleDateString()}
-                  </TableCell>
-                  <TableCell>
-                    <Button variant="ghost" size="sm">
-                      <Eye className="h-4 w-4" />
-                    </Button>
+              {filteredOrders.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={9} className="text-center py-8 text-neutral-500">
+                    No orders found
                   </TableCell>
                 </TableRow>
-              ))}
+              ) : (
+                filteredOrders.map((order, index) => (
+                  <motion.tr
+                    key={order.id}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3, delay: index * 0.05 }}
+                    className="border-b border-neutral-800 hover:bg-neutral-900/50"
+                    style={{ display: "table-row" }}
+                  >
+                    <TableCell className="font-medium">{order.orderNumber}</TableCell>
+                    <TableCell>
+                      <div>
+                        <div className="font-medium">{order.customerName}</div>
+                        {order.customerPhone && (
+                          <div className="text-sm text-neutral-500">{order.customerPhone}</div>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell>{order.vendorName}</TableCell>
+                    <TableCell>
+                      <div className="max-w-[200px]">
+                        {order.items.map((item, idx) => (
+                          <div key={idx} className="text-sm">
+                            {item.quantity}x {item.itemName}
+                          </div>
+                        ))}
+                      </div>
+                    </TableCell>
+                    <TableCell>₹{Number(order.totalAmount || 0).toFixed(2)}</TableCell>
+                    <TableCell>
+                      <Badge className={statusColors[order.status]}>
+                        {order.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <div>
+                        <div className="text-sm">{order.paymentMethod}</div>
+                        <div className="text-xs text-neutral-500">{order.paymentStatus}</div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      {new Date(order.createdAt).toLocaleDateString()}
+                    </TableCell>
+                    <TableCell>
+                      <Button variant="ghost" size="sm">
+                        <Eye className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
+                  </motion.tr>
+                ))
+              )}
             </TableBody>
           </Table>
+          
+          {/* Pagination */}
+          {pagination.totalPages > 1 && (
+            <div className="flex items-center justify-between mt-6">
+              <div className="text-sm text-neutral-500">
+                Showing {((currentPage - 1) * pagination.limit) + 1} to {Math.min(currentPage * pagination.limit, pagination.total)} of {pagination.total} orders
+              </div>
+              <div className="flex items-center gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => handlePageChange(currentPage - 1)}
+                  disabled={currentPage === 1}
+                  className="dark:border-neutral-600 dark:text-neutral-300 dark:hover:bg-neutral-800"
+                >
+                  Previous
+                </Button>
+                
+                {/* Page numbers */}
+                <div className="flex gap-1">
+                  {Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
+                    let pageNum
+                    if (pagination.totalPages <= 5) {
+                      pageNum = i + 1
+                    } else if (currentPage <= 3) {
+                      pageNum = i + 1
+                    } else if (currentPage >= pagination.totalPages - 2) {
+                      pageNum = pagination.totalPages - 4 + i
+                    } else {
+                      pageNum = currentPage - 2 + i
+                    }
+                    
+                    return (
+                      <Button
+                        key={pageNum}
+                        variant={currentPage === pageNum ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => handlePageChange(pageNum)}
+                        className={`w-10 h-8 ${
+                          currentPage === pageNum 
+                            ? "bg-blue-600 text-white hover:bg-blue-700" 
+                            : "dark:border-neutral-600 dark:text-neutral-300 dark:hover:bg-neutral-800"
+                        }`}
+                      >
+                        {pageNum}
+                      </Button>
+                    )
+                  })}
+                </div>
+                
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => handlePageChange(currentPage + 1)}
+                  disabled={currentPage === pagination.totalPages}
+                  className="dark:border-neutral-600 dark:text-neutral-300 dark:hover:bg-neutral-800"
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
-    </div>
+      </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
   )
 }
