@@ -22,15 +22,23 @@ export async function GET(request, { params }) {
       return NextResponse.json({ success: false, message: "Admin access required" }, { status: 403 })
     }
 
-    const whereClause = { courtId }
+    const whereClause = {
+      [Op.or]: [
+        { courtId },
+        literal(`JSON_CONTAINS(managedCourtIds, '"${courtId}"')`)
+      ]
+    }
     if (role) whereClause.role = role
     if (status) whereClause.status = status
     if (search) {
-      whereClause[Op.or] = [
-        { fullName: { [Op.like]: `%${search}%` } },
-        { email: { [Op.like]: `%${search}%` } },
-        { phone: { [Op.like]: `%${search}%` } },
-      ]
+      whereClause[Op.and] = whereClause[Op.and] || []
+      whereClause[Op.and].push({
+        [Op.or]: [
+          { fullName: { [Op.like]: `%${search}%` } },
+          { email: { [Op.like]: `%${search}%` } },
+          { phone: { [Op.like]: `%${search}%` } },
+        ]
+      })
     }
 
     const users = await User.findAndCountAll({

@@ -98,7 +98,7 @@ export async function POST(request) {
     let court = null
     let userCourtId = null
 
-    // Create court if court information is provided (from onboarding)
+    // Create court if court information is provided
     if (courtId && instituteName) {
       console.log("🏢 Creating court during registration")
       court = await Court.create({
@@ -137,13 +137,56 @@ export async function POST(request) {
       })
 
       userCourtId = courtId
+    } else {
+      console.log("👑 Creating super admin - using system court")
+      // For super admins, create or use a system court
+      const systemCourtId = "system-admin"
+      let systemCourt = await Court.findOne({ where: { courtId: systemCourtId } })
+      
+      if (!systemCourt) {
+        systemCourt = await Court.create({
+          courtId: systemCourtId,
+          instituteName: "System Administration",
+          instituteType: "system",
+          contactEmail: email.toLowerCase(),
+          contactPhone: phone,
+          status: "active",
+          subscriptionPlan: "unlimited",
+          subscriptionExpiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000), // 1 year
+        })
+        
+        // Create system court settings
+        await CourtSettings.create({
+          courtId: systemCourtId,
+          allowOnlinePayments: true,
+          allowCOD: true,
+          platformFeePercentage: 0,
+          maxOrdersPerUser: 999,
+          orderBufferTime: 0,
+          minimumOrderAmount: 0,
+          maximumOrderAmount: 999999,
+          autoAcceptOrders: false,
+          orderCancellationWindow: 60,
+          themeSettings: {
+            primaryColor: "#3B82F6",
+            secondaryColor: "#10B981",
+            accentColor: "#F59E0B",
+          },
+          notificationSettings: {
+            emailNotifications: true,
+            smsNotifications: false,
+            pushNotifications: true,
+          },
+        })
+      }
+      
+      userCourtId = systemCourtId
+      court = systemCourt
     }
-    // For admin registration without court info, leave courtId as null
-    // They will create their court in the onboarding process
 
     // Create admin user
     const user = await User.create({
-      courtId: userCourtId, // Will be null for initial admin registration
+      courtId: userCourtId,
       email: email.toLowerCase(),
       password: hashedPassword,
       fullName,

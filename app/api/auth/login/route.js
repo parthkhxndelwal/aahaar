@@ -79,25 +79,33 @@ export async function POST(request) {
     }
 
     // Email/password login
-    if (!email || !password || !courtId) {
+    if (!email || !password) {
+      console.log("❌ Missing credentials:", { email: !!email, password: !!password })
       return NextResponse.json(
         {
           success: false,
-          message: "Email, password, and court ID are required",
+          message: "Email and password are required",
         },
         { status: 400 },
       )
     }
 
-    // Find user with court information
-    const user = await User.findOne({
-      where: {
-        email: email.toLowerCase(),
-        courtId,
-      },
-      include: [
-        {
-          model: Court,
+    console.log("🔐 Admin login attempt:", { email, courtId })
+
+    // For admin login, find user without court restriction
+    // For regular users, court ID is still required
+    let user
+    if (courtId) {
+      console.log("🏢 Court-specific login")
+      // Regular user login with specific court
+      user = await User.findOne({
+        where: {
+          email: email.toLowerCase(),
+          courtId,
+        },
+        include: [
+          {
+            model: Court,
           as: "court",
           attributes: ["courtId", "instituteName", "status"],
         },
@@ -108,8 +116,32 @@ export async function POST(request) {
         },
       ],
     })
+    } else {
+      console.log("👑 Admin login without court restriction")
+      // Admin login without court restriction
+      user = await User.findOne({
+        where: {
+          email: email.toLowerCase(),
+        },
+        include: [
+          {
+            model: Vendor,
+            as: "vendorProfile",
+            attributes: ["id", "stallName", "stallLocation", "isOnline"],
+          },
+        ],
+      })
+    }
+
+    console.log("👤 User found:", { 
+      found: !!user, 
+      role: user?.role, 
+      courtId: user?.courtId,
+      status: user?.status 
+    })
 
     if (!user) {
+      console.log("❌ No user found with email:", email)
       return NextResponse.json(
         {
           success: false,
@@ -129,7 +161,8 @@ export async function POST(request) {
       )
     }
 
-    if (user.court?.status !== "active") {
+    // Only check court status if user has a court (not for super admins)
+    if (user.court && user.court.status !== "active") {
       return NextResponse.json(
         {
           success: false,
@@ -142,7 +175,10 @@ export async function POST(request) {
     // Verify password
     const isValidPassword = await bcrypt.compare(password, user.password)
     
+    console.log("🔒 Password verification:", { isValid: isValidPassword })
+    
     if (!isValidPassword) {
+      console.log("❌ Invalid password for user:", email)
       return NextResponse.json(
         {
           success: false,
@@ -153,6 +189,13 @@ export async function POST(request) {
     }
 
     // Generate JWT token
+    console.log("🎫 Generating token for user:", { 
+      userId: user.id, 
+      courtId: user.courtId, 
+      role: user.role, 
+      email: user.email 
+    })
+    
     const token = jwt.sign(
       {
         userId: user.id,
@@ -174,10 +217,10 @@ export async function POST(request) {
       fullName: user.fullName,
       role: user.role,
       courtId: user.courtId,
-      court: {
+      court: user.court ? {
         courtId: user.court.courtId,
         instituteName: user.court.instituteName,
-      },
+      } : null,
     }
 
     // Add vendor profile if user is a vendor

@@ -7,9 +7,11 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Spinner } from "@/components/ui/spinner"
 import { useToast } from "@/hooks/use-toast"
 import { Search, Download, RefreshCw, CreditCard, TrendingUp } from "lucide-react"
 import { useAdminAuth } from "@/contexts/admin-auth-context"
+import { motion, AnimatePresence } from "framer-motion"
 
 interface Payment {
   id: string
@@ -123,21 +125,28 @@ export default function AdminPaymentsPage({ params }: { params: Promise<{ courtI
     return matchesSearch && matchesStatus
   })
 
-  const totalRevenue = payments.filter(p => p.status === "completed").reduce((sum, p) => sum + p.amount, 0)
-  const totalPayouts = payouts.filter(p => p.status === "processed").reduce((sum, p) => sum + p.amount, 0)
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
-      </div>
-    )
-  }
+  const totalRevenue = payments
+    .filter(p => p.status === "completed")
+    .reduce((sum, p) => sum + Number(p.amount || 0), 0)
+  
+  const totalPayouts = payouts
+    .filter(p => p.status === "processed")
+    .reduce((sum, p) => sum + Number(p.amount || 0), 0)
 
   return (
-    <div className="space-y-6">
+    <motion.div 
+      className="space-y-6"
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5 }}
+    >
       {/* Header */}
-      <div className="flex justify-between items-center">
+      <motion.div 
+        className="flex justify-between items-center"
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, delay: 0.1 }}
+      >
         <div>
           <h1 className="text-3xl font-bold text-neutral-100">Payments & Payouts</h1>
           <p className="text-neutral-400">Monitor payment flows and vendor payouts</p>
@@ -155,204 +164,271 @@ export default function AdminPaymentsPage({ params }: { params: Promise<{ courtI
             Export
           </Button>
         </div>
-      </div>
+      </motion.div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
-            <CreditCard className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">₹{totalRevenue.toLocaleString()}</div>
-            <p className="text-xs text-muted-foreground">From completed payments</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Payouts</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">₹{totalPayouts.toLocaleString()}</div>
-            <p className="text-xs text-muted-foreground">Transferred to vendors</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Platform Revenue</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">₹{(totalRevenue - totalPayouts).toLocaleString()}</div>
-            <p className="text-xs text-muted-foreground">Commission earned</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Online Payments</CardTitle>
-            <CreditCard className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {payments.filter(p => p.paymentMethod === "online").length}
+      <AnimatePresence mode="wait">
+        {loading ? (
+          <motion.div
+            key="loading"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="flex items-center justify-center min-h-[400px]"
+          >
+            <div className="text-center">
+              <div className="flex justify-center mb-4">
+                <Spinner size={32} variant="white" />
+              </div>
+              <p className="text-neutral-400">Loading payments data...</p>
             </div>
-            <p className="text-xs text-muted-foreground">Digital transactions</p>
-          </CardContent>
-        </Card>
-      </div>
+          </motion.div>
+        ) : (
+          <motion.div
+            key="content"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.5 }}
+            className="space-y-6"
+          >
 
-      {/* Tab Navigation */}
-      <div className="flex space-x-1 bg-neutral-900 p-1 rounded-lg w-fit">
-        <button
-          onClick={() => setActiveTab("payments")}
-          className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-            activeTab === "payments"
-              ? "bg-black text-neutral-100 shadow-sm"
-              : "text-neutral-400 hover:text-neutral-100"
-          }`}
-        >
-          Payments
-        </button>
-        <button
-          onClick={() => setActiveTab("payouts")}
-          className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-            activeTab === "payouts"
-              ? "bg-black text-neutral-100 shadow-sm"
-              : "text-neutral-400 hover:text-neutral-100"
-          }`}
-        >
-          Vendor Payouts
-        </button>
-      </div>
+            {/* Stats Cards */}
+            <motion.div 
+              className="grid grid-cols-1 md:grid-cols-4 gap-6"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.6, delay: 0.2 }}
+            >
+              {[
+                { 
+                  title: "Total Revenue", 
+                  value: `₹${totalRevenue.toLocaleString()}`, 
+                  subtitle: "From completed payments",
+                  icon: CreditCard
+                },
+                { 
+                  title: "Total Payouts", 
+                  value: `₹${totalPayouts.toLocaleString()}`, 
+                  subtitle: "Transferred to vendors",
+                  icon: TrendingUp
+                },
+                { 
+                  title: "Platform Revenue", 
+                  value: `₹${(totalRevenue - totalPayouts).toLocaleString()}`, 
+                  subtitle: "Commission earned",
+                  icon: TrendingUp
+                },
+                { 
+                  title: "Online Payments", 
+                  value: payments.filter(p => p.paymentMethod === "online").length,
+                  subtitle: "Digital transactions",
+                  icon: CreditCard
+                }
+              ].map((stat, index) => (
+                <motion.div
+                  key={stat.title}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.4, delay: 0.3 + index * 0.1 }}
+                >
+                  <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium">{stat.title}</CardTitle>
+                      <stat.icon className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold">{stat.value}</div>
+                      <p className="text-xs text-muted-foreground">{stat.subtitle}</p>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              ))}
+            </motion.div>
 
-      {/* Filters */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="flex gap-4">
-            <div className="flex-1">
-              <Input
-                placeholder={`Search ${activeTab}...`}
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="max-w-sm"
-              />
-            </div>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Filter by status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Status</SelectItem>
-                {activeTab === "payments" ? (
-                  <>
-                    <SelectItem value="pending">Pending</SelectItem>
-                    <SelectItem value="completed">Completed</SelectItem>
-                    <SelectItem value="failed">Failed</SelectItem>
-                    <SelectItem value="refunded">Refunded</SelectItem>
-                  </>
-                ) : (
-                  <>
-                    <SelectItem value="pending">Pending</SelectItem>
-                    <SelectItem value="processed">Processed</SelectItem>
-                    <SelectItem value="reversed">Reversed</SelectItem>
-                  </>
-                )}
-              </SelectContent>
-            </Select>
-          </div>
-        </CardContent>
-      </Card>
+            {/* Tab Navigation */}
+            <motion.div 
+              className="flex space-x-1 bg-neutral-900 p-1 rounded-lg w-fit"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.7 }}
+            >
+              <button
+                onClick={() => setActiveTab("payments")}
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                  activeTab === "payments"
+                    ? "bg-black text-neutral-100 shadow-sm"
+                    : "text-neutral-400 hover:text-neutral-100"
+                }`}
+              >
+                Payments
+              </button>
+              <button
+                onClick={() => setActiveTab("payouts")}
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                  activeTab === "payouts"
+                    ? "bg-black text-neutral-100 shadow-sm"
+                    : "text-neutral-400 hover:text-neutral-100"
+                }`}
+              >
+                Vendor Payouts
+              </button>
+            </motion.div>
 
-      {/* Content */}
-      {activeTab === "payments" ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>Payment Transactions</CardTitle>
-            <CardDescription>All payment transactions from customers</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Order #</TableHead>
-                  <TableHead>Customer</TableHead>
-                  <TableHead>Vendor</TableHead>
-                  <TableHead>Amount</TableHead>
-                  <TableHead>Method</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Razorpay ID</TableHead>
-                  <TableHead>Date</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredPayments.map((payment) => (
-                  <TableRow key={payment.id}>
-                    <TableCell className="font-medium">{payment.orderNumber}</TableCell>
-                    <TableCell>{payment.customerName}</TableCell>
-                    <TableCell>{payment.vendorName}</TableCell>
-                    <TableCell>₹{payment.amount}</TableCell>
-                    <TableCell className="capitalize">{payment.paymentMethod}</TableCell>
-                    <TableCell>
-                      <Badge className={paymentStatusColors[payment.status]}>
-                        {payment.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-sm text-neutral-500">
-                      {payment.razorpayPaymentId || payment.razorpayOrderId || "-"}
-                    </TableCell>
-                    <TableCell>
-                      {new Date(payment.createdAt).toLocaleDateString()}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      ) : (
-        <Card>
-          <CardHeader>
-            <CardTitle>Vendor Payouts</CardTitle>
-            <CardDescription>Money transferred to vendor accounts</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Vendor</TableHead>
-                  <TableHead>Amount</TableHead>
-                  <TableHead>Orders</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Transfer ID</TableHead>
-                  <TableHead>Date</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredPayouts.map((payout) => (
-                  <TableRow key={payout.id}>
-                    <TableCell className="font-medium">{payout.vendorName}</TableCell>
-                    <TableCell>₹{payout.amount}</TableCell>
-                    <TableCell>{payout.ordersCount} orders</TableCell>
-                    <TableCell>
-                      <Badge className={payoutStatusColors[payout.status]}>
-                        {payout.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-sm text-neutral-500">
-                      {payout.razorpayTransferId || "-"}
-                    </TableCell>
-                    <TableCell>
-                      {new Date(payout.transferDate).toLocaleDateString()}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      )}
-    </div>
+            {/* Filters */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.8 }}
+            >
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="flex gap-4">
+                    <div className="flex-1">
+                      <Input
+                        placeholder={`Search ${activeTab}...`}
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="max-w-sm"
+                      />
+                    </div>
+                    <Select value={statusFilter} onValueChange={setStatusFilter}>
+                      <SelectTrigger className="w-[180px]">
+                        <SelectValue placeholder="Filter by status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Status</SelectItem>
+                        {activeTab === "payments" ? (
+                          <>
+                            <SelectItem value="pending">Pending</SelectItem>
+                            <SelectItem value="completed">Completed</SelectItem>
+                            <SelectItem value="failed">Failed</SelectItem>
+                            <SelectItem value="refunded">Refunded</SelectItem>
+                          </>
+                        ) : (
+                          <>
+                            <SelectItem value="pending">Pending</SelectItem>
+                            <SelectItem value="processed">Processed</SelectItem>
+                            <SelectItem value="reversed">Reversed</SelectItem>
+                          </>
+                        )}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+
+            {/* Content */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.9 }}
+            >
+              {activeTab === "payments" ? (
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Payment Transactions</CardTitle>
+                    <CardDescription>All payment transactions from customers</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Order #</TableHead>
+                          <TableHead>Customer</TableHead>
+                          <TableHead>Vendor</TableHead>
+                          <TableHead>Amount</TableHead>
+                          <TableHead>Method</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Razorpay ID</TableHead>
+                          <TableHead>Date</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {filteredPayments.map((payment, index) => (
+                          <motion.tr
+                            key={payment.id}
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.3, delay: index * 0.05 }}
+                            className="border-b border-neutral-800 hover:bg-neutral-900/50"
+                            style={{ display: "table-row" }}
+                          >
+                            <TableCell className="font-medium">{payment.orderNumber}</TableCell>
+                            <TableCell>{payment.customerName}</TableCell>
+                            <TableCell>{payment.vendorName}</TableCell>
+                            <TableCell>₹{Number(payment.amount || 0).toFixed(2)}</TableCell>
+                            <TableCell className="capitalize">{payment.paymentMethod}</TableCell>
+                            <TableCell>
+                              <Badge className={paymentStatusColors[payment.status]}>
+                                {payment.status}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-sm text-neutral-500">
+                              {payment.razorpayPaymentId || payment.razorpayOrderId || "-"}
+                            </TableCell>
+                            <TableCell>
+                              {new Date(payment.createdAt).toLocaleDateString()}
+                            </TableCell>
+                          </motion.tr>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </CardContent>
+                </Card>
+              ) : (
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Vendor Payouts</CardTitle>
+                    <CardDescription>Money transferred to vendor accounts</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Vendor</TableHead>
+                          <TableHead>Amount</TableHead>
+                          <TableHead>Orders</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Transfer ID</TableHead>
+                          <TableHead>Date</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {filteredPayouts.map((payout, index) => (
+                          <motion.tr
+                            key={payout.id}
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.3, delay: index * 0.05 }}
+                            className="border-b border-neutral-800 hover:bg-neutral-900/50"
+                            style={{ display: "table-row" }}
+                          >
+                            <TableCell className="font-medium">{payout.vendorName}</TableCell>
+                            <TableCell>₹{Number(payout.amount || 0).toFixed(2)}</TableCell>
+                            <TableCell>{payout.ordersCount} orders</TableCell>
+                            <TableCell>
+                              <Badge className={payoutStatusColors[payout.status]}>
+                                {payout.status}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-sm text-neutral-500">
+                              {payout.razorpayTransferId || "-"}
+                            </TableCell>
+                            <TableCell>
+                              {new Date(payout.transferDate).toLocaleDateString()}
+                            </TableCell>
+                          </motion.tr>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </CardContent>
+                </Card>
+              )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
   )
 }

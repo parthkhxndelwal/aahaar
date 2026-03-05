@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState } from "react"
+import React, { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Button } from "@/components/ui/button"
 import { AnimatedButton } from "@/components/ui/animated-button"
@@ -20,7 +20,6 @@ export default function AdminAuthPage() {
   const [loginData, setLoginData] = useState({
     email: "",
     password: "",
-    courtId: "",
   })
   const [registerData, setRegisterData] = useState({
     fullName: "",
@@ -28,9 +27,6 @@ export default function AdminAuthPage() {
     phone: "",
     password: "",
     confirmPassword: "",
-    courtId: "",
-    instituteName: "",
-    instituteType: "college",
   })
   const [loading, setLoading] = useState(false)
   const [loginError, setLoginError] = useState("")
@@ -42,17 +38,51 @@ export default function AdminAuthPage() {
     email: "",
     phone: "",
     password: "",
-    confirmPassword: "",
-    courtId: "",
-    instituteName: ""
+    confirmPassword: ""
   })
   const [loginValidationErrors, setLoginValidationErrors] = useState({
-    email: "",
-    courtId: ""
+    email: ""
   })
   const { toast } = useToast()
-  const { login } = useAdminAuth()
+  const { login, user, token, isAuthenticated } = useAdminAuth()
   const router = useRouter()
+
+  // Check if user is already logged in and redirect appropriately
+  useEffect(() => {
+    if (isAuthenticated && user && token) {
+      // User is logged in, check if they have courts
+      const checkCourtsAndRedirect = async () => {
+        try {
+          const courtsResponse = await fetch("/api/admin/courts", {
+            headers: {
+              "Authorization": `Bearer ${token}`
+            }
+          })
+
+          if (courtsResponse.ok) {
+            const courtsData = await courtsResponse.json()
+            
+            if (courtsData.success && courtsData.data.length > 0) {
+              // Has courts, redirect to dashboard
+              router.push(`/admin/${courtsData.data[0].courtId}`)
+            } else {
+              // No courts, redirect to onboarding
+              router.push("/admin/onboarding")
+            }
+          } else {
+            // Error fetching courts, redirect to onboarding to be safe
+            router.push("/admin/onboarding")
+          }
+        } catch (error) {
+          console.error("Error checking courts:", error)
+          // On error, redirect to onboarding
+          router.push("/admin/onboarding")
+        }
+      }
+
+      checkCourtsAndRedirect()
+    }
+  }, [isAuthenticated, user, token, router])
 
   // Validation functions
   const validateEmail = (email: string) => {
@@ -104,12 +134,6 @@ export default function AdminAuthPage() {
       case "confirmPassword":
         error = !value ? "Please confirm your password" : value !== registerData.password ? "Passwords do not match" : ""
         break
-      case "courtId":
-        error = validateCourtId(value)
-        break
-      case "instituteName":
-        error = !value ? "Institute name is required" : value.length < 2 ? "Institute name must be at least 2 characters long" : ""
-        break
     }
     
     setValidationErrors(prev => ({ ...prev, [field]: error }))
@@ -121,9 +145,6 @@ export default function AdminAuthPage() {
     switch (field) {
       case "email":
         error = validateEmail(value)
-        break
-      case "courtId":
-        error = validateCourtId(value)
         break
     }
     
@@ -193,42 +214,82 @@ export default function AdminAuthPage() {
     
     // Validate login fields
     const emailValid = validateLoginField("email", loginData.email)
-    const courtIdValid = validateLoginField("courtId", loginData.courtId)
     
-    if (!emailValid || !courtIdValid) {
-      showLoginErrorWithAnimation("Please fix the validation errors below")
+    if (!emailValid || !loginData.password) {
+      showLoginErrorWithAnimation("Please enter valid email and password")
       return false
     }
 
     try {
+      console.log("🔐 Attempting login with:", { email: loginData.email })
+      
       const response = await fetch("/api/auth/login", {
         method: "POST",
         body: JSON.stringify({
           email: loginData.email,
           password: loginData.password,
-          courtId: loginData.courtId,
         }),
         headers: {
           "Content-Type": "application/json",
         },
-      }).then(res => res.json())
+      })
       
-      if (response.success) {
-        const { token, user } = response.data
+      console.log("📡 Response status:", response.status)
+      
+      const data = await response.json()
+      console.log("📦 Response data:", data)
+      
+      if (data.success) {
+        console.log("✅ Login successful, processing...")
+        const { token, user } = data.data
+        console.log("🎫 Token:", token?.substring(0, 20) + "...")
+        console.log("👤 User:", user)
+        
         login(token, user)
+        
+        console.log("👤 User logged in:", user)
+        
+        // Check if admin has courts
+        const courtsResponse = await fetch("/api/admin/courts", {
+          headers: {
+            "Authorization": `Bearer ${token}`
+          }
+        })
+
+        console.log("🏢 Courts response status:", courtsResponse.status)
+
+        if (courtsResponse.ok) {
+          const courtsData = await courtsResponse.json()
+          console.log("🏢 Courts data:", courtsData)
+          
+          if (courtsData.success && courtsData.data.length > 0) {
+            // Redirect to the first court's dashboard
+            console.log("➡️ Redirecting to court dashboard:", courtsData.data[0].courtId)
+            router.push(`/admin/${courtsData.data[0].courtId}`)
+          } else {
+            // No courts, redirect to onboarding
+            console.log("➡️ Redirecting to onboarding")
+            router.push("/admin/onboarding")
+          }
+        } else {
+          // Fallback to general dashboard
+          console.log("➡️ Redirecting to general dashboard")
+          router.push("/admin/dashboard")
+        }
         
         toast({
           title: "Success",
           description: "Logged in successfully!",
         })
         
-        router.push(`/admin/${loginData.courtId}`)
         return true
       } else {
-        showLoginErrorWithAnimation(response.message || "Invalid credentials. Please check your email, password, and court ID.")
+        console.log("❌ Login failed:", data)
+        showLoginErrorWithAnimation(data.message || "Invalid credentials. Please check your email and password.")
         return false
       }
     } catch (error: any) {
+      console.error("🚨 Login error:", error)
       showLoginErrorWithAnimation("An error occurred during login. Please try again.")
       return false
     }
@@ -243,7 +304,7 @@ export default function AdminAuthPage() {
     e.preventDefault()
 
     // Validate all fields
-    const fields = ['fullName', 'email', 'phone', 'password', 'confirmPassword', 'courtId', 'instituteName']
+    const fields = ['fullName', 'email', 'phone', 'password', 'confirmPassword']
     let hasErrors = false
     
     fields.forEach(field => {
@@ -280,15 +341,15 @@ export default function AdminAuthPage() {
 
       const data = await response.json()
 
-      localStorage.setItem("token", data.token)
-      localStorage.setItem("user", JSON.stringify(data.user))
+      // Use the login function from context to properly set auth state
+      login(data.data.token, data.data.user)
 
       toast({
         title: "Success",
-        description: "Account created successfully! Welcome to Aahaar.",
+        description: "Account created successfully! Let's set up your first court.",
       })
 
-      router.push(`/admin/${registerData.courtId}/onboarding`)
+      router.push("/admin/onboarding")
       return true
     } catch (error: any) {
       showRegisterErrorWithAnimation("An error occurred during registration. Please try again.")
@@ -312,13 +373,10 @@ export default function AdminAuthPage() {
       email: "",
       phone: "",
       password: "",
-      confirmPassword: "",
-      courtId: "",
-      instituteName: ""
+      confirmPassword: ""
     })
     setLoginValidationErrors({
-      email: "",
-      courtId: ""
+      email: ""
     })
   }
 
@@ -354,15 +412,6 @@ export default function AdminAuthPage() {
                 </CardHeader>
                 <CardContent>
                 <form onSubmit={handleLoginSubmit} className="space-y-6" noValidate>
-                  <FloatingInput
-                    id="courtId"
-                    type="text"
-                    label="Court ID"
-                    value={loginData.courtId}
-                    onChange={(e) => handleLoginDataChange("courtId", e.target.value)}
-                    error={loginValidationErrors.courtId}
-                  />
-
                   <FloatingInput
                     id="email"
                     type="email"
@@ -457,7 +506,7 @@ export default function AdminAuthPage() {
                   <CardDescription>Set up your food court management system</CardDescription>
                 </CardHeader>
                 <CardContent>
-                <form onSubmit={handleRegisterSubmit} className="space-y-6" noValidate>
+                <form className="space-y-6" noValidate>
                   {/* Row 1: Full Name and Email */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FloatingInput
@@ -479,53 +528,17 @@ export default function AdminAuthPage() {
                     />
                   </div>
 
-                  {/* Row 2: Phone and Institute Name */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FloatingInput
-                      id="phone"
-                      type="tel"
-                      label="Phone Number"
-                      value={registerData.phone}
-                      onChange={(e) => handleRegisterDataChange("phone", e.target.value)}
-                      error={validationErrors.phone}
-                    />
+                  {/* Row 2: Phone */}
+                  <FloatingInput
+                    id="phone"
+                    type="tel"
+                    label="Phone Number"
+                    value={registerData.phone}
+                    onChange={(e) => handleRegisterDataChange("phone", e.target.value)}
+                    error={validationErrors.phone}
+                  />
 
-                    <FloatingInput
-                      id="instituteName"
-                      type="text"
-                      label="Institute Name"
-                      value={registerData.instituteName}
-                      onChange={(e) => handleRegisterDataChange("instituteName", e.target.value)}
-                      error={validationErrors.instituteName}
-                    />
-                  </div>
-
-                  {/* Row 3: Court ID and Institute Type */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FloatingInput
-                      id="courtId"
-                      type="text"
-                      label="Court ID (e.g. vbs-ghamroj)"
-                      value={registerData.courtId}
-                      onChange={(e) => handleRegisterDataChange("courtId", e.target.value.toLowerCase())}
-                      error={validationErrors.courtId}
-                    />
-
-                    <FloatingSelect
-                      label="Institute Type"
-                      value={registerData.instituteType}
-                      onValueChange={(value) => setRegisterData((prev) => ({ ...prev, instituteType: value }))}
-                      options={[
-                        { value: "school", label: "School" },
-                        { value: "college", label: "College" },
-                        { value: "office", label: "Office" },
-                        { value: "hospital", label: "Hospital" },
-                        { value: "other", label: "Other" }
-                      ]}
-                    />
-                  </div>
-
-                  {/* Row 4: Password and Confirm Password */}
+                  {/* Row 3: Password and Confirm Password */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FloatingInput
                       id="password"

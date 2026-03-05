@@ -10,11 +10,11 @@ interface AdminUser {
   phone?: string
   fullName: string
   role: "admin"
-  courtId: string
+  courtId?: string | null
   court?: {
     courtId: string
     instituteName: string
-  }
+  } | null
 }
 
 interface AdminAuthContextType {

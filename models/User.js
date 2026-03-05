@@ -9,7 +9,7 @@ module.exports = (sequelize, DataTypes) => {
       },
       courtId: {
         type: DataTypes.STRING,
-        allowNull: false,
+        allowNull: true, // Allow null for admin users during registration
         references: {
           model: "courts",
           key: "courtId",
@@ -68,6 +68,11 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.ENUM("male", "female", "other", "prefer-not-to-say"),
         allowNull: true,
       },
+      managedCourtIds: {
+        type: DataTypes.JSON,
+        allowNull: true,
+        defaultValue: null,
+      },
       profilePicture: {
         type: DataTypes.TEXT,
         allowNull: true,
@@ -92,6 +97,11 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.JSON,
         allowNull: false,
         defaultValue: {},
+      },
+      managedCourtIds: {
+        type: DataTypes.JSON,
+        allowNull: true,
+        defaultValue: null,
       },
       createdAt: {
         type: DataTypes.DATE,

@@ -38,13 +38,43 @@ export default function AdminDashboard({ params }: { params: Promise<{ courtId: 
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    if (!user || user.role !== "admin" || user.courtId !== courtId) {
+    if (!user || user.role !== "admin") {
       router.push("/admin/auth")
       return
     }
 
-    fetchDashboardData()
+    // Check if user has access to this court
+    checkAccess()
   }, [user, courtId])
+
+  const checkAccess = async () => {
+    try {
+      // Verify user has access to this court
+      const response = await fetch(`/api/admin/courts`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        const hasAccess = data.data.some((court: any) => court.courtId === courtId)
+        
+        if (!hasAccess) {
+          router.push("/admin/auth")
+          return
+        }
+        
+        // User has access, fetch dashboard data
+        fetchDashboardData()
+      } else {
+        router.push("/admin/auth")
+      }
+    } catch (error) {
+      console.error("Error checking access:", error)
+      router.push("/admin/auth")
+    }
+  }
 
   const fetchDashboardData = async () => {
     try {
@@ -61,14 +91,26 @@ export default function AdminDashboard({ params }: { params: Promise<{ courtId: 
         const statsData = await statsResponse.json()
         // Extract data from the summary object returned by analytics API
         setStats({
-          totalOrders: statsData.data.summary.totalOrders || 0,
-          totalRevenue: statsData.data.summary.totalRevenue || 0,
-          activeVendors: statsData.data.summary.activeVendors || 0,
-          totalUsers: statsData.data.summary.totalUsers || 0,
-          todayOrders: statsData.data.summary.todayOrders || 0,
-          todayRevenue: statsData.data.summary.todayRevenue || 0,
-          pendingOrders: statsData.data.summary.pendingOrders || 0,
-          completedOrders: statsData.data.summary.completedOrders || 0,
+          totalOrders: statsData.data?.summary?.totalOrders || 0,
+          totalRevenue: statsData.data?.summary?.totalRevenue || 0,
+          activeVendors: statsData.data?.summary?.activeVendors || 0,
+          totalUsers: statsData.data?.summary?.totalUsers || 0,
+          todayOrders: statsData.data?.summary?.todayOrders || 0,
+          todayRevenue: statsData.data?.summary?.todayRevenue || 0,
+          pendingOrders: statsData.data?.summary?.pendingOrders || 0,
+          completedOrders: statsData.data?.summary?.completedOrders || 0,
+        })
+      } else {
+        // Set default stats for new court
+        setStats({
+          totalOrders: 0,
+          totalRevenue: 0,
+          activeVendors: 0,
+          totalUsers: 0,
+          todayOrders: 0,
+          todayRevenue: 0,
+          pendingOrders: 0,
+          completedOrders: 0,
         })
       }
 
@@ -81,7 +123,9 @@ export default function AdminDashboard({ params }: { params: Promise<{ courtId: 
 
       if (ordersResponse.ok) {
         const ordersData = await ordersResponse.json()
-        setRecentOrders(ordersData.data.orders)
+        setRecentOrders(ordersData.data?.orders || [])
+      } else {
+        setRecentOrders([])
       }
     } catch (error) {
       console.error("Error fetching dashboard data:", error)

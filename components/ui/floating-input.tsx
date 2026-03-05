@@ -25,6 +25,11 @@ export const FloatingInput = React.forwardRef<HTMLInputElement, FloatingInputPro
             aria-describedby={error ? errorId : undefined}
             className={cn(
               "block px-2.5 pb-2.5 pt-4 w-full text-sm bg-transparent rounded-lg border appearance-none dark:text-white focus:outline-none focus:ring-0 peer",
+              "autofill:bg-transparent autofill:text-white autofill:shadow-[inset_0_0_0px_1000px_transparent]",
+              "[-webkit-autofill]:bg-transparent [-webkit-autofill]:text-white [-webkit-autofill]:shadow-[inset_0_0_0px_1000px_transparent]",
+              "[-webkit-autofill:hover]:bg-transparent [-webkit-autofill:hover]:text-white [-webkit-autofill:hover]:shadow-[inset_0_0_0px_1000px_transparent]",
+              "[-webkit-autofill:focus]:bg-transparent [-webkit-autofill:focus]:text-white [-webkit-autofill:focus]:shadow-[inset_0_0_0px_1000px_transparent]",
+              "[-webkit-autofill:active]:bg-transparent [-webkit-autofill:active]:text-white [-webkit-autofill:active]:shadow-[inset_0_0_0px_1000px_transparent]",
               error
                 ? "text-neutral-900 border-red-600 dark:border-red-500 dark:focus:border-red-500 focus:border-red-600"
                 : "text-neutral-900 border-neutral-300 dark:border-neutral-600 dark:focus:border-white focus:border-white",

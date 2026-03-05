@@ -126,4 +126,32 @@ input, textarea, select {
   body {
     @apply bg-background text-foreground;
   }
+  
+  /* Autofill styling to prevent yellow background and maintain dark theme */
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover,
+  input:-webkit-autofill:focus,
+  input:-webkit-autofill:active {
+    -webkit-box-shadow: 0 0 0 1000px transparent inset !important;
+    -webkit-text-fill-color: white !important;
+    background-color: transparent !important;
+    background-image: none !important;
+    color: white !important;
+    transition: background-color 5000s ease-in-out 0s;
+  }
+  
+  /* For light mode autofill */
+  .light input:-webkit-autofill,
+  .light input:-webkit-autofill:hover,
+  .light input:-webkit-autofill:focus,
+  .light input:-webkit-autofill:active {
+    -webkit-text-fill-color: #171717 !important;
+    color: #171717 !important;
+  }
+  
+  /* Standard autofill (for browsers that support it) */
+  input:autofill {
+    background-color: transparent !important;
+    color: white !important;
+  }
 }

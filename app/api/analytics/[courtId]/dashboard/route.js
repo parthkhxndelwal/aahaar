@@ -107,10 +107,29 @@ export async function GET(request, { params }) {
     })
     console.log(`- All vendors:`, allVendorsForDebug)
 
-    // Get registered users count
-    const totalUsers = await User.count({
-      where: { courtId, role: "user" },
+    // Get registered users count - include users who have this court in managedCourtIds or as courtId
+    console.log(`[DEBUG] Counting users for court: ${courtId}`)
+    
+    // First, let's see all users
+    const allUsers = await User.findAll({
+      attributes: ['id', 'email', 'courtId', 'managedCourtIds', 'role'],
+      raw: true
     })
+    console.log(`[DEBUG] All users:`, allUsers)
+    
+    // Try different approaches to count users
+    const usersByCourtId = await User.count({
+      where: { courtId: courtId }
+    })
+    console.log(`[DEBUG] Users with courtId=${courtId}: ${usersByCourtId}`)
+    
+    // Try JSON_CONTAINS approach
+    const usersWithManagedCourts = await User.count({
+      where: sequelize.literal(`JSON_CONTAINS(managedCourtIds, '"${courtId}"')`)
+    })
+    console.log(`[DEBUG] Users with ${courtId} in managedCourtIds: ${usersWithManagedCourts}`)
+    
+    const totalUsers = usersByCourtId + usersWithManagedCourts
 
     // Get top vendors by order count
     const topVendors = await sequelize.query(

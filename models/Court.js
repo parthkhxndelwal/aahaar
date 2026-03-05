@@ -12,7 +12,7 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: false,
         unique: true,
         validate: {
-          isAlphanumeric: true,
+          is: /^[a-zA-Z0-9_-]+$/,
           len: [3, 50],
         },
       },
@@ -24,7 +24,7 @@ module.exports = (sequelize, DataTypes) => {
         },
       },
       instituteType: {
-        type: DataTypes.ENUM("school", "college", "office", "hospital", "other"),
+        type: DataTypes.ENUM("school", "college", "university", "office", "corporate", "hospital", "system", "other"),
         allowNull: false,
         defaultValue: "college",
       },
@@ -43,7 +43,7 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.STRING,
         allowNull: true,
         validate: {
-          len: [10, 15],
+          len: [8, 20], // More flexible range for international numbers
         },
       },
       address: {

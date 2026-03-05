@@ -103,7 +103,7 @@ export async function PUT(request, { params }) {
       instituteType: updateData.instituteType,
       logoUrl: updateData.logoUrl,
       address: updateData.address,
-      contactPhone: updateData.contactPhone,
+      contactPhone: updateData.contactPhone && updateData.contactPhone.trim().length >= 8 ? updateData.contactPhone.trim() : null,
       timezone: updateData.timezone,
       // Transform operating hours from frontend format to backend format
       operatingHours: Object.entries(updateData.operatingHours || {}).reduce((acc, [day, hours]) => {
