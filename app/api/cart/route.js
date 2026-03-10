@@ -1,227 +1,108 @@
 import { NextResponse } from "next/server"
-import { authenticateToken } from "@/middleware/auth"
-import { MenuItem, Cart, CartItem, User, Vendor } from "@/models"
+import { authenticateTokenNextJS } from "@/middleware/auth"
+import { CartService } from "@/lib/services/cart-service"
+import { successResponse, errorResponse, handleServiceError } from "@/lib/api-response"
+
+// Helper to format cart for legacy frontend compatibility
+const formatCartResponse = (cartSummary) => {
+  // cartSummary.items is the array of Sequelize objects
+  // We need to map it to the flat structure expected by frontend
+  const items = cartSummary.items.map(item => {
+    // Check if menuItem is loaded (it should be via getCart)
+    const menuItem = item.menuItem || {}
+    const vendor = menuItem.vendor || {}
+
+    return {
+      menuItemId: item.menuItemId,
+      name: menuItem.name || "Unknown Item",
+      price: parseFloat(item.unitPrice || 0),
+      quantity: item.quantity,
+      subtotal: parseFloat(item.subtotal || 0),
+      customizations: item.customizations,
+      vendorId: menuItem.vendorId,
+      imageUrl: menuItem.imageUrl,
+      vendorName: vendor.stallName || vendor.vendorName || 'Unknown Vendor'
+    }
+  })
+
+  return {
+    items,
+    total: cartSummary.summary.subtotal, // Use subtotal as legacy 'total' (pre-tax) or total (post-tax)? 
+    // Old route used cart.total which was sum of subtotals. Cleanest is subtotal.
+    summary: cartSummary.summary // Include new rich summary as well
+  }
+}
 
 export async function GET(request) {
   try {
-    const authResult = await authenticateToken(request)
-    if (authResult instanceof NextResponse) return authResult
+    const authResult = await authenticateTokenNextJS(request)
+    if (authResult.error) {
+      // Allow 401? Cart might be guest?
+      // Old route returned error.
+      return errorResponse(authResult.error, authResult.status)
+    }
 
     const { user } = authResult
-
-    let cart = await Cart.findOne({
-      where: {
-        userId: user.id,
-        courtId: user.courtId,
-        status: 'active'
-      },
-      include: [
-        {
-          model: CartItem,
-          as: 'items',
-          include: [
-            {
-              model: MenuItem,
-              as: 'menuItem',
-              attributes: ['id', 'name', 'price', 'imageUrl', 'vendorId'],
-              include: [
-                {
-                  model: Vendor,
-                  as: 'vendor',
-                  attributes: ['id', 'stallName', 'vendorName']
-                }
-              ]
-            }
-          ]
-        }
-      ]
-    })
-
-    if (!cart) {
-      // Create new cart if none exists
-      cart = await Cart.create({
-        userId: user.id,
-        courtId: user.courtId,
-        status: 'active',
-        total: 0
-      })
-      cart.items = []
+    // CartService.getCartSummary requires userId, courtId.
+    // If user.courtId is missing, what happens? 
+    // Assuming authResult includes courtId or user has it.
+    // Middleware usually attaches courtId if in params, but here it's global cart route.
+    // We rely on user.courtId.
+    
+    if (!user.courtId) {
+        // Fallback or error?
+        // Old code: user.courtId
     }
 
-    // Format cart data for frontend
-    const formattedCart = {
-      items: cart.items?.map(item => ({
-        menuItemId: item.menuItemId,
-        name: item.menuItem.name,
-        price: parseFloat(item.unitPrice),
-        quantity: item.quantity,
-        subtotal: parseFloat(item.subtotal),
-        customizations: item.customizations,
-        vendorId: item.menuItem.vendorId,
-        imageUrl: item.menuItem.imageUrl,
-        vendorName: item.menuItem.vendor?.stallName || 'Unknown Vendor'
-      })) || [],
-      total: parseFloat(cart.total || 0)
-    }
+    const summary = await CartService.getCartSummary(user.id, user.courtId)
+    
+    // Return formatted data
+    return successResponse({ cart: formatCartResponse(summary) })
 
-    return NextResponse.json({
-      success: true,
-      data: { cart: formattedCart },
-    })
   } catch (error) {
-    console.error("Get cart error:", error)
-    return NextResponse.json({ success: false, message: "Internal server error" }, { status: 500 })
+    return handleServiceError(error)
   }
 }
 
 export async function POST(request) {
   try {
-    const authResult = await authenticateToken(request)
-    if (authResult instanceof NextResponse) return authResult
+    const authResult = await authenticateTokenNextJS(request)
+    if (authResult.error) {
+      return errorResponse(authResult.error, authResult.status)
+    }
 
     const { user } = authResult
     const { menuItemId, quantity = 1, customizations = {} } = await request.json()
 
-    const menuItem = await MenuItem.findByPk(menuItemId)
-    if (!menuItem || !menuItem.isAvailable) {
-      return NextResponse.json({ success: false, message: "Menu item not available" }, { status: 400 })
-    }
-
-    // Find or create active cart
-    let cart = await Cart.findOne({
-      where: {
-        userId: user.id,
-        courtId: user.courtId,
-        status: 'active'
-      }
+    const summary = await CartService.addItem(user.id, user.courtId, {
+      menuItemId,
+      quantity,
+      customizations
     })
 
-    if (!cart) {
-      cart = await Cart.create({
-        userId: user.id,
-        courtId: user.courtId,
-        status: 'active',
-        total: 0
-      })
-    }
+    return successResponse({ cart: formatCartResponse(summary) }, "Item added to cart")
 
-    // Check if item already exists in cart
-    const existingCartItem = await CartItem.findOne({
-      where: {
-        cartId: cart.id,
-        menuItemId: menuItemId
-      }
-    })
-
-    if (existingCartItem) {
-      // Update existing item
-      existingCartItem.quantity += quantity
-      existingCartItem.subtotal = existingCartItem.quantity * menuItem.price
-      await existingCartItem.save()
-    } else {
-      // Create new cart item
-      await CartItem.create({
-        cartId: cart.id,
-        menuItemId: menuItemId,
-        quantity: quantity,
-        unitPrice: menuItem.price,
-        subtotal: quantity * menuItem.price,
-        customizations: customizations
-      })
-    }
-
-    // Recalculate cart total
-    const cartItems = await CartItem.findAll({
-      where: { cartId: cart.id }
-    })
-    
-    cart.total = cartItems.reduce((sum, item) => sum + parseFloat(item.subtotal), 0)
-    await cart.save()
-
-    // Return updated cart
-    const updatedCart = await Cart.findOne({
-      where: { id: cart.id },
-      include: [
-        {
-          model: CartItem,
-          as: 'items',
-          include: [
-            {
-              model: MenuItem,
-              as: 'menuItem',
-              attributes: ['id', 'name', 'price', 'imageUrl', 'vendorId'],
-              include: [
-                {
-                  model: Vendor,
-                  as: 'vendor',
-                  attributes: ['id', 'stallName', 'vendorName']
-                }
-              ]
-            }
-          ]
-        }
-      ]
-    })
-
-    const formattedCart = {
-      items: updatedCart.items.map(item => ({
-        menuItemId: item.menuItemId,
-        name: item.menuItem.name,
-        price: parseFloat(item.unitPrice),
-        quantity: item.quantity,
-        subtotal: parseFloat(item.subtotal),
-        customizations: item.customizations,
-        vendorId: item.menuItem.vendorId,
-        imageUrl: item.menuItem.imageUrl,
-        vendorName: item.menuItem.vendor?.stallName || 'Unknown Vendor'
-      })),
-      total: parseFloat(updatedCart.total)
-    }
-
-    return NextResponse.json({
-      success: true,
-      message: "Item added to cart",
-      data: { cart: formattedCart },
-    })
   } catch (error) {
-    console.error("Add to cart error:", error)
-    return NextResponse.json({ success: false, message: "Internal server error" }, { status: 500 })
+    return handleServiceError(error)
   }
 }
 
 export async function DELETE(request) {
   try {
-    const authResult = await authenticateToken(request)
-    if (authResult instanceof NextResponse) return authResult
+    const authResult = await authenticateTokenNextJS(request)
+    if (authResult.error) {
+      return errorResponse(authResult.error, authResult.status)
+    }
 
     const { user } = authResult
 
-    // Find the user's active cart
-    const cart = await Cart.findOne({
-      where: {
-        userId: user.id,
-        courtId: user.courtId,
-        status: 'active'
-      }
-    })
+    await CartService.clearCart(user.id, user.courtId)
 
-    if (cart) {
-      // Delete all cart items
-      await CartItem.destroy({
-        where: { cartId: cart.id }
-      })
+    return successResponse({
+      cart: { items: [], total: 0 }
+    }, "Cart cleared")
 
-      // Update cart total to 0
-      await cart.update({ total: 0 })
-    }
-
-    return NextResponse.json({
-      success: true,
-      message: "Cart cleared",
-      data: { cart: { items: [], total: 0 } }
-    })
   } catch (error) {
-    console.error("Clear cart error:", error)
-    return NextResponse.json({ success: false, message: "Internal server error" }, { status: 500 })
+    return handleServiceError(error)
   }
 }

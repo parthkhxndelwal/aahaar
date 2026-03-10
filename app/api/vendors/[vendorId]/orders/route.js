@@ -1,142 +1,79 @@
 import { NextResponse } from "next/server"
-import { Order, User, Payment, OrderItem, MenuItem, Vendor } from "@/models"
-import { authenticateToken } from "@/middleware/auth"
-import { Op } from "sequelize"
+import { Vendor } from "@/models"
+import { authenticateTokenNextJS } from "@/middleware/auth"
+import { OrderService } from "@/lib/services/order-service"
+import { successResponse, errorResponse, handleServiceError } from "@/lib/api-response"
 
 export async function GET(request, { params }) {
   try {
-    console.log("🚀 API GET /api/vendors/[vendorId]/orders called")
-
-    const authResult = await authenticateToken(request)
-    if (authResult instanceof NextResponse) {
-      console.log("❌ Authentication failed")
-      return authResult
+    const authResult = await authenticateTokenNextJS(request)
+    if (authResult.error) {
+      return errorResponse(authResult.error, authResult.status)
     }
 
     const { user } = authResult
     const { vendorId } = await params
     const { searchParams } = new URL(request.url)
 
-    console.log("👤 User:", user.email, "(role:", user.role, ")")
-    console.log("🏪 Vendor ID:", vendorId)
-
     // Check permissions
     if (user.role === "vendor") {
       const vendor = await Vendor.findOne({ where: { userId: user.id } })
       if (!vendor || vendor.id !== vendorId) {
-        return NextResponse.json({ success: false, message: "Access denied" }, { status: 403 })
+        return errorResponse("Access denied", 403)
       }
     } else if (user.role === "admin") {
       const vendor = await Vendor.findOne({ where: { id: vendorId, courtId: user.courtId } })
       if (!vendor) {
-        return NextResponse.json({ success: false, message: "Vendor not found" }, { status: 404 })
+        return errorResponse("Vendor not found", 404)
       }
     } else {
-      return NextResponse.json({ success: false, message: "Access denied" }, { status: 403 })
+      return errorResponse("Access denied", 403)
     }
 
-    // Get query parameters
     const status = searchParams.get("status")
     const date = searchParams.get("date")
     const limit = parseInt(searchParams.get("limit") || "50")
     const page = parseInt(searchParams.get("page") || "1")
-    const offset = (page - 1) * limit
 
-    // Build where condition
-    const whereCondition = {
-      vendorId,
-    }
-
-    if (status) {
-      whereCondition.status = status
-    }
-
-    if (date) {
-      const startDate = new Date(date)
-      const endDate = new Date(startDate)
-      endDate.setDate(endDate.getDate() + 1)
-      whereCondition.createdAt = {
-        [Op.gte]: startDate,
-        [Op.lt]: endDate,
-      }
-    }
-
-    // Fetch orders
-    const orders = await Order.findAll({
-      where: whereCondition,
-      include: [
-        {
-          model: User,
-          as: "user",
-          attributes: ["fullName", "phone", "email"],
-        },
-        {
-          model: Payment,
-          as: "payment",
-          attributes: ["paymentMethod", "status", "amount"],
-        },
-        {
-          model: OrderItem,
-          as: "orderItems",
-          include: [
-            {
-              model: MenuItem,
-              as: "menuItem",
-              attributes: ["name", "price"],
-            },
-          ],
-        },
-      ],
-      order: [["createdAt", "DESC"]],
-      limit,
-      offset,
+    const result = await OrderService.getVendorOrders(vendorId, {
+      status, 
+      date,
+      page,
+      limit
     })
 
-    // Transform orders for frontend
-    const transformedOrders = orders.map((order) => ({
+    // Transform for frontend compatibility
+    const transformedOrders = result.orders.map((order) => ({
       id: order.id,
       orderNumber: order.orderNumber,
-      customerName: order.user?.fullName || "Unknown",
-      customerPhone: order.user?.phone,
+      customerName: order.customerName || order.user?.fullName || "Unknown",
+      customerPhone: order.customerPhone || order.user?.phone,
       items: order.orderItems?.map((item) => ({
-        name: item.menuItem?.name || "Unknown Item",
+        name: item.itemName || item.menuItem?.name || "Unknown Item",
         quantity: item.quantity,
-        price: item.unitPrice,
+        price: item.itemPrice, // using itemPrice stored in OrderItem
       })) || [],
       totalAmount: order.totalAmount,
       status: order.status,
-      paymentMethod: order.payment?.paymentMethod || "cash",
-      paymentStatus: order.payment?.status || "pending",
+      paymentMethod: order.paymentMethod || "cash", // Order model has paymentMethod directly too
+      paymentStatus: order.paymentStatus || "pending",
       specialInstructions: order.specialInstructions,
       createdAt: order.createdAt,
       estimatedPreparationTime: order.estimatedPreparationTime || 15,
     }))
 
-    // Get total count for pagination
-    const totalCount = await Order.count({
-      where: whereCondition,
-    })
+    return successResponse({
+      orders: transformedOrders,
+      pagination: {
+          page: result.pagination.page,
+          limit: result.pagination.limit,
+          total: result.pagination.total,
+          pages: result.pagination.totalPages 
+          // Note: formatted 'pages' vs 'totalPages' in previous code
+      },
+    }, "Orders fetched successfully")
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        orders: transformedOrders,
-        pagination: {
-          page,
-          limit,
-          total: totalCount,
-          pages: Math.ceil(totalCount / limit),
-        },
-      },
-    })
   } catch (error) {
-    console.error("Get vendor orders error:", error)
-    return NextResponse.json(
-      {
-        success: false,
-        message: "Internal server error",
-      },
-      { status: 500 },
-    )
+    return handleServiceError(error)
   }
 }

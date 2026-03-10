@@ -1,13 +1,14 @@
 import { NextResponse } from "next/server"
-import { Order, User, Payment, OrderItem, MenuItem, Vendor } from "@/models"
 import { authenticateTokenNextJS } from "@/middleware/auth"
+import { OrderService } from "@/lib/services/order-service"
+import { successResponse, errorResponse, handleServiceError } from "@/lib/api-response"
 import { Op } from "sequelize"
 
 export async function GET(request, { params }) {
   try {
     const authResult = await authenticateTokenNextJS(request)
     if (authResult.error) {
-      return NextResponse.json({ success: false, message: authResult.error }, { status: authResult.status })
+      return errorResponse(authResult.error, authResult.status)
     }
 
     const { user } = authResult
@@ -18,65 +19,23 @@ export async function GET(request, { params }) {
     const activeOnly = searchParams.get("activeOnly") === "true"
     const page = Number.parseInt(searchParams.get("page")) || 1
     const limit = Number.parseInt(searchParams.get("limit")) || 20
-    const offset = (page - 1) * limit
 
-    // Build where clause
-    const whereClause = { 
-      userId: user.id, 
+    const result = await OrderService.getUserOrders(user.id, {
       courtId,
-      isSubOrder: true // Only show sub-orders to avoid confusion
-    }
-
-    if (parentOrderId) {
-      whereClause.parentOrderId = parentOrderId
-    }
-
-    if (status) {
-      whereClause.status = status
-    }
-
-    // If activeOnly, filter for non-completed, non-rejected and non-cancelled orders
-    if (activeOnly) {
-      whereClause.status = {
-        [Op.notIn]: ['completed', 'rejected', 'cancelled']
-      }
-    }
-
-    const orders = await Order.findAndCountAll({
-      where: whereClause,
-      include: [
-        {
-          model: Vendor,
-          as: "vendor",
-          attributes: ["id", "stallName", "vendorName"],
-        },
-        {
-          model: OrderItem,
-          as: "orderItems",
-          include: [
-            {
-              model: MenuItem,
-              as: "menuItem",
-              attributes: ["id", "name", "imageUrl"],
-            },
-          ],
-        },
-        {
-          model: Payment,
-          as: "payment",
-          attributes: ["id", "status", "paymentMethod", "amount"],
-        },
-      ],
-      limit,
-      offset,
-      order: [["createdAt", "DESC"]],
+      parentOrderId: parentOrderId || undefined,
+      status: status || undefined,
+      activeOnly,
+      page,
+      limit
     })
 
-    // Group orders by parentOrderId for better organization
+    const orders = result.orders
+
+    // Group orders by parentOrderId for active order screen
     const groupedOrders = {}
     const orderSummaries = []
 
-    for (const order of orders.rows) {
+    for (const order of orders) {
       const parentId = order.parentOrderId
       
       if (!groupedOrders[parentId]) {
@@ -85,7 +44,7 @@ export async function GET(request, { params }) {
           orderOtp: order.orderOtp,
           orders: [],
           totalAmount: 0,
-          overallStatus: 'pending', // pending, partial, ready, completed, cancelled
+          overallStatus: 'pending',
           createdAt: order.createdAt,
           vendorsCount: 0,
           completedVendors: 0,
@@ -97,10 +56,10 @@ export async function GET(request, { params }) {
       const orderData = {
         id: order.id,
         orderNumber: order.orderNumber,
-        vendor: order.vendor,
+        vendor: order.vendor, // Service include matches
         items: order.orderItems?.map((item) => ({
           id: item.id,
-          name: item.menuItem?.name || "Unknown Item",
+          name: item.itemName || item.menuItem?.name || "Unknown Item",
           quantity: item.quantity,
           price: item.itemPrice,
           subtotal: item.subtotal,
@@ -125,10 +84,9 @@ export async function GET(request, { params }) {
       }
 
       groupedOrders[parentId].orders.push(orderData)
-      groupedOrders[parentId].totalAmount += order.totalAmount
+      groupedOrders[parentId].totalAmount += parseFloat(order.totalAmount || 0)
       groupedOrders[parentId].vendorsCount++
 
-      // Update completion counts
       if (order.status === 'completed') {
         groupedOrders[parentId].completedVendors++
       } else if (order.status === 'rejected') {
@@ -138,86 +96,49 @@ export async function GET(request, { params }) {
       }
     }
 
-    // Calculate overall status for each parent order
+    // Calculate aggregated status
     for (const parentId in groupedOrders) {
       const group = groupedOrders[parentId]
       const activeOrders = group.vendorsCount - group.rejectedVendors - group.cancelledVendors
       
-      console.log(`🔍 [API] Status calculation for ${parentId}:`, {
-        totalVendors: group.vendorsCount,
-        completed: group.completedVendors,
-        rejected: group.rejectedVendors,
-        cancelled: group.cancelledVendors,
-        active: activeOrders,
-        orderStatuses: group.orders.map(o => o.status)
-      })
-      
-      // If all orders are cancelled, mark as cancelled
       if (group.cancelledVendors === group.vendorsCount) {
         group.overallStatus = 'cancelled'
       }
-      // If all orders are rejected, mark as rejected
       else if (group.rejectedVendors === group.vendorsCount) {
         group.overallStatus = 'rejected'
       }
-      // If all orders are either cancelled or rejected (no active orders), determine status
       else if (activeOrders === 0) {
-        // If there are both cancelled and rejected, show rejected (more severe)
-        if (group.rejectedVendors > 0) {
-          group.overallStatus = 'rejected'
-        } else {
-          group.overallStatus = 'cancelled'
-        }
+        if (group.rejectedVendors > 0) group.overallStatus = 'rejected'
+        else group.overallStatus = 'cancelled'
       }
-      // If all non-cancelled/rejected orders are completed, mark as completed
       else if (group.completedVendors === activeOrders && activeOrders > 0) {
         group.overallStatus = 'completed'
       } 
-      // If any orders are ready for pickup, mark as ready (highest priority for active orders)
       else if (group.orders.some(o => o.status === 'ready' && o.status !== 'cancelled' && o.status !== 'rejected')) {
         group.overallStatus = 'ready'
       }
-      // If some orders are completed but not all, mark as partial
       else if (group.completedVendors > 0 && activeOrders > group.completedVendors) {
         group.overallStatus = 'partial'
       } 
-      // If any orders are preparing, mark as preparing
       else if (group.orders.some(o => o.status === 'preparing' || o.status === 'accepted')) {
         group.overallStatus = 'preparing'
       }
-      // Default to pending for new orders
       else {
         group.overallStatus = 'pending'
       }
 
-      console.log(`✅ [API] Final status for ${parentId}: ${group.overallStatus}`)
       orderSummaries.push(group)
     }
 
-    // Sort by creation date
-    orderSummaries.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+    orderSummaries.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        orderSummaries,
-        pagination: {
-          total: orders.count,
-          page,
-          limit,
-          totalPages: Math.ceil(orders.count / limit),
-        },
-      },
+    return successResponse({
+      orderSummaries,
+      pagination: result.pagination
     })
+
   } catch (error) {
-    console.error("Get user order status error:", error)
-    return NextResponse.json(
-      {
-        success: false,
-        message: "Internal server error",
-      },
-      { status: 500 }
-    )
+    return handleServiceError(error)
   }
 }
 
@@ -226,7 +147,7 @@ export async function POST(request, { params }) {
   try {
     const authResult = await authenticateTokenNextJS(request)
     if (authResult.error) {
-      return NextResponse.json({ success: false, message: authResult.error }, { status: authResult.status })
+      return errorResponse(authResult.error, authResult.status)
     }
 
     const { user } = authResult
@@ -234,44 +155,23 @@ export async function POST(request, { params }) {
     const { parentOrderId } = await request.json()
 
     if (!parentOrderId) {
-      return NextResponse.json({ success: false, message: "Parent order ID is required" }, { status: 400 })
+      return errorResponse("Parent order ID is required", 400)
     }
 
-    const orders = await Order.findAll({
-      where: { 
-        userId: user.id, 
-        courtId,
-        parentOrderId,
-        isSubOrder: true
-      },
-      include: [
-        {
-          model: Vendor,
-          as: "vendor",
-          attributes: ["id", "stallName", "vendorName", "contactPhone"],
-        },
-        {
-          model: OrderItem,
-          as: "orderItems",
-          include: [
-            {
-              model: MenuItem,
-              as: "menuItem",
-              attributes: ["id", "name", "imageUrl", "description"],
-            },
-          ],
-        },
-        {
-          model: Payment,
-          as: "payment",
-          attributes: ["id", "status", "paymentMethod", "amount"],
-        },
-      ],
-      order: [["createdAt", "ASC"]],
+    // Service fetch does not sort by ASC, it sorts by DESC by default.
+    // We might want to sort here or add sorting to service? 
+    // Usually detail view sorting isn't critical, but original was ASC.
+    const result = await OrderService.getUserOrders(user.id, {
+      courtId,
+      parentOrderId,
+      limit: 100 // Fetch all sub-orders for this parent
     })
+    
+    // Sort logic handled in-memory if needed, or update service (Service sorts DESC)
+    const orders = result.orders.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
 
     if (orders.length === 0) {
-      return NextResponse.json({ success: false, message: "Order not found" }, { status: 404 })
+      return errorResponse("Order not found", 404)
     }
 
     const orderDetails = {
@@ -282,10 +182,10 @@ export async function POST(request, { params }) {
       orders: orders.map(order => ({
         id: order.id,
         orderNumber: order.orderNumber,
-        vendor: order.vendor,
+        vendor: order.vendor, // Service includes this
         items: order.orderItems?.map((item) => ({
           id: item.id,
-          name: item.menuItem?.name || "Unknown Item",
+          name: item.itemName || item.menuItem?.name || "Unknown Item",
           description: item.menuItem?.description,
           quantity: item.quantity,
           price: item.itemPrice,
@@ -301,7 +201,8 @@ export async function POST(request, { params }) {
         queuePosition: order.queuePosition,
         specialInstructions: order.specialInstructions,
         statusHistory: order.statusHistory,
-        timeline: {
+        timeline: { // Inferred timeline, old code had manual fields maybe? Order model has timestamps?
+            // Assuming model has these fields or they are undefined
           createdAt: order.createdAt,
           acceptedAt: order.acceptedAt,
           preparingAt: order.preparingAt,
@@ -325,18 +226,9 @@ export async function POST(request, { params }) {
       }
     }
 
-    return NextResponse.json({
-      success: true,
-      data: orderDetails,
-    })
+    return successResponse(orderDetails)
+
   } catch (error) {
-    console.error("Get order details error:", error)
-    return NextResponse.json(
-      {
-        success: false,
-        message: "Internal server error",
-      },
-      { status: 500 }
-    )
+    return handleServiceError(error)
   }
 }

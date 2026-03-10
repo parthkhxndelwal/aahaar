@@ -1,13 +1,12 @@
 "use client"
 
-import type React from "react"
 import { use } from "react"
 import { useState, useEffect } from "react"
-
 import { useVendorAuth } from "@/contexts/vendor-auth-context"
 import { useRouter } from "next/navigation"
-import { VendorSidebar } from "@/components/vendor/vendor-sidebar"
-import { VendorHeader } from "@/components/vendor/vendor-header"
+import { DashboardShell } from "@/components/dashboard-shell"
+import { LayoutDashboard, UtensilsCrossed, ClipboardList, Settings, Box } from "lucide-react"
+import { Spinner } from "@/components/ui/spinner"
 
 export default function VendorLayout({
   children,
@@ -16,57 +15,55 @@ export default function VendorLayout({
   children: React.ReactNode
   params: Promise<{ courtId: string }>
 }) {
-  const { user, loading } = useVendorAuth()
+  const { user, loading, logout } = useVendorAuth()
   const router = useRouter()
   const { courtId } = use(params)
-  const [isMobile, setIsMobile] = useState(false)
-  const [isHydrated, setIsHydrated] = useState(false)
+  const [mounted, setMounted] = useState(false)
 
-  // Mark as hydrated after first render
   useEffect(() => {
-    setIsHydrated(true)
-  }, [])
-
-  // Check if device is mobile
-  useEffect(() => {
-    const checkIsMobile = () => {
-      setIsMobile(window.innerWidth < 768)
-    }
-    
-    checkIsMobile()
-    window.addEventListener('resize', checkIsMobile)
-    
-    return () => window.removeEventListener('resize', checkIsMobile)
+    setMounted(true)
   }, [])
 
   useEffect(() => {
-    if (!loading && (!user || user.role !== "vendor" || user.courtId !== courtId)) {
-      router.push("/vendor/login")
+    if (!loading && mounted) {
+        if (!user || user.role !== "vendor") {
+             router.push("/vendor/login")
+        } else if (user.courtId !== courtId) {
+             router.push(`/vendor/${user.courtId}`)
+        }
     }
-  }, [user, loading, courtId, router])
+  }, [user, loading, courtId, router, mounted])
 
-  if (loading || !isHydrated) {
-    return <div className="flex items-center justify-center min-h-screen">Loading...</div>
+  if (loading || !mounted) {
+    return (
+      <div className="h-screen w-full flex items-center justify-center bg-muted/20">
+        <Spinner size={32} />
+      </div>
+    )
   }
+  
+  if (!user) return null;
 
-  if (!user || user.role !== "vendor") {
-    return null
-  }
+  const navItems = [
+    { title: "Overview", href: `/vendor/${courtId}`, icon: LayoutDashboard },
+    { title: "Live Orders", href: `/vendor/${courtId}/queue`, icon: ClipboardList },
+    { title: "Menu", href: `/vendor/${courtId}/menu`, icon: UtensilsCrossed },
+    { title: "Inventory", href: `/vendor/${courtId}/inventory`, icon: Box },
+    { title: "Settings", href: `/vendor/${courtId}/settings`, icon: Settings },
+  ]
 
   return (
-    <div className={`flex h-screen bg-neutral-950 ${isMobile ? 'flex-col' : ''}`}>
-      {/* Desktop Sidebar */}
-      {!isMobile && <VendorSidebar courtId={courtId} />}
-      
-      <div className={`flex-1 flex flex-col overflow-hidden ${isMobile ? 'pb-16' : ''}`}>
-        <VendorHeader />
-        <main className="flex-1 overflow-x-hidden overflow-y-auto bg-neutral-950 p-6">
-          {children}
-        </main>
-      </div>
-      
-      {/* Mobile Bottom Navigation */}
-      {isMobile && <VendorSidebar courtId={courtId} />}
-    </div>
+    <DashboardShell
+        navItems={navItems}
+        user={{
+            name: user.vendorProfile?.stallName || user.fullName,
+            email: user.email || user.phone || 'No email',
+            role: "Vendor",
+        }}
+        onLogout={logout}
+        appName="Vendor Portal"
+    >
+        {children}
+    </DashboardShell>
   )
 }
