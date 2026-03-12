@@ -60,6 +60,11 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: false,
         defaultValue: false,
       },
+      profileCompleted: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
+      },
       dateOfBirth: {
         type: DataTypes.DATEONLY,
         allowNull: true,

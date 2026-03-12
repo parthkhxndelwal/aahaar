@@ -5,12 +5,14 @@ import { useState, useEffect, useCallback } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { AnimatedButton } from "@/components/ui/animated-button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Loader2, Phone, Mail, ArrowLeft, Building2 } from "lucide-react"
+import { Loader2, ArrowLeft, Building2, Mail, Eye, EyeOff } from "lucide-react"
 import { useAppAuth } from "@/contexts/app-auth-context"
+
+type AuthStep = 'email' | 'otp' | 'password' | 'onboarding'
 
 export default function UserLogin() {
   const params = useParams()
@@ -31,81 +33,117 @@ export default function UserLogin() {
 
   // Redirect already authenticated users
   useEffect(() => {
-    console.log('🔄 [Login] Auth state changed:', { 
-      hasUser: !!user, 
-      hasToken: !!token, 
-      returnTo,
-      userLoading: !user && !token // If neither user nor token, we're still loading
-    })
-    
     if (user && token) {
-      console.log('🔄 [Login] User authenticated, redirecting...', { 
-        userId: user.id, 
-        hasToken: !!token,
-        returnTo 
-      })
       const redirectUrl = returnTo || `/app/${courtId}`
-      console.log(`🎯 [Login] Redirecting to: ${redirectUrl}`)
-      
-      // Use a small delay to ensure cookie is set
       setTimeout(() => {
         router.replace(redirectUrl)
       }, 100)
     }
   }, [user, token, returnTo, courtId, router])
 
+  // UI State
+  const [currentStep, setCurrentStep] = useState<AuthStep>('email')
   const [loading, setLoading] = useState(false)
   const [courtLoading, setCourtLoading] = useState(true)
   const [error, setError] = useState("")
   const [courtError, setCourtError] = useState("")
-  const [otpSent, setOtpSent] = useState(false)
-  const [activeTab, setActiveTab] = useState("phone")
   const [courtInfo, setCourtInfo] = useState<any>(null)
+  const [showPassword, setShowPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+  const [isNewUser, setIsNewUser] = useState(false)
+  const [needsOnboarding, setNeedsOnboarding] = useState(false)
 
-  // Phone/OTP Login State
-  const [phone, setPhone] = useState("")
-  const [otp, setOtp] = useState("")
-
-  // Email Login State
+  // Form Data
   const [email, setEmail] = useState("")
+  const [emailError, setEmailError] = useState("")
+  const [emailTouched, setEmailTouched] = useState(false)
+  const [emailValidationTimeout, setEmailValidationTimeout] = useState<NodeJS.Timeout | null>(null)
+  const [otp, setOtp] = useState("")
   const [password, setPassword] = useState("")
+  const [confirmPassword, setConfirmPassword] = useState("")
+  const [name, setName] = useState("")
 
-  // Validate court on mount - wrapped in useCallback to prevent infinite loops
+  // Validate court on mount
   const validateCourt = useCallback(async () => {
     try {
       setCourtLoading(true)
-      console.log("🏢 Validating court:", courtId)
-      
       const response = await fetch(`/api/courts/${courtId}`)
-      
-      console.log("📡 Court API response status:", response.status)
       
       if (response.ok) {
         const data = await response.json()
-        console.log("📥 Court API response data:", data)
-        
         if (data.success) {
           setCourtInfo(data.data.court)
           setCourtError("")
-          console.log("✅ Court info set:", data.data.court)
         } else {
           setCourtError("Food court not found")
-          console.log("❌ Court not found in response")
         }
       } else if (response.status === 404) {
         setCourtError("Food court not found")
-        console.log("❌ Court not found (404)")
       } else {
         setCourtError("Failed to load food court information")
-        console.log("❌ Failed to load court info, status:", response.status)
       }
     } catch (error) {
-      console.error("❌ Error validating court:", error)
       setCourtError("Failed to load food court information")
     } finally {
       setCourtLoading(false)
     }
   }, [courtId])
+
+  // Email validation function
+  const validateEmail = (email: string) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!email.trim()) {
+      return "Email address is required"
+    }
+    if (!emailRegex.test(email)) {
+      return "Please enter a valid email address"
+    }
+    return ""
+  }
+
+  // Handle email input change with debounced validation
+  const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value
+    setEmail(value)
+    
+    // Clear any existing timeout
+    if (emailValidationTimeout) {
+      clearTimeout(emailValidationTimeout)
+    }
+    
+    // Clear general error when user starts typing
+    if (error) {
+      setError("")
+    }
+    
+    // Check if email is now valid and clear error immediately
+    const validationError = validateEmail(value)
+    if (!validationError) {
+      setEmailError("")
+    } else if (emailTouched) {
+      // Only show validation error after user stops typing for 800ms
+      const timeout = setTimeout(() => {
+        setEmailError(validationError)
+      }, 800)
+      setEmailValidationTimeout(timeout)
+    }
+  }
+
+  // Handle email input focus
+  const handleEmailFocus = () => {
+    setEmailTouched(true)
+  }
+
+  // Handle email input blur - validate immediately on blur
+  const handleEmailBlur = () => {
+    if (emailValidationTimeout) {
+      clearTimeout(emailValidationTimeout)
+    }
+    const validationError = validateEmail(email)
+    if (validationError && emailTouched) {
+      setEmailError(validationError)
+    }
+  }
 
   useEffect(() => {
     if (courtId) {
@@ -113,136 +151,253 @@ export default function UserLogin() {
     }
   }, [courtId, validateCourt])
 
-  const handleSendOTP = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!phone || phone.length < 10) {
-      setError("Please enter a valid phone number")
-      return
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (emailValidationTimeout) {
+        clearTimeout(emailValidationTimeout)
+      }
+    }
+  }, [emailValidationTimeout])
+
+  const handleEmailSubmit = async (): Promise<boolean> => {
+    // Validate email first
+    const validationError = validateEmail(email)
+    if (validationError) {
+      setEmailError(validationError)
+      setError(validationError)
+      return false
     }
 
-    setLoading(true)
     setError("")
+    setEmailError("")
 
     try {
-      console.log("🚀 Sending OTP to:", phone, "for court:", courtId)
-      
-      const response = await fetch("/api/auth/send-otp", {
+      // First check if email exists in database
+      const checkResponse = await fetch("/api/auth/check-availability", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ phone, courtId }),
-      }).then(res => res.json())
+        body: JSON.stringify({ email }),
+      })
 
-      console.log("📥 Send OTP response:", response)
+      const checkData = await checkResponse.json()
 
-      if (response.success) {
-        setOtpSent(true)
-        setError("")
-        // In development, show the OTP
-        if (response.data?.otp) {
-          setError(`Development OTP: ${response.data.otp}`)
+      if (checkData.success) {
+        const emailExists = checkData.data.email.exists
+        const userType = checkData.data.email.userType
+
+        // Store whether this is a new user or existing user
+        setIsNewUser(!emailExists)
+
+        // Now send OTP
+        const otpResponse = await fetch("/api/auth/send-otp", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ email, courtId }),
+        })
+
+        const otpData = await otpResponse.json()
+
+        if (otpData.success) {
+          setCurrentStep('otp')
+          setError("")
+          // In development, show the OTP
+          if (otpData.data?.otp) {
+            setError(`Development OTP: ${otpData.data.otp}`)
+          }
+          return true
+        } else {
+          setError(otpData.message || "Failed to send OTP")
+          return false
         }
       } else {
-        setError(response.message || "Failed to send OTP")
+        setError(checkData.message || "Failed to check email availability")
+        return false
       }
     } catch (error: any) {
-      setError(error.response?.data?.message || "Failed to send OTP")
-    } finally {
-      setLoading(false)
+      setError("Failed to process email")
+      return false
     }
   }
 
-  const handleOTPLogin = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleOTPSubmit = async (): Promise<boolean> => {
     if (!otp || otp.length !== 6) {
       setError("Please enter a valid 6-digit OTP")
-      return
+      return false
     }
 
-    setLoading(true)
     setError("")
 
     try {
-      console.log("🚀 Verifying OTP for:", phone, "courtId:", courtId)
-      
       const response = await fetch("/api/auth/login", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ phone, otp, courtId, loginType: "otp" }),
-      }).then(res => res.json())
+        body: JSON.stringify({ email, otp, courtId, loginType: "otp" }),
+      })
 
-      console.log("📥 OTP Login response:", response)
+      const data = await response.json()
+      console.log("🔍 OTP Response data:", data)
 
-      if (response.success) {
-        console.log('✅ [Login] OTP verification successful, logging in user')
-        login(response.data.token, response.data.user)
-        // Don't redirect immediately - let the useEffect handle it after state updates
+      if (data.success) {
+        // For new users (email doesn't exist), always go to onboarding
+        if (isNewUser) {
+          // Check if user needs password setup
+          const userNeedsPassword = !data.data?.user?.hasPassword
+          setNeedsOnboarding(true)
+          setCurrentStep('onboarding')
+          // Update isNewUser based on whether they need to set a password
+          setIsNewUser(userNeedsPassword)
+          console.log("🔧 New user onboarding:", { userNeedsPassword, hasPassword: data.data?.user?.hasPassword, dataStructure: data.data })
+        } else {
+          // For existing users, check if they need onboarding (no name set)
+          if (!data.data.user.name) {
+            setNeedsOnboarding(true)
+            setCurrentStep('onboarding')
+            // Existing user just needs name, not password
+            setIsNewUser(false)
+          } else {
+            // Existing user with complete profile
+            login(data.data.token, data.data.user)
+          }
+        }
+        return true
       } else {
-        setError(response.message || "Invalid OTP")
+        setError(data.message || "Invalid OTP")
+        return false
       }
     } catch (error: any) {
-      setError(error.response?.data?.message || "Login failed")
-    } finally {
-      setLoading(false)
+      setError("Login failed")
+      return false
     }
   }
 
-  const handleEmailLogin = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!email || !password) {
-      setError("Please enter both email and password")
-      return
+  const handlePasswordSubmit = async (): Promise<boolean> => {
+    if (!password) {
+      setError("Please enter your password")
+      return false
     }
 
-    setLoading(true)
     setError("")
 
     try {
-      console.log("🚀 Email login for:", email, "courtId:", courtId)
-      
       const response = await fetch("/api/auth/login", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ email, password, courtId, loginType: "password" }),
-      }).then(res => res.json())
+      })
 
-      console.log("📥 Email Login response:", response)
+      const data = await response.json()
 
-      if (response.success) {
-        console.log('✅ [Login] Email login successful, logging in user')
-        login(response.data.token, response.data.user)
-        // Don't redirect immediately - let the useEffect handle it after state updates
+      if (data.success) {
+        // Check if user needs onboarding (no name set)
+        if (!data.data.user.name) {
+          setIsNewUser(false)
+          setNeedsOnboarding(true)
+          setCurrentStep('onboarding')
+        } else {
+          login(data.data.token, data.data.user)
+        }
+        return true
       } else {
-        setError(response.message || "Invalid credentials")
+        setError(data.message || "Invalid password")
+        return false
       }
     } catch (error: any) {
-      setError(error.response?.data?.message || "Login failed")
-    } finally {
-      setLoading(false)
+      setError("Login failed")
+      return false
+    }
+  }
+
+  const handleOnboardingSubmit = async (): Promise<boolean> => {
+    if (!name.trim()) {
+      setError("Please enter your name")
+      return false
+    }
+
+    // Password is always required for onboarding since API requires it
+    if (!password || password.length < 6) {
+      setError("Password must be at least 6 characters")
+      return false
+    }
+    if (password !== confirmPassword) {
+      setError("Passwords do not match")
+      return false
+    }
+
+    setError("")
+
+    try {
+      const response = await fetch("/api/auth/complete-profile", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ 
+          email, 
+          fullName: name.trim(), 
+          password: password,
+          courtId 
+        }),
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        login(data.data.token, data.data.user)
+        return true
+      } else {
+        setError(data.message || "Failed to complete profile")
+        return false
+      }
+    } catch (error: any) {
+      setError("Failed to complete profile")
+      return false
     }
   }
 
   const goBack = () => {
-    router.push(`/app/login`)
+    if (currentStep === 'otp') {
+      setCurrentStep('email')
+      setOtp("")
+      setError("")
+    } else if (currentStep === 'password') {
+      setCurrentStep('otp')
+      setPassword("")
+      setError("")
+    } else if (currentStep === 'onboarding') {
+      setCurrentStep('otp')
+      setName("")
+      setPassword("")
+      setConfirmPassword("")
+      setError("")
+    } else {
+      router.push(`/app/login`)
+    }
   }
 
-  const clearAuthData = () => {
-    console.log('🧹 [Login] Manually clearing app auth data')
-    localStorage.removeItem("app_auth_token")
-    localStorage.removeItem("app_auth_user")
-    document.cookie = 'app-auth-token=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT'
-    window.location.reload()
+  const switchToPasswordLogin = () => {
+    setCurrentStep('password')
+    setError("")
+  }
+
+  const switchToOTPLogin = () => {
+    setCurrentStep('otp')
+    setPassword("")
+    setError("")
   }
 
   // Show loading while validating court
   if (courtLoading) {
     return (
-      <div className="min-h-screen bg-neutral-950 flex items-center justify-center p-4">
+      <div className="h-full bg-neutral-950 flex items-center justify-center p-4">
         <div className="flex items-center space-x-4">
           <Loader2 className="h-8 w-8 animate-spin text-blue-400" />
           <span className="text-lg text-white">Loading food court...</span>
@@ -253,38 +408,11 @@ export default function UserLogin() {
 
   // Show loading while checking authentication
   if (user && token) {
-    // Add a timeout to prevent infinite loading
-    setTimeout(() => {
-      if (user && token) {
-        console.log('⚠️ [Login] Redirect timeout, forcing navigation')
-        const redirectUrl = returnTo || `/app/${courtId}`
-        window.location.href = redirectUrl // Force navigation as fallback
-      }
-    }, 3000)
-
     return (
-      <div className="min-h-screen bg-neutral-950 flex items-center justify-center p-4">
+      <div className="h-full bg-neutral-950 flex items-center justify-center p-4">
         <div className="flex items-center space-x-4">
           <Loader2 className="h-8 w-8 animate-spin text-blue-400" />
-          <div className="text-center">
-            <span className="text-lg text-white block">Already logged in, redirecting...</span>
-            <span className="text-sm text-neutral-400 mt-2 block">
-              If this takes too long, <button 
-                onClick={() => {
-                  const redirectUrl = returnTo || `/app/${courtId}`
-                  window.location.href = redirectUrl
-                }}
-                className="text-blue-400 underline"
-              >
-                click here
-              </button> or <button 
-                onClick={clearAuthData}
-                className="text-red-400 underline"
-              >
-                clear auth data
-              </button>
-            </span>
-          </div>
+          <span className="text-lg text-white">Already logged in, redirecting...</span>
         </div>
       </div>
     )
@@ -293,7 +421,7 @@ export default function UserLogin() {
   // Show error if court not found
   if (courtError) {
     return (
-      <div className="min-h-screen bg-neutral-950 flex items-center justify-center p-4">
+      <div className="h-full bg-neutral-950 flex items-center justify-center p-4">
         <div className="w-full max-w-md">
           <Card>
             <CardHeader className="text-center">
@@ -315,12 +443,12 @@ export default function UserLogin() {
   }
 
   return (
-    <div className="min-h-screen bg-neutral-950 flex items-center justify-center p-4">
+    <div className="h-full bg-neutral-950 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="mb-6">
           <Button variant="ghost" onClick={goBack} className="mb-4">
             <ArrowLeft className="h-4 w-4 mr-2" />
-            Choose Different Court
+            {currentStep === 'email' ? 'Choose Different Court' : 'Back'}
           </Button>
           
           {/* Court Info Display */}
@@ -347,109 +475,303 @@ export default function UserLogin() {
           )}
         </div>
 
-        <Card>
+        <Card className="dark:bg-neutral-950">
           <CardHeader className="text-center">
-            <CardTitle>Welcome Back</CardTitle>
-            <CardDescription>Sign in to place your order</CardDescription>
+            <CardTitle>
+              {currentStep === 'email' && 'Welcome'}
+              {currentStep === 'otp' && 'Verify your email'}
+              {currentStep === 'password' && 'Enter your password'}
+              {currentStep === 'onboarding' && (isNewUser ? 'Complete your profile' : 'Set up your account')}
+            </CardTitle>
+            <CardDescription>
+              {currentStep === 'email' && 'Enter your email address to continue'}
+              {currentStep === 'otp' && `We sent a code to ${email}`}
+              {currentStep === 'password' && 'Welcome back! Please enter your password'}
+              {currentStep === 'onboarding' && (isNewUser ? "We need a few more details to get you started" : "Please complete your account setup")}
+            </CardDescription>
           </CardHeader>
           <CardContent>
-            <Tabs value={activeTab} onValueChange={setActiveTab}>
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="phone">
-                  <Phone className="h-4 w-4 mr-2" />
-                  Phone
-                </TabsTrigger>
-                <TabsTrigger value="email">
-                  <Mail className="h-4 w-4 mr-2" />
-                  Email
-                </TabsTrigger>
-              </TabsList>
-
-              <TabsContent value="phone" className="space-y-4">
-                {!otpSent ? (
-                  <form onSubmit={handleSendOTP} className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="phone">Phone Number</Label>
-                      <Input
-                        id="phone"
-                        type="tel"
-                        placeholder="Enter your phone number"
-                        value={phone}
-                        onChange={(e) => setPhone(e.target.value)}
-                        maxLength={10}
-                      />
-                    </div>
-                    <Button type="submit" className="w-full" disabled={loading}>
-                      {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                      Send OTP
-                    </Button>
-                  </form>
-                ) : (
-                  <form onSubmit={handleOTPLogin} className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="otp">Enter OTP</Label>
-                      <Input
-                        id="otp"
-                        type="text"
-                        placeholder="Enter 6-digit OTP"
-                        value={otp}
-                        onChange={(e) => setOtp(e.target.value)}
-                        maxLength={6}
-                      />
-                      <p className="text-sm text-gray-600">OTP sent to {phone}</p>
-                    </div>
-                    <div className="flex space-x-2">
-                      <Button type="button" variant="outline" onClick={() => setOtpSent(false)} className="flex-1">
-                        Change Number
-                      </Button>
-                      <Button type="submit" className="flex-1" disabled={loading}>
-                        {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                        Verify OTP
-                      </Button>
-                    </div>
-                  </form>
-                )}
-              </TabsContent>
-
-              <TabsContent value="email" className="space-y-4">
-                <form onSubmit={handleEmailLogin} className="space-y-4">
+            {/* Email Step */}
+            {currentStep === 'email' && (
+              <div className="space-y-4">
+                <div className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="email">Email</Label>
+                    <Label htmlFor="email">Email Address</Label>
                     <Input
                       id="email"
                       type="email"
-                      placeholder="Enter your email"
+                      placeholder="Enter your email address"
                       value={email}
-                      onChange={(e) => setEmail(e.target.value)}
+                      onChange={handleEmailChange}
+                      onFocus={handleEmailFocus}
+                      onBlur={handleEmailBlur}
+                      className={emailError ? "border-red-500 focus:border-red-500" : ""}
+                      aria-invalid={emailError ? "true" : "false"}
+                      aria-describedby={emailError ? "email-error" : undefined}
+                    />
+                    {emailError && (
+                      <p id="email-error" className="text-sm text-red-500 mt-1">
+                        {emailError}
+                      </p>
+                    )}
+                  </div>
+                  <AnimatedButton 
+                    className="w-full" 
+                    disabled={!!emailError}
+                    onAsyncClick={handleEmailSubmit}
+                  >
+                    Continue
+                  </AnimatedButton>
+                </div>
+
+                {/* Social Login Buttons */}
+                <div className="space-y-3">
+                  <div className="relative">
+                    <div className="absolute inset-0 flex items-center">
+                      <span className="w-full border-t border-neutral-300" />
+                    </div>
+                    <div className="relative flex justify-center text-xs uppercase">
+                      <span className="bg-white px-2 text-neutral-500">Or continue with</span>
+                    </div>
+                  </div>
+
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    className="w-full"
+                    onClick={() => {}}
+                  >
+                    <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
+                      <path
+                        fill="currentColor"
+                        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                      />
+                      <path
+                        fill="currentColor"
+                        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                      />
+                      <path
+                        fill="currentColor"
+                        d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+                      />
+                      <path
+                        fill="currentColor"
+                        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+                      />
+                    </svg>
+                    Continue with Google
+                  </Button>
+
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    className="w-full"
+                    onClick={() => {}}
+                  >
+                    <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
+                      <path
+                        fill="currentColor"
+                        d="M23.5 12.1c0-1.1-.1-2.1-.2-3.1H12v5.9h6.4c-.3 1.5-1.1 2.8-2.4 3.7v3.1h3.9c2.3-2.1 3.6-5.2 3.6-9.6z"
+                      />
+                      <path
+                        fill="currentColor"
+                        d="M12 24c3.2 0 5.9-1.1 7.9-2.9l-3.9-3.1c-1.1.7-2.4 1.1-4 1.1-3.1 0-5.7-2.1-6.6-4.9H1.5v3.2C3.4 21.4 7.4 24 12 24z"
+                      />
+                      <path
+                        fill="currentColor"
+                        d="M5.4 14.2c-.2-.7-.4-1.4-.4-2.2s.1-1.5.4-2.2V6.6H1.5C.5 8.6 0 10.2 0 12s.5 3.4 1.5 5.4l3.9-3.2z"
+                      />
+                      <path
+                        fill="currentColor"
+                        d="M12 4.8c1.7 0 3.3.6 4.5 1.8L20.4 2C18.2.8 15.2 0 12 0 7.4 0 3.4 2.6 1.5 6.6l3.9 3.2C6.3 6.9 8.9 4.8 12 4.8z"
+                      />
+                    </svg>
+                    Continue with Microsoft
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* OTP Step */}
+            {currentStep === 'otp' && (
+              <div className="space-y-4">
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="otp">Verification Code</Label>
+                    <Input
+                      id="otp"
+                      type="text"
+                      placeholder="Enter 6-digit code"
+                      value={otp}
+                      onChange={(e) => setOtp(e.target.value)}
+                      maxLength={6}
+                    />
+                  </div>
+                  <AnimatedButton 
+                    className="w-full"
+                    onAsyncClick={handleOTPSubmit}
+                  >
+                    Verify Code
+                  </AnimatedButton>
+                </div>
+
+                <div className="text-center">
+                  <button
+                    type="button"
+                    onClick={switchToPasswordLogin}
+                    className="text-sm text-blue-600 hover:text-blue-800 underline"
+                  >
+                    Already a customer? Login with Password instead
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Password Step */}
+            {currentStep === 'password' && (
+              <div className="space-y-4">
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="login-email">Email Address</Label>
+                    <Input
+                      id="login-email"
+                      type="email"
+                      value={email}
+                      disabled
+                      className="bg-gray-50 text-gray-500"
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="password">Password</Label>
+                    <Label htmlFor="login-password">Password</Label>
+                    <div className="relative">
+                      <Input
+                        id="login-password"
+                        type={showPassword ? "text" : "password"}
+                        placeholder="Enter your password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        className="pr-10"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                      >
+                        {showPassword ? (
+                          <EyeOff className="h-4 w-4 text-gray-400" />
+                        ) : (
+                          <Eye className="h-4 w-4 text-gray-400" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                  <AnimatedButton 
+                    className="w-full"
+                    onAsyncClick={handlePasswordSubmit}
+                  >
+                    Login
+                  </AnimatedButton>
+                </div>
+
+                <div className="text-center">
+                  <button
+                    type="button"
+                    onClick={switchToOTPLogin}
+                    className="text-sm text-blue-600 hover:text-blue-800 underline"
+                  >
+                    Login with OTP instead
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Onboarding Step */}
+            {currentStep === 'onboarding' && (
+              <div className="space-y-4">
+                {/* Debug info */}
+                {process.env.NODE_ENV === 'development' && (
+                  <div className="bg-yellow-100 p-2 text-xs rounded">
+                    Debug: isNewUser={isNewUser.toString()}, needsOnboarding={needsOnboarding.toString()}
+                  </div>
+                )}
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="name">What do we call you?</Label>
                     <Input
-                      id="password"
-                      type="password"
-                      placeholder="Enter your password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
+                      id="name"
+                      type="text"
+                      placeholder="Enter your full name"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
                     />
                   </div>
-                  <Button type="submit" className="w-full" disabled={loading}>
-                    {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Sign In
-                  </Button>
-                </form>
-              </TabsContent>
-            </Tabs>
+
+                  {/* Always show password fields during onboarding since API requires them */}
+                  <div className="space-y-2">
+                    <Label htmlFor="new-password">Create Password</Label>
+                    <div className="relative">
+                      <Input
+                        id="new-password"
+                        type={showPassword ? "text" : "password"}
+                        placeholder="Enter password (min. 6 characters)"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        className="pr-10"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                      >
+                        {showPassword ? (
+                          <EyeOff className="h-4 w-4 text-gray-400" />
+                        ) : (
+                          <Eye className="h-4 w-4 text-gray-400" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="confirm-password">Confirm Password</Label>
+                    <div className="relative">
+                      <Input
+                        id="confirm-password"
+                        type={showConfirmPassword ? "text" : "password"}
+                        placeholder="Confirm your password"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        className="pr-10"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                        className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                      >
+                        {showConfirmPassword ? (
+                          <EyeOff className="h-4 w-4 text-gray-400" />
+                        ) : (
+                          <Eye className="h-4 w-4 text-gray-400" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
+                  <AnimatedButton 
+                    className="w-full"
+                    onAsyncClick={handleOnboardingSubmit}
+                  >
+                    {isNewUser ? 'Create Account' : 'Complete Setup'}
+                  </AnimatedButton>
+                </div>
+              </div>
+            )}
 
             {error && (
               <Alert className="mt-4" variant={error.includes("Development OTP") ? "default" : "destructive"}>
                 <AlertDescription>{error}</AlertDescription>
               </Alert>
             )}
-
-            <div className="mt-6 text-center text-sm text-gray-600">
-              <p>New user? You'll be automatically registered after OTP verification.</p>
-            </div>
           </CardContent>
         </Card>
       </div>
