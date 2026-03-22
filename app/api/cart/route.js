@@ -194,11 +194,31 @@ export async function DELETE(request) {
     const authResult = await authenticateToken(request)
     if (authResult instanceof NextResponse) return authResult
 
-    userCarts.delete(user.id)
+    const { user } = authResult
+
+    // Find the user's active cart
+    const cart = await Cart.findOne({
+      where: {
+        userId: user.id,
+        courtId: user.courtId,
+        status: 'active'
+      }
+    })
+
+    if (cart) {
+      // Delete all cart items
+      await CartItem.destroy({
+        where: { cartId: cart.id }
+      })
+
+      // Update cart total to 0
+      await cart.update({ total: 0 })
+    }
 
     return NextResponse.json({
       success: true,
       message: "Cart cleared",
+      data: { cart: { items: [], total: 0 } }
     })
   } catch (error) {
     console.error("Clear cart error:", error)

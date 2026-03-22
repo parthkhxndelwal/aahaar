@@ -155,7 +155,7 @@ function calculateSplit(totalAmount: number, vendorAmounts: number[]) {
 
 export default function CartPage({ params }: { params: Promise<{ courtId: string }> }) {
   const { courtId } = use(params)
-  const { cart, isLoading, hasActiveOrder, activeOrderError, checkActiveOrders } = useCart()
+  const { cart, isLoading, hasActiveOrder, activeOrderError, checkActiveOrders, clearCart } = useCart()
   const { user, token } = useAppAuth()
   const { isCartValid, hasInvalidItems, validateCart, getItemIssues, isItemValid } = useCartValidation(courtId)
   const [isDrawerOpen, setIsDrawerOpen] = useState(false)
@@ -163,6 +163,8 @@ export default function CartPage({ params }: { params: Promise<{ courtId: string
   const [orderData, setOrderData] = useState<any>(null)
   const [checkoutLoading, setCheckoutLoading] = useState(false)
   const [removedItems, setRemovedItems] = useState<Set<string>>(new Set())
+  const [paymentSuccess, setPaymentSuccess] = useState(false)
+  const [transformedOrder, setTransformedOrder] = useState<any>(null)
   const router = useRouter()
 
   // Memoized transformed order preview (used to show accurate to-pay amount)
@@ -201,12 +203,12 @@ export default function CartPage({ params }: { params: Promise<{ courtId: string
     }
   }, [user, token, courtId, router])
 
-  // Check for active orders when cart page loads
+  // Show payment gateway when payment is successful
   useEffect(() => {
-    if (user && token) {
-      checkActiveOrders()
+    if (paymentSuccess && orderData) {
+      setShowPaymentGateway(true)
     }
-  }, [user, token, checkActiveOrders])
+  }, [paymentSuccess, orderData])
 
   // Calculate charges
   const itemTotal = cart.total
@@ -240,8 +242,41 @@ export default function CartPage({ params }: { params: Promise<{ courtId: string
 
     console.table(cart)
 
-    // Transform cart items with fee calculation
-    const transformedOrder = transformOrderWithFeeCalculation(cart.items)
+    // Transform cart items with fee calculation (initial creation)
+    let transformedOrder = transformOrderWithFeeCalculation(cart.items)
+    
+    // Log all vendor details for vendors in the current cart
+    const vendorIds = [...new Set(cart.items.map(item => item.vendorId))]
+    if (vendorIds.length > 0) {
+      try {
+        const vendorResponse = await fetch(`/api/app/${courtId}/vendors?ids=${vendorIds.join(',')}`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        })
+        const vendorData = await vendorResponse.json()
+        
+        if (vendorData.success) {
+          console.log('All vendor details for current cart:', JSON.stringify(vendorData.data.vendors, null, 2))
+          
+          // Update transformedOrder with razorpayAccountId from fetched vendor data
+          vendorIds.forEach(vendorId => {
+            const vendor = vendorData.data.vendors.find((v: any) => v.id === vendorId)
+            if (vendor && transformedOrder.vendors[vendorId]) {
+              transformedOrder.vendors[vendorId].accountId = vendor.razorpayAccountId || null
+            }
+          })
+          console.log('Updated transformedOrder with razorpayAccountId:', transformedOrder)
+        } else {
+          console.log('Failed to fetch vendor details:', vendorData)
+        }
+      } catch (error) {
+        console.error('Error fetching vendor details:', error)
+      }
+    }
+
+    // Set the final transformed order (with or without vendor account IDs)
+    setTransformedOrder(transformedOrder)
     console.table(transformedOrder)
 
     // Check for active orders before proceeding
@@ -340,8 +375,7 @@ export default function CartPage({ params }: { params: Promise<{ courtId: string
             amount: data.data.razorpayOrderAmount,
             localOrderId: data.data?.orders?.[0]?.id || data.data?.orders?.[0]?.orderNumber || data.data?.parentOrderId,
           })
-          // On success, navigate to a success page or refresh orders
-          router.push(`/app/${courtId}/orders`)
+          // Payment success will be handled by the state change in the handler
         } catch (err) {
           console.error("Payment failed or cancelled:", err)
           alert("Payment failed or cancelled")
@@ -397,6 +431,60 @@ export default function CartPage({ params }: { params: Promise<{ courtId: string
                 localOrderId,
               }),
             })
+
+            // Fetch vendor details to get razorpayAccountId and create payout JSON
+            console.log('Checking for payout data:', { transformedOrder: !!transformedOrder, orderData: !!orderData })
+            if (transformedOrder && orderData) {
+              console.log('transformedOrder:', transformedOrder)
+              console.log('orderData:', orderData)
+              const vendorIds = Object.keys(transformedOrder.vendors)
+              console.log('vendorIds:', vendorIds)
+              const vendorResponse = await fetch(`/api/app/${courtId}/vendors?ids=${vendorIds.join(',')}`, {
+                headers: {
+                  Authorization: `Bearer ${token}`,
+                },
+              })
+              console.log('vendorResponse status:', vendorResponse.status)
+              const vendorData = await vendorResponse.json()
+              console.log('vendorData:', vendorData)
+
+              if (vendorData.success) {
+                console.log('All vendor details from database:', JSON.stringify(vendorData.data.vendors, null, 2))
+
+                // Update transformedOrder with razorpayAccountId
+                const updatedTransformedOrder = { ...transformedOrder }
+                vendorIds.forEach(vendorId => {
+                  const vendor = vendorData.data.vendors.find((v: any) => v.id === vendorId)
+                  if (vendor && updatedTransformedOrder.vendors[vendorId]) {
+                    updatedTransformedOrder.vendors[vendorId].accountId = vendor.razorpayAccountId || null
+                  }
+                })
+                setTransformedOrder(updatedTransformedOrder)
+
+                // Create payout JSON
+                const payoutData = vendorIds.map(vendorId => {
+                  const vendor = vendorData.data.vendors.find((v: any) => v.id === vendorId)
+                  const vendorPayout = updatedTransformedOrder.vendors[vendorId]
+                  return {
+                    vendorId,
+                    razorpayAccountId: vendor?.razorpayAccountId || null,
+                    amount: vendorPayout.finalPayout, // Already in paise
+                  }
+                })
+
+                console.log('Updated transformedOrder with razorpayAccountId:', updatedTransformedOrder)
+                console.log('Vendor Payout JSON:', JSON.stringify(payoutData, null, 2))
+              } else {
+                console.log('Vendor API call failed:', vendorData)
+              }
+            } else {
+              console.log('transformedOrder or orderData not available')
+            }
+
+            // Clear the cart after successful payment
+            await clearCart()
+            // Set payment success state to show dummy gateway success page
+            setPaymentSuccess(true)
             resolve()
           } catch (err) {
             reject(err)
@@ -442,6 +530,7 @@ export default function CartPage({ params }: { params: Promise<{ courtId: string
         courtId={courtId}
         onPaymentComplete={handlePaymentComplete}
         onCancel={handlePaymentCancel}
+        paymentAlreadyComplete={paymentSuccess}
       />
     )
   }

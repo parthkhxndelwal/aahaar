@@ -1,1 +1,1 @@
-npm run dev:https
+npm run dev
