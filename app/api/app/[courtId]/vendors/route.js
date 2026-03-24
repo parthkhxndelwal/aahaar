@@ -3,7 +3,7 @@ import { Vendor, MenuItem, MenuCategory, sequelize } from "@/models"
 
 export async function GET(request, { params }) {
   try {
-    const { courtId } = params
+    const { courtId } = await params
     const { searchParams } = new URL(request.url)
     const vendorIds = searchParams.get('ids')?.split(',').filter(Boolean)
 
