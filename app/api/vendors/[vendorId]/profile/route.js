@@ -62,8 +62,22 @@ export async function PATCH(request, { params }) {
       return NextResponse.json({ success: false, message: "Access denied" }, { status: 403 })
     }
 
+    // Define allowed fields for vendor update (prevent mass assignment)
+    const allowedFields = [
+      'stallName', 'vendorName', 'contactEmail', 'contactPhone',
+      'stallLocation', 'cuisineType', 'description', 'logoUrl', 'bannerUrl',
+      'operatingHours', 'maxOrdersPerHour', 'averagePreparationTime',
+      'isOnline'
+    ]
+    const sanitizedData = {}
+    for (const field of allowedFields) {
+      if (updateData[field] !== undefined) {
+        sanitizedData[field] = updateData[field]
+      }
+    }
+
     // Update vendor profile
-    await vendor.update(updateData)
+    await vendor.update(sanitizedData)
 
     return NextResponse.json({
       success: true,

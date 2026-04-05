@@ -8,7 +8,7 @@ export async function POST(request, { params }) {
     if (authResult instanceof NextResponse) return authResult
 
     const { user } = authResult
-    const { orderId } = params
+    const { orderId } = await params
     const { rating, feedback } = await request.json()
 
     if (!rating || rating < 1 || rating > 5) {

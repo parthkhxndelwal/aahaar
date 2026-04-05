@@ -374,12 +374,12 @@ export default function QRScanner({ onScan, onError, isScanning, disabled = fals
       <motion.div 
         initial={{ opacity: 0, scale: 0.9 }}
         animate={{ opacity: 1, scale: 1 }}
-        className="flex items-center justify-center aspect-square bg-gray-900 rounded-lg border border-gray-700"
+        className="flex items-center justify-center aspect-square bg-card rounded-lg border-2 border-border shadow-lg"
       >
         <motion.div 
           initial={{ y: 20 }}
           animate={{ y: 0 }}
-          className="text-center text-gray-100 max-w-sm px-6"
+          className="text-center text-foreground max-w-sm px-6"
         >
           <motion.div
             animate={{ scale: [1, 1.1, 1] }}
@@ -389,17 +389,11 @@ export default function QRScanner({ onScan, onError, isScanning, disabled = fals
             📷
           </motion.div>
           <h3 className="text-lg font-semibold mb-2">Camera Access Required</h3>
-          <p className="text-gray-300 text-sm mb-4 leading-relaxed">
+          <p className="text-muted-foreground text-sm mb-4 leading-relaxed">
             To scan QR codes, we need access to your camera. Your camera will only be used for scanning and no images are stored.
           </p>
-          <p className="text-gray-400 text-xs mb-6">
+          <p className="text-muted-foreground/70 text-xs mb-6">
             If you've already granted permission, try "Retry Detection" first.
-            <br />
-            <span className="font-mono text-xs">
-              Debug: hasPermission={hasPermission?.toString()}, 
-              showDialog={showPermissionDialog.toString()}, 
-              protocol={typeof window !== 'undefined' ? window.location.protocol : 'unknown'}
-            </span>
           </p>
           <div className="flex flex-col gap-3">
             <motion.button
@@ -407,7 +401,7 @@ export default function QRScanner({ onScan, onError, isScanning, disabled = fals
               whileTap={{ scale: 0.98 }}
               onClick={requestCameraPermission}
               disabled={isLoading}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              className="bg-primary text-primary-foreground px-6 py-3 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               {isLoading ? (
                 <>
@@ -432,7 +426,7 @@ export default function QRScanner({ onScan, onError, isScanning, disabled = fals
                 checkExistingPermission()
               }}
               disabled={isLoading}
-              className="bg-gray-600 hover:bg-gray-700 text-white px-6 py-2 text-sm rounded-lg transition-colors disabled:opacity-50"
+              className="bg-secondary text-secondary-foreground px-6 py-2 text-sm rounded-lg transition-colors disabled:opacity-50"
             >
               Retry Detection
             </motion.button>
@@ -441,7 +435,7 @@ export default function QRScanner({ onScan, onError, isScanning, disabled = fals
               whileTap={{ scale: 0.98 }}
               onClick={cancelPermissionRequest}
               disabled={isLoading}
-              className="text-gray-400 hover:text-gray-300 px-6 py-2 text-sm transition-colors disabled:opacity-50"
+              className="text-muted-foreground hover:text-foreground px-6 py-2 text-sm transition-colors disabled:opacity-50"
             >
               Cancel
             </motion.button>
@@ -456,22 +450,22 @@ export default function QRScanner({ onScan, onError, isScanning, disabled = fals
       <motion.div 
         initial={{ opacity: 0, scale: 0.9 }}
         animate={{ opacity: 1, scale: 1 }}
-        className="flex items-center justify-center aspect-square bg-gray-900 rounded-lg border border-gray-700"
+        className="flex items-center justify-center aspect-square bg-card rounded-lg border-2 border-border shadow-lg"
       >
         <motion.div 
           initial={{ y: 20 }}
           animate={{ y: 0 }}
-          className="text-center text-gray-100 max-w-sm px-6"
+          className="text-center text-foreground max-w-sm px-6"
         >
           <motion.div
             animate={{ rotate: [0, 10, -10, 0] }}
             transition={{ repeat: Infinity, duration: 2 }}
             className="text-5xl mb-4"
           >
-            �
+            🚫
           </motion.div>
           <h3 className="text-lg font-semibold mb-2">Camera Access Denied</h3>
-          <p className="text-gray-300 text-sm mb-6 leading-relaxed">
+          <p className="text-muted-foreground text-sm mb-6 leading-relaxed">
             Camera access was denied. Please enable camera permissions in your browser settings or try again.
           </p>
           <motion.button
@@ -481,7 +475,7 @@ export default function QRScanner({ onScan, onError, isScanning, disabled = fals
               setHasPermission(null)
               setShowPermissionDialog(true)
             }}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors"
+            className="bg-primary text-primary-foreground px-6 py-3 rounded-lg font-medium transition-colors"
           >
             Try Again
           </motion.button>
@@ -495,7 +489,7 @@ export default function QRScanner({ onScan, onError, isScanning, disabled = fals
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.3 }}
-      className="relative w-full aspect-square bg-black rounded-lg overflow-hidden"
+      className="relative w-full aspect-square bg-black rounded-lg overflow-hidden shadow-lg border-2 border-border"
     >
       <motion.video
         ref={videoRef}
@@ -515,14 +509,18 @@ export default function QRScanner({ onScan, onError, isScanning, disabled = fals
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="absolute inset-0 flex items-center justify-center bg-black/80"
+            className="absolute inset-0 flex items-center justify-center bg-card/95 backdrop-blur-sm"
           >
-            <Image 
-              src="/Spinner_dark_275x275.svg" 
-              alt="Loading camera..." 
-              width={48} 
-              height={48} 
-            />
+            <div className="text-center">
+              <Image 
+                src="/Spinner_white_275x275.svg" 
+                alt="Loading camera..." 
+                width={48} 
+                height={48} 
+                className="mx-auto mb-3"
+              />
+              <p className="text-sm text-muted-foreground">Initializing camera...</p>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -536,7 +534,7 @@ export default function QRScanner({ onScan, onError, isScanning, disabled = fals
               initial={{ scale: 0.8, opacity: 0 }}
               animate={{ 
                 scale: [0.8, 1.1, 0.8],
-                opacity: [0, 0.1, 0]
+                opacity: [0, 0.15, 0]
               }}
               exit={{ opacity: 0 }}
               transition={{
@@ -544,7 +542,7 @@ export default function QRScanner({ onScan, onError, isScanning, disabled = fals
                 duration: 3,
                 ease: "easeInOut"
               }}
-              className="absolute w-64 h-64 bg-blue-400 rounded-full blur-xl"
+              className="absolute w-64 h-64 bg-primary/30 rounded-full blur-xl"
             />
           )}
         </AnimatePresence>
@@ -553,13 +551,13 @@ export default function QRScanner({ onScan, onError, isScanning, disabled = fals
           initial={{ scale: 0.8, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           transition={{ delay: 0.2 }}
-          className="relative w-48 h-48"
+          className="relative w-40 h-40 sm:w-48 sm:h-48"
         >
-          {/* Corner borders */}
-          <div className="absolute top-0 left-0 w-8 h-8 border-t-8 border-l-8 border-white rounded-tl-lg" />
-          <div className="absolute top-0 right-0 w-8 h-8 border-t-8 border-r-8 border-white rounded-tr-lg" />
-          <div className="absolute bottom-0 left-0 w-8 h-8 border-b-8 border-l-8 border-white rounded-bl-lg" />
-          <div className="absolute bottom-0 right-0 w-8 h-8 border-b-8 border-r-8 border-white rounded-br-lg" />
+          {/* Corner borders - now using primary color */}
+          <div className="absolute top-0 left-0 w-6 h-6 sm:w-8 sm:h-8 border-t-4 border-l-4 sm:border-t-[6px] sm:border-l-[6px] border-primary rounded-tl-lg" />
+          <div className="absolute top-0 right-0 w-6 h-6 sm:w-8 sm:h-8 border-t-4 border-r-4 sm:border-t-[6px] sm:border-r-[6px] border-primary rounded-tr-lg" />
+          <div className="absolute bottom-0 left-0 w-6 h-6 sm:w-8 sm:h-8 border-b-4 border-l-4 sm:border-b-[6px] sm:border-l-[6px] border-primary rounded-bl-lg" />
+          <div className="absolute bottom-0 right-0 w-6 h-6 sm:w-8 sm:h-8 border-b-4 border-r-4 sm:border-b-[6px] sm:border-r-[6px] border-primary rounded-br-lg" />
           
           {/* Enhanced Scanning Animation */}
           <AnimatePresence>
@@ -567,7 +565,7 @@ export default function QRScanner({ onScan, onError, isScanning, disabled = fals
               <motion.div
                 className="absolute inset-x-4 h-2"
                 animate={{ 
-                  y: [20, 185, 20] // Move from top to bottom of the 192px (h-48) container minus the bar height
+                  y: [16, 145, 16] // Adjusted for responsive sizes
                 }}
                 transition={{
                   repeat: Infinity,
@@ -576,9 +574,9 @@ export default function QRScanner({ onScan, onError, isScanning, disabled = fals
                 }}
               >
                 <div 
-                  className="w-full h-full bg-red-500 rounded-full"
+                  className="w-full h-full bg-primary rounded-full"
                   style={{
-                    boxShadow: '0 0 12px #ef4444, 0 0 24px #ef444460'
+                    boxShadow: '0 0 12px hsl(var(--primary)), 0 0 24px hsl(var(--primary) / 0.4)'
                   }}
                 />
               </motion.div>
@@ -599,7 +597,7 @@ export default function QRScanner({ onScan, onError, isScanning, disabled = fals
                   initial={{ scale: 0 }}
                   animate={{ scale: [0, 1.2, 1] }}
                   transition={{ duration: 0.5 }}
-                  className="w-16 h-16 bg-green-500 rounded-full flex items-center justify-center"
+                  className="w-14 h-14 sm:w-16 sm:h-16 bg-primary rounded-full flex items-center justify-center shadow-lg"
                 >
                   <motion.svg
                     initial={{ pathLength: 0 }}
@@ -631,12 +629,12 @@ export default function QRScanner({ onScan, onError, isScanning, disabled = fals
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 20, opacity: 0 }}
             transition={{ delay: 1 }}
-            className="absolute bottom-4 left-0 right-0 text-center"
+            className="absolute bottom-3 sm:bottom-4 left-0 right-0 text-center px-4"
           >
             <motion.p 
               animate={{ opacity: [0.7, 1, 0.7] }}
               transition={{ repeat: Infinity, duration: 2 }}
-              className="text-white text-sm bg-black/50 rounded px-2 py-1 inline-block"
+              className="text-white text-xs sm:text-sm bg-black/60 backdrop-blur-sm rounded-full px-3 py-1.5 inline-block shadow-lg"
             >
               {isScanning ? "Position QR code within the frame" : "Initializing camera..."}
             </motion.p>

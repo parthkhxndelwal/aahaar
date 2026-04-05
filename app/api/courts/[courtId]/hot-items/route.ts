@@ -180,29 +180,9 @@ export async function GET(
       })
     }
 
-    // Randomly select 3 items from available menu items, prioritizing different vendors
-    let selectedItems: any[] = []
-    const usedVendorIds = new Set<string>()
-    const shuffled = [...menuItems].sort(() => 0.5 - Math.random())
-    
-    // First pass: try to get one item from each vendor
-    for (const item of shuffled) {
-      if (selectedItems.length >= 3) break
-      if (!usedVendorIds.has(item.vendorId)) {
-        selectedItems.push(item)
-        usedVendorIds.add(item.vendorId)
-      }
-    }
-    
-    // Second pass: if we don't have 3 items yet, add more from any vendor
-    if (selectedItems.length < 3) {
-      for (const item of shuffled) {
-        if (selectedItems.length >= 3) break
-        if (!selectedItems.find(selected => selected.id === item.id)) {
-          selectedItems.push(item)
-        }
-      }
-    }
+    // Select first 3 items deterministically - use createdAt to get consistent results
+    // Items are already ordered by createdAt DESC in the query
+    const selectedItems = menuItems.slice(0, 3)
 
     // Transform the data to match the expected format
     const hotItems: HotMenuItem[] = selectedItems.map((item: any) => {

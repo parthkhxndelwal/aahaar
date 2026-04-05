@@ -220,15 +220,15 @@ export function CartItem({ item, index, onRemove, isLoading, isValid = true, val
         stiffness: 300,
         damping: 30
       }}
-      className={`bg-white dark:bg-neutral-900 rounded-lg shadow-sm border transition-all ${
+      className={`bg-background rounded-lg shadow-sm border transition-all ${
         isValid 
-          ? 'border-neutral-200 dark:border-neutral-800 hover:shadow-md dark:hover:shadow-neutral-800/50' 
-          : 'border-amber-300 dark:border-amber-600 bg-amber-50/50 dark:bg-amber-900/10 hover:shadow-md hover:shadow-amber-200/50 dark:hover:shadow-amber-800/20'
+          ? 'border-border hover:shadow-md' 
+          : 'border-amber-300 bg-amber-50/50 hover:shadow-md hover:shadow-amber-200/50'
       } p-4 w-full`}
     >
       <div className="flex gap-3 h-full">
         {/* Image */}
-        <div className="w-16 h-16 rounded-lg overflow-hidden bg-neutral-100 dark:bg-neutral-800 flex-shrink-0">
+        <div className="w-16 h-16 rounded-lg overflow-hidden bg-muted flex-shrink-0">
           {item.imageUrl ? (
             <Image 
               src={item.imageUrl} 
@@ -238,8 +238,8 @@ export function CartItem({ item, index, onRemove, isLoading, isValid = true, val
               className="w-full h-full object-cover"
             />
           ) : (
-            <div className="w-full h-full bg-neutral-200 dark:bg-neutral-700 flex items-center justify-center">
-              <span className="text-neutral-400 dark:text-neutral-500 text-xs">No image</span>
+            <div className="w-full h-full bg-muted flex items-center justify-center">
+              <span className="text-muted-foreground text-xs">No image</span>
             </div>
           )}
         </div>
@@ -249,33 +249,33 @@ export function CartItem({ item, index, onRemove, isLoading, isValid = true, val
           {/* Header with Name and Remove Button */}
           <div className="flex items-start justify-between w-full mb-2">
             <div className="flex-1 min-w-0 pr-2">
-              <h3 className={`font-medium truncate text-sm ${isValid ? 'text-neutral-900 dark:text-white' : 'text-amber-800 dark:text-amber-200'}`}>
+              <h3 className={`font-medium truncate text-sm ${isValid ? 'text-foreground' : 'text-amber-800'}`}>
                 {item.name}
               </h3>
               <div className="flex items-center gap-2">
-                <p className="text-xs text-neutral-600 dark:text-neutral-400 truncate">
+                <p className="text-xs text-muted-foreground truncate">
                   {item.vendorName || 'Unknown Vendor'}
                 </p>
                 {isVendorOffline && (
                   <div className="flex items-center gap-1">
-                    <WifiOff className="h-3 w-3 text-red-500" />
-                    <span className="text-xs text-red-600 dark:text-red-400">Offline</span>
+                    <WifiOff className="h-3 w-3 text-destructive" />
+                    <span className="text-xs text-destructive">Offline</span>
                   </div>
                 )}
                 {hasStockIssues && (
                   <div className="flex items-center gap-1">
-                    <AlertTriangle className="h-3 w-3 text-amber-500" />
-                    <span className="text-xs text-amber-600 dark:text-amber-400">Stock Issue</span>
+                    <AlertTriangle className="h-3 w-3 text-muted-foreground" />
+                    <span className="text-xs text-muted-foreground">Stock Issue</span>
                   </div>
                 )}
               </div>
               {!isValid && validationIssues.length > 0 && (
                 <div className="mt-1">
-                  <p className="text-xs text-amber-700 dark:text-amber-300 font-medium">
+                  <p className="text-xs text-destructive font-medium">
                     {validationIssues[0].message}
                   </p>
                   {validationIssues.length > 1 && (
-                    <p className="text-xs text-amber-600 dark:text-amber-400">
+                    <p className="text-xs text-muted-foreground">
                       +{validationIssues.length - 1} more issue{validationIssues.length > 2 ? 's' : ''}
                     </p>
                   )}
@@ -291,7 +291,7 @@ export function CartItem({ item, index, onRemove, isLoading, isValid = true, val
                 size="sm"
                 onClick={handleRemoveItem}
                 disabled={isLoading}
-                className="text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 p-1 h-auto flex-shrink-0"
+                className="text-destructive hover:text-destructive hover:bg-destructive/10 p-1 h-auto flex-shrink-0"
               >
                 <Trash2 className="h-4 w-4" />
               </Button>
@@ -301,7 +301,7 @@ export function CartItem({ item, index, onRemove, isLoading, isValid = true, val
           {/* Quantity Controls and Price */}
           <div className="flex justify-between items-center w-full">
             <motion.div 
-              className="flex items-center gap-1 bg-neutral-100 dark:bg-neutral-800 rounded-lg p-1 flex-shrink-0"
+              className="flex items-center gap-1 bg-muted rounded-lg p-1 flex-shrink-0"
               whileHover={{ scale: 1.02 }}
               transition={{ type: "spring", stiffness: 400 }}
             >
@@ -314,13 +314,13 @@ export function CartItem({ item, index, onRemove, isLoading, isValid = true, val
                   size="sm"
                   onClick={handleQuantityDecrease}
                   disabled={isLoading}
-                  className="h-7 w-7 p-0 hover:bg-neutral-200 dark:hover:bg-neutral-700 text-neutral-700 dark:text-neutral-300"
+                  className="h-7 w-7 p-0 hover:bg-muted text-foreground"
                 >
                   <Minus className="h-3 w-3" />
                 </Button>
               </motion.div>
               <motion.span 
-                className="mx-1 min-w-[20px] text-center font-medium text-sm text-neutral-900 dark:text-white"
+                className="mx-1 min-w-[20px] text-center font-medium text-sm text-foreground"
                 key={displayQuantity}
                 initial={{ scale: 1.2 }}
                 animate={{ scale: 1 }}
@@ -337,7 +337,7 @@ export function CartItem({ item, index, onRemove, isLoading, isValid = true, val
                   size="sm"
                   onClick={handleQuantityIncrease}
                   disabled={isLoading}
-                  className="h-7 w-7 p-0 hover:bg-neutral-200 dark:hover:bg-neutral-700 text-neutral-700 dark:text-neutral-300"
+                  className="h-7 w-7 p-0 hover:bg-muted text-foreground"
                 >
                   <Plus className="h-3 w-3" />
                 </Button>
@@ -346,7 +346,7 @@ export function CartItem({ item, index, onRemove, isLoading, isValid = true, val
 
             <div className="text-right flex-shrink-0 ml-2">
               <motion.p 
-                className="font-semibold text-neutral-900 dark:text-white text-sm"
+                className="font-semibold text-foreground text-sm"
                 key={displaySubtotal}
                 initial={{ scale: 1.1 }}
                 animate={{ scale: 1 }}
@@ -354,7 +354,7 @@ export function CartItem({ item, index, onRemove, isLoading, isValid = true, val
               >
                 ₹{Number(displaySubtotal || 0).toFixed(2)}
               </motion.p>
-              <p className="text-xs text-neutral-500 dark:text-neutral-400">₹{Number(item.price || 0).toFixed(2)} each</p>
+              <p className="text-xs text-muted-foreground">₹{Number(item.price || 0).toFixed(2)} each</p>
             </div>
           </div>
         </div>

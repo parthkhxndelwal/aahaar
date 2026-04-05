@@ -7,7 +7,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useToast } from "@/hooks/use-toast"
 import { BarChart3, TrendingUp, TrendingDown, DollarSign, ShoppingCart, Users, Store } from "lucide-react"
-import { useAdminAuth } from "@/contexts/admin-auth-context"
+import { useUnifiedAuth } from "@/contexts/unified-auth-context"
+import { analyticsApi, apiClient } from "@/lib/api"
 
 interface AnalyticsData {
   summary: {
@@ -34,28 +35,27 @@ export default function AdminAnalyticsPage({ params }: { params: Promise<{ court
   const [loading, setLoading] = useState(true)
   const [period, setPeriod] = useState("7d")
   const { toast } = useToast()
-  const { token } = useAdminAuth()
+  const { token } = useUnifiedAuth()
   const { courtId } = use(params)
 
+  // Set up API client token
   useEffect(() => {
-    fetchAnalytics()
-  }, [period])
+    if (token) {
+      apiClient.setTokenGetter(() => token)
+    }
+  }, [token])
+
+  useEffect(() => {
+    if (token) {
+      fetchAnalytics()
+    }
+  }, [period, token])
 
   const fetchAnalytics = async () => {
     try {
       setLoading(true)
-      const response = await fetch(`/api/analytics/${courtId}/dashboard?period=${period}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
-      
-      const result = await response.json()
-      if (result.success) {
-        setAnalyticsData(result.data)
-      } else {
-        throw new Error(result.message)
-      }
+      const result = await analyticsApi.getDashboard(courtId, { startDate: period })
+      setAnalyticsData(result as unknown as AnalyticsData)
     } catch (error: any) {
       toast({
         title: "Error",
@@ -79,7 +79,7 @@ export default function AdminAnalyticsPage({ params }: { params: Promise<{ court
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-foreground"></div>
       </div>
     )
   }
@@ -88,8 +88,8 @@ export default function AdminAnalyticsPage({ params }: { params: Promise<{ court
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
-          <h2 className="text-2xl font-semibold text-gray-700">No Data Available</h2>
-          <p className="text-gray-500">Analytics data could not be loaded.</p>
+          <h2 className="text-2xl font-semibold">No Data Available</h2>
+          <p className="text-muted-foreground">Analytics data could not be loaded.</p>
         </div>
       </div>
     )
@@ -100,12 +100,12 @@ export default function AdminAnalyticsPage({ params }: { params: Promise<{ court
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold text-neutral-100">Analytics</h1>
-          <p className="text-neutral-600">Insights and performance metrics for {formatPeriodText(period)}</p>
+          <h1 className="text-3xl font-bold">Analytics</h1>
+          <p className="text-muted-foreground">Insights and performance metrics for {formatPeriodText(period)}</p>
         </div>
         <div className="flex gap-2">
           <Select value={period} onValueChange={setPeriod}>
-            <SelectTrigger className="w-[150px] text-white">
+            <SelectTrigger className="w-[150px]">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -114,7 +114,7 @@ export default function AdminAnalyticsPage({ params }: { params: Promise<{ court
               <SelectItem value="90d">Last 90 Days</SelectItem>
             </SelectContent>
           </Select>
-          <Button variant="outline" className="text-white" onClick={fetchAnalytics}>
+          <Button variant="outline" onClick={fetchAnalytics}>
             <BarChart3 className="h-4 w-4 mr-2" />
             Refresh
           </Button>
@@ -237,7 +237,9 @@ export default function AdminAnalyticsPage({ params }: { params: Promise<{ court
                 <div className="flex justify-between items-center">
                   <span className="text-sm font-medium">Vendor Utilization</span>
                   <span className="text-lg font-bold">
-                    {Math.round((analyticsData.topVendors.length / analyticsData.summary.activeVendors) * 100)}%
+                    {analyticsData.summary.activeVendors > 0 
+                      ? Math.round((analyticsData.topVendors.length / analyticsData.summary.activeVendors) * 100)
+                      : 0}%
                   </span>
                 </div>
               </CardContent>
@@ -257,24 +259,26 @@ export default function AdminAnalyticsPage({ params }: { params: Promise<{ court
                   analyticsData.topVendors.map((vendor, index) => (
                     <div key={vendor.id} className="flex items-center justify-between p-4 border rounded-lg">
                       <div className="flex items-center gap-3">
-                        <div className="flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 text-blue-600 font-semibold">
+                        <div className="flex items-center justify-center w-8 h-8 rounded-full bg-muted text-foreground font-semibold">
                           {index + 1}
                         </div>
                         <div>
                           <p className="font-medium">{vendor.stallName}</p>
-                          <p className="text-sm text-gray-500">{vendor.vendorName}</p>
+                          <p className="text-sm text-muted-foreground">{vendor.vendorName}</p>
                         </div>
                       </div>
                       <div className="text-right">
                         <p className="font-semibold">{vendor.orderCount} orders</p>
-                        <p className="text-sm text-gray-500">
-                          {Math.round((vendor.orderCount / analyticsData.summary.totalOrders) * 100)}% of total
+                        <p className="text-sm text-muted-foreground">
+                          {analyticsData.summary.totalOrders > 0 
+                            ? Math.round((vendor.orderCount / analyticsData.summary.totalOrders) * 100)
+                            : 0}% of total
                         </p>
                       </div>
                     </div>
                   ))
                 ) : (
-                  <p className="text-center text-gray-500 py-8">No vendor data available</p>
+                  <p className="text-center text-muted-foreground py-8">No vendor data available</p>
                 )}
               </div>
             </CardContent>
@@ -294,24 +298,26 @@ export default function AdminAnalyticsPage({ params }: { params: Promise<{ court
                     <div key={stat.status} className="flex items-center justify-between p-4 border rounded-lg">
                       <div className="flex items-center gap-3">
                         <div className={`w-3 h-3 rounded-full ${
-                          stat.status === "completed" ? "bg-green-500" :
-                          stat.status === "pending" ? "bg-yellow-500" :
-                          stat.status === "preparing" ? "bg-blue-500" :
-                          stat.status === "cancelled" ? "bg-red-500" :
-                          "bg-gray-500"
+                          stat.status === "completed" ? "bg-foreground" :
+                          stat.status === "pending" ? "bg-muted-foreground" :
+                          stat.status === "preparing" ? "bg-foreground" :
+                          stat.status === "cancelled" ? "bg-destructive" :
+                          "bg-muted-foreground"
                         }`}></div>
                         <span className="font-medium capitalize">{stat.status}</span>
                       </div>
                       <div className="text-right">
                         <p className="font-semibold">{stat.count} orders</p>
-                        <p className="text-sm text-gray-500">
-                          {Math.round((stat.count / analyticsData.summary.totalOrders) * 100)}%
+                        <p className="text-sm text-muted-foreground">
+                          {analyticsData.summary.totalOrders > 0 
+                            ? Math.round((stat.count / analyticsData.summary.totalOrders) * 100)
+                            : 0}%
                         </p>
                       </div>
                     </div>
                   ))
                 ) : (
-                  <p className="text-center text-gray-500 py-8">No order status data available</p>
+                  <p className="text-center text-muted-foreground py-8">No order status data available</p>
                 )}
               </div>
             </CardContent>

@@ -12,6 +12,8 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Spinner } from "@/components/ui/spinner"
 import Image from "next/image"
 import { motion, AnimatePresence } from "framer-motion"
+import { adminVendorApi, apiClient } from "@/lib/api"
+import { useUnifiedAuth } from "@/contexts/unified-auth-context"
 
 interface Vendor {
   id: string
@@ -59,21 +61,11 @@ interface Vendor {
   updatedAt: string
 }
 
-interface VendorsListResponse {
-  vendors: Vendor[]
-  pagination: {
-    currentPage: number
-    totalPages: number
-    totalItems: number
-    hasNext: boolean
-    hasPrev: boolean
-  }
-}
-
 export default function VendorsPage() {
   const params = useParams()
   const router = useRouter()
   const searchParams = useSearchParams()
+  const { token } = useUnifiedAuth()
   const courtId = params.courtId as string
 
   const [vendors, setVendors] = useState<Vendor[]>([])
@@ -93,9 +85,16 @@ export default function VendorsPage() {
   const successMessage = searchParams.get("success")
   const newVendorId = searchParams.get("vendorId")
 
+  // Set up API client token
+  useEffect(() => {
+    if (token) {
+      apiClient.setTokenGetter(() => token)
+    }
+  }, [token])
+
   useEffect(() => {
     fetchVendors()
-  }, [courtId, currentPage, statusFilter])
+  }, [courtId, currentPage, statusFilter, token])
 
   // Show success message if vendor was just created
   useEffect(() => {
@@ -106,25 +105,25 @@ export default function VendorsPage() {
   }, [successMessage, newVendorId])
 
   const fetchVendors = async () => {
+    if (!token) return
+    
     try {
       setLoading(true)
-      const params = new URLSearchParams({
+      
+      const result = await adminVendorApi.list({
         courtId,
-        page: currentPage.toString(),
-        limit: "10",
+        page: currentPage,
+        limit: 10,
+        status: statusFilter !== "all" ? statusFilter : undefined,
       })
 
-      if (statusFilter && statusFilter !== "all") {
-        params.append("status", statusFilter)
-      }
-
-      const response = await fetch(`/api/admin/vendors?${params}`)
-      const result = await response.json()
-
-      if (result.success) {
-        setVendors(result.data.vendors)
-        setPagination(result.data.pagination)
-      }
+      setVendors((result as any).vendors || [])
+      setPagination((result as any).pagination || {
+        totalPages: 1,
+        totalItems: 0,
+        hasNext: false,
+        hasPrev: false,
+      })
     } catch (error) {
       console.error("Failed to fetch vendors:", error)
     } finally {
@@ -141,15 +140,15 @@ export default function VendorsPage() {
   const getStatusColor = (status: string) => {
     switch (status) {
       case "active":
-        return "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
+        return "bg-muted text-foreground"
       case "inactive":
-        return "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200"
+        return "bg-muted text-muted-foreground"
       case "maintenance":
-        return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200"
+        return "bg-muted text-muted-foreground"
       case "suspended":
-        return "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
+        return "bg-destructive/10 text-destructive"
       default:
-        return "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200"
+        return "bg-muted text-muted-foreground"
     }
   }
 
@@ -158,7 +157,7 @@ export default function VendorsPage() {
     const editButtonId = `edit-${vendor.id}`
     
     return (
-      <Card className="hover:shadow-md transition-all duration-300 dark:bg-neutral-900 dark:border-neutral-800 hover:shadow-neutral-900/20">
+      <Card className="hover:shadow-md transition-all duration-300">
         <CardHeader className="pb-3">
           <div className="flex items-start justify-between">
             <div className="flex items-center gap-3">
@@ -171,13 +170,13 @@ export default function VendorsPage() {
                   className="rounded-lg object-cover"
                 />
               ) : (
-                <div className="w-12 h-12 bg-neutral-200 dark:bg-neutral-700 rounded-lg flex items-center justify-center">
+                <div className="w-12 h-12 bg-muted rounded-lg flex items-center justify-center">
                   <Store className="h-6 w-6 text-muted-foreground" />
                 </div>
               )}
               <div>
-                <CardTitle className="text-lg dark:text-white">{vendor.stallName}</CardTitle>
-                <CardDescription className="dark:text-neutral-400">{vendor.vendorName}</CardDescription>
+                <CardTitle className="text-lg">{vendor.stallName}</CardTitle>
+                <CardDescription>{vendor.vendorName}</CardDescription>
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -185,7 +184,7 @@ export default function VendorsPage() {
                 {vendor.status}
               </Badge>
               {vendor.isOnline && (
-                <Badge variant="outline" className="bg-green-50 text-green-700 dark:bg-green-900 dark:text-green-200">
+                <Badge variant="outline" className="bg-muted text-foreground">
                   Online
                 </Badge>
               )}
@@ -196,22 +195,22 @@ export default function VendorsPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
             <div className="flex items-center gap-2">
               <Mail className="h-4 w-4 text-muted-foreground" />
-              <span className="truncate dark:text-neutral-300">{vendor.contactEmail}</span>
+              <span className="truncate">{vendor.contactEmail}</span>
             </div>
             <div className="flex items-center gap-2">
               <Phone className="h-4 w-4 text-muted-foreground" />
-              <span className="dark:text-neutral-300">{vendor.contactPhone}</span>
+              <span>{vendor.contactPhone}</span>
             </div>
             {vendor.stallLocation && (
               <div className="flex items-center gap-2">
                 <MapPin className="h-4 w-4 text-muted-foreground" />
-                <span className="truncate dark:text-neutral-300">{vendor.stallLocation}</span>
+                <span className="truncate">{vendor.stallLocation}</span>
               </div>
             )}
             {vendor.cuisineType && (
               <div className="flex items-center gap-2">
                 <Store className="h-4 w-4 text-muted-foreground" />
-                <span className="dark:text-neutral-300">{vendor.cuisineType}</span>
+                <span>{vendor.cuisineType}</span>
               </div>
             )}
           </div>
@@ -219,13 +218,13 @@ export default function VendorsPage() {
           {vendor.totalRatings > 0 && (
             <div className="flex items-center gap-2">
               <Star className="h-4 w-4 text-yellow-500 fill-current" />
-              <span className="text-sm dark:text-neutral-300">
-                {vendor.rating.toFixed(1)} ({vendor.totalRatings} reviews)
+              <span className="text-sm">
+                {typeof vendor.rating === 'number' ? vendor.rating.toFixed(1) : parseFloat(vendor.rating || 0).toFixed(1)} ({vendor.totalRatings} reviews)
               </span>
             </div>
           )}
 
-          <div className="flex items-center justify-end pt-2 border-t dark:border-neutral-700">
+          <div className="flex items-center justify-end pt-2 border-t">
             <div className="flex gap-2">
               <Button
                 variant="outline"
@@ -235,7 +234,7 @@ export default function VendorsPage() {
                   setButtonLoading(viewButtonId)
                   router.push(`/admin/${courtId}/vendors/${vendor.id}`)
                 }}
-                className="gap-2 dark:border-neutral-600 dark:text-neutral-300 dark:hover:bg-neutral-800"
+                className="gap-2"
               >
                 {buttonLoading === viewButtonId ? (
                   <Spinner size={16} variant="light" />
@@ -252,7 +251,7 @@ export default function VendorsPage() {
                   setButtonLoading(editButtonId)
                   router.push(`/admin/${courtId}/vendors/${vendor.id}/edit`)
                 }}
-                className="gap-2 dark:border-neutral-600 dark:text-neutral-300 dark:hover:bg-neutral-800"
+                className="gap-2"
               >
                 {buttonLoading === editButtonId ? (
                   <Spinner size={16} variant="dark" />
@@ -284,9 +283,9 @@ export default function VendorsPage() {
             exit={{ opacity: 0, height: 0 }}
             transition={{ duration: 0.3 }}
           >
-            <Alert className="border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950">
-              <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
-              <AlertDescription className="text-green-800 dark:text-green-200">
+            <Alert className="border-border bg-muted">
+              <CheckCircle className="h-4 w-4 text-foreground" />
+              <AlertDescription className="text-foreground">
                 <strong>Success!</strong> Vendor has been created and configured successfully.
               </AlertDescription>
             </Alert>
@@ -302,8 +301,8 @@ export default function VendorsPage() {
         transition={{ duration: 0.4, delay: 0.1 }}
       >
         <div>
-          <h1 className="text-3xl font-bold dark:text-neutral-200">Vendors</h1>
-          <p className="text-muted-foreground dark:text-neutral-400">
+          <h1 className="text-3xl font-bold">Vendors</h1>
+          <p className="text-muted-foreground">
             Manage vendors and their configuration
           </p>
         </div>
@@ -313,7 +312,7 @@ export default function VendorsPage() {
             setButtonLoading('create-vendor')
             router.push(`/admin/${courtId}/vendors/onboard`)
           }}
-          className="gap-2 bg-neutral-100 hover:bg-neutral-700 text-black hover:text-white"
+          className="gap-2 bg-foreground hover:bg-foreground/90 text-background"
         >
           {buttonLoading === 'create-vendor' ? (
             <Spinner size={16} variant="white" />
@@ -330,7 +329,7 @@ export default function VendorsPage() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, delay: 0.2 }}
       >
-        <Card className="dark:bg-neutral-900 dark:border-neutral-800">
+        <Card>
         <CardContent className="pt-6">
           <div className="flex flex-col md:flex-row gap-4">
             <div className="relative flex-1">
@@ -339,19 +338,19 @@ export default function VendorsPage() {
                 placeholder="Search vendors by name, email, or stall name..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 dark:bg-neutral-800 dark:border-neutral-700 dark:text-white"
+                className="pl-10"
               />
             </div>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-full md:w-48 dark:bg-neutral-800 dark:border-neutral-700 dark:text-white">
+              <SelectTrigger className="w-full md:w-48">
                 <SelectValue placeholder="Filter by status" />
               </SelectTrigger>
-              <SelectContent className="dark:bg-neutral-800 dark:border-neutral-700">
-                <SelectItem value="all" className="dark:text-white dark:hover:bg-neutral-700">All Statuses</SelectItem>
-                <SelectItem value="active" className="dark:text-white dark:hover:bg-neutral-700">Active</SelectItem>
-                <SelectItem value="inactive" className="dark:text-white dark:hover:bg-neutral-700">Inactive</SelectItem>
-                <SelectItem value="maintenance" className="dark:text-white dark:hover:bg-neutral-700">Maintenance</SelectItem>
-                <SelectItem value="suspended" className="dark:text-white dark:hover:bg-neutral-700">Suspended</SelectItem>
+              <SelectContent>
+                <SelectItem value="all">All Statuses</SelectItem>
+                <SelectItem value="active">Active</SelectItem>
+                <SelectItem value="inactive">Inactive</SelectItem>
+                <SelectItem value="maintenance">Maintenance</SelectItem>
+                <SelectItem value="suspended">Suspended</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -375,16 +374,16 @@ export default function VendorsPage() {
           >
             <div className="text-center">
               <Spinner size={32} variant="white" className="mx-auto mb-4" />
-              <p className="text-muted-foreground dark:text-neutral-400">Loading vendors...</p>
+              <p className="text-muted-foreground">Loading vendors...</p>
             </div>
           </motion.div>
         ) : filteredVendors.length === 0 ? (
-          <Card className="dark:bg-neutral-900 dark:border-neutral-800">
+          <Card>
             <CardContent className="py-12">
               <div className="text-center">
                 <Store className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                <h3 className="text-lg font-semibold mb-2 dark:text-white">No vendors found</h3>
-                <p className="text-muted-foreground dark:text-neutral-400 mb-4">
+                <h3 className="text-lg font-semibold mb-2">No vendors found</h3>
+                <p className="text-muted-foreground mb-4">
                   {searchTerm || (statusFilter !== "all")
                     ? "No vendors match your current filters."
                     : "Get started by creating your first vendor."}
@@ -397,7 +396,7 @@ export default function VendorsPage() {
                       setButtonLoading('create-first-vendor')
                       router.push(`/admin/${courtId}/vendors/onboard`)
                     }}
-                    className="gap-2 bg-neutral-400 hover:bg-neutral-300 text-black"
+                    className="gap-2"
                 >
                   {buttonLoading === 'create-first-vendor' ? (
                     <Spinner size={16} variant="white" />
@@ -429,7 +428,7 @@ export default function VendorsPage() {
       {/* Pagination */}
       {!searchTerm && pagination.totalPages > 1 && (
         <div className="flex items-center justify-between">
-          <p className="text-sm text-muted-foreground dark:text-neutral-400">
+          <p className="text-sm text-muted-foreground">
             Showing {searchTerm ? filteredVendors.length : pagination.totalItems} of {pagination.totalItems} vendors
           </p>
           <div className="flex gap-2">
@@ -437,7 +436,7 @@ export default function VendorsPage() {
               variant="outline"
               onClick={() => setCurrentPage(currentPage - 1)}
               disabled={!pagination.hasPrev}
-              className="dark:border-neutral-600 dark:text-neutral-300 dark:hover:bg-neutral-800"
+
             >
               Previous
             </Button>
@@ -445,7 +444,6 @@ export default function VendorsPage() {
               variant="outline"
               onClick={() => setCurrentPage(currentPage + 1)}
               disabled={!pagination.hasNext}
-              className="dark:border-neutral-600 dark:text-neutral-300 dark:hover:bg-neutral-800"
             >
               Next
             </Button>

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
-import { Order, User, Payment, OrderItem, MenuItem, Vendor } from "@/models"
+import { Order, Payment, OrderItem, Vendor } from "@/models"
 import { authenticateToken } from "@/middleware/auth"
-import { Op } from "sequelize"
+import { successResponse, errorResponse, handleServiceError } from "@/lib/api-response"
 
 export async function PATCH(request, { params }) {
   try {
@@ -16,15 +16,15 @@ export async function PATCH(request, { params }) {
     if (user.role === "vendor") {
       const vendor = await Vendor.findOne({ where: { userId: user.id } })
       if (!vendor || vendor.id !== vendorId) {
-        return NextResponse.json({ success: false, message: "Access denied" }, { status: 403 })
+        return errorResponse("Access denied", 403, "FORBIDDEN")
       }
     } else if (user.role === "admin") {
       const vendor = await Vendor.findOne({ where: { id: vendorId, courtId: user.courtId } })
       if (!vendor) {
-        return NextResponse.json({ success: false, message: "Vendor not found" }, { status: 404 })
+        return errorResponse("Vendor not found", 404, "VENDOR_NOT_FOUND")
       }
     } else {
-      return NextResponse.json({ success: false, message: "Access denied" }, { status: 403 })
+      return errorResponse("Access denied", 403, "FORBIDDEN")
     }
 
     // Find the order
@@ -33,7 +33,7 @@ export async function PATCH(request, { params }) {
     })
 
     if (!order) {
-      return NextResponse.json({ success: false, message: "Order not found" }, { status: 404 })
+      return errorResponse("Order not found", 404, "ORDER_NOT_FOUND")
     }
 
     let newStatus
@@ -43,9 +43,10 @@ export async function PATCH(request, { params }) {
     switch (action) {
       case "mark_ready":
         if (order.status !== "preparing") {
-          return NextResponse.json(
-            { success: false, message: "Order must be in preparing status to mark as ready" },
-            { status: 400 }
+          return errorResponse(
+            "Order must be in preparing status to mark as ready",
+            400,
+            "INVALID_STATUS_TRANSITION"
           )
         }
         newStatus = "ready"
@@ -55,17 +56,19 @@ export async function PATCH(request, { params }) {
 
       case "complete":
         if (order.status !== "ready") {
-          return NextResponse.json(
-            { success: false, message: "Order must be in ready status to complete" },
-            { status: 400 }
+          return errorResponse(
+            "Order must be in ready status to complete",
+            400,
+            "INVALID_STATUS_TRANSITION"
           )
         }
 
         // Verify OTP
         if (!otp || otp !== order.orderOtp) {
-          return NextResponse.json(
-            { success: false, message: "Invalid OTP. Please check the OTP provided by the customer." },
-            { status: 400 }
+          return errorResponse(
+            "Invalid OTP. Please check the OTP provided by the customer.",
+            400,
+            "INVALID_OTP"
           )
         }
 
@@ -81,7 +84,7 @@ export async function PATCH(request, { params }) {
         break
 
       default:
-        return NextResponse.json({ success: false, message: "Invalid action" }, { status: 400 })
+        return errorResponse("Invalid action", 400, "INVALID_ACTION")
     }
 
     // Update order status
@@ -98,13 +101,6 @@ export async function PATCH(request, { params }) {
         },
       ],
     })
-
-    // Get updated section counts for the vendor
-    const sectionCounts = await Promise.all([
-      Order.count({ where: { vendorId, status: "pending" } }),
-      Order.count({ where: { vendorId, status: "preparing" } }),
-      Order.count({ where: { vendorId, status: "ready" } }),
-    ])
 
     // Fetch updated order with items
     const updatedOrder = await Order.findOne({
@@ -136,37 +132,17 @@ export async function PATCH(request, { params }) {
       completedAt: updateData.completedAt || updatedOrder.completedAt,
     }
 
-    // Determine which section the order belongs to now
-    let targetSection
-    if (newStatus === "ready") {
-      targetSection = "ready"
-    } else if (newStatus === "completed") {
-      targetSection = null // Order will be removed from all sections
-    }
+    console.log(`📋 Order status updated: ${orderId} -> ${newStatus}`)
 
-    // Note: Status changes will be automatically detected by polling systems
-    // - Vendor polling will detect queue/ready status changes  
-    // - User polling will detect order status updates
-    console.log(`� Order status updated: ${orderId} -> ${newStatus} (will be picked up by polling)`)
-
-    return NextResponse.json({
-      success: true,
-      message,
-      data: {
-        orderId: order.id,
-        status: newStatus,
-        orderOtp: order.orderOtp,
-        parentOrderId: order.parentOrderId,
-      },
-    })
+    return successResponse({
+      orderId: order.id,
+      status: newStatus,
+      orderOtp: order.orderOtp,
+      parentOrderId: order.parentOrderId,
+      order: orderData,
+    }, message)
   } catch (error) {
     console.error("Update order preparation status error:", error)
-    return NextResponse.json(
-      {
-        success: false,
-        message: "Internal server error",
-      },
-      { status: 500 }
-    )
+    return handleServiceError(error)
   }
 }

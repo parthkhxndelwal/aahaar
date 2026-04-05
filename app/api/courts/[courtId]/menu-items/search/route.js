@@ -14,6 +14,11 @@ export async function GET(request, { params }) {
       }, { status: 400 })
     }
 
+    // Validate courtId format to prevent SQL injection
+    if (!courtId || typeof courtId !== 'string' || !/^[a-zA-Z0-9_-]+$/.test(courtId)) {
+      return Response.json({ success: false, error: "Invalid court ID format" }, { status: 400 })
+    }
+
     console.log(`Searching for "${query}" in court: ${courtId}`)
 
     // Build search conditions with MySQL/TiDB compatible operators (case-insensitive)
@@ -22,24 +27,17 @@ export async function GET(request, { params }) {
     const searchConditions = {
       [Op.and]: [
         {
-          // Only show available items
           isAvailable: true,
         },
         {
           [Op.or]: [
-            // Search in item name (case-insensitive using LOWER function)
             sequelize.where(
               sequelize.fn('LOWER', sequelize.col('MenuItem.name')),
-              {
-                [Op.like]: `%${lowerQuery}%`
-              }
+              { [Op.like]: `%${lowerQuery}%` }
             ),
-            // Search in description (case-insensitive using LOWER function)
             sequelize.where(
               sequelize.fn('LOWER', sequelize.col('MenuItem.description')),
-              {
-                [Op.like]: `%${lowerQuery}%`
-              }
+              { [Op.like]: `%${lowerQuery}%` }
             )
           ]
         }
@@ -81,14 +79,17 @@ export async function GET(request, { params }) {
       console.log("Some additional search fields skipped:", additionalSearchError.message)
     }
 
-    // Query menu items with associations (simplified for debugging)
+    // Query menu items with associations - filter by courtId at DB level
     const menuItems = await MenuItem.findAll({
       where: searchConditions,
       include: [
         {
           model: Vendor,
           as: 'vendor',
-          // Temporarily remove the courtId filter to see if that's the issue
+          where: {
+            courtId,
+            status: 'active'
+          },
           attributes: ['id', 'stallName', 'vendorName', 'cuisineType', 'courtId', 'status']
         },
         {
@@ -99,13 +100,11 @@ export async function GET(request, { params }) {
         }
       ],
       order: [
-        // Prioritize exact name matches
         ['name', 'ASC'],
-        // Then by availability and price
         ['isAvailable', 'DESC'],
         ['price', 'ASC']
       ],
-      limit: 50 // Limit results to prevent too many items
+      limit: 50
     })
     
     console.log("Search query results count:", menuItems.length)
@@ -118,17 +117,8 @@ export async function GET(request, { params }) {
       } : 'No vendor'
     })))
 
-    // Filter results to only include items from the correct court and approved/active vendors
-    const filteredItems = menuItems.filter(item => 
-      item.vendor && 
-      item.vendor.courtId === courtId && 
-      (item.vendor.status === 'approved' || item.vendor.status === 'active')
-    )
-
-    console.log("Filtered results for court:", filteredItems.length)
-
     // Format the response to match the expected format
-    const formattedItems = filteredItems.map(item => ({
+    const formattedItems = menuItems.map(item => ({
       id: item.id,
       name: item.name,
       description: item.description,

@@ -23,8 +23,9 @@ import {
   ChevronDown,
   Plus,
 } from "lucide-react"
-import { useAdminAuth } from "@/contexts/admin-auth-context"
+import { useUnifiedAuth } from "@/contexts/unified-auth-context"
 import { CourtSwitcher } from "@/components/admin/court-switcher"
+import { adminCourtApi } from "@/lib/api"
 
 interface Court {
   id: string
@@ -43,7 +44,7 @@ export function AdminSidebar({ courtId }: AdminSidebarProps) {
   const [collapsed, setCollapsed] = useState(false)
   const [courts, setCourts] = useState<Court[]>([])
   const [currentCourt, setCurrentCourt] = useState<Court | null>(null)
-  const { logout, user, token } = useAdminAuth()
+  const { logout, user, token } = useUnifiedAuth()
   const router = useRouter()
   const pathname = usePathname()
 
@@ -64,18 +65,18 @@ export function AdminSidebar({ courtId }: AdminSidebarProps) {
     if (!token) return
 
     try {
-      const response = await fetch("/api/admin/courts", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        if (data.success) {
-          setCourts(data.data)
-        }
-      }
+      const response = await adminCourtApi.list()
+      const courtsData = response.courts || []
+      // Map to local Court interface, using courtId as fallback for id
+      const mappedCourts: Court[] = courtsData.map(c => ({
+        id: c.courtId, // Use courtId as id if not provided
+        courtId: c.courtId,
+        instituteName: c.instituteName,
+        instituteType: c.instituteType,
+        status: c.status,
+        logoUrl: c.logoUrl
+      }))
+      setCourts(mappedCourts)
     } catch (error) {
       console.error("Error fetching courts:", error)
     }
@@ -83,7 +84,7 @@ export function AdminSidebar({ courtId }: AdminSidebarProps) {
 
   const handleLogout = () => {
     logout()
-    router.push("/admin/auth")
+    router.push("/")
   }
 
   const navItems = [
@@ -133,26 +134,26 @@ export function AdminSidebar({ courtId }: AdminSidebarProps) {
 
   return (
     <div className={cn(
-      "h-full bg-neutral-950 border-r border-neutral-800 flex flex-col transition-all duration-300",
+      "h-full bg-background border-r border-border flex flex-col transition-all duration-300",
       collapsed ? "w-16" : "w-64"
     )}>
-      <div className="p-4 border-b border-neutral-800 flex items-center justify-between">
+      <div className="p-4 border-b border-border flex items-center justify-between">
         {!collapsed && (
           <div className="flex items-center gap-3">
             <Image src="/logo.png" alt="Logo" width={24} height={24} />
-            <h2 className="text-xl font-semibold text-white">Aahaar</h2>
+            <h2 className="text-xl font-semibold text-foreground">Aahaar</h2>
           </div>
         )}
         <button
           onClick={() => setCollapsed(!collapsed)}
-          className="p-2 hover:bg-neutral-900 rounded-md transition-colors text-neutral-400 hover:text-white"
+          className="p-2 hover:bg-muted rounded-md transition-colors text-muted-foreground hover:text-foreground"
         >
           {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
         </button>
       </div>
       
       {!collapsed && (
-        <div className="p-4 border-b border-neutral-800">
+        <div className="p-4 border-b border-border">
           <CourtSwitcher 
             courts={courts} 
             currentCourt={currentCourt}
@@ -170,8 +171,8 @@ export function AdminSidebar({ courtId }: AdminSidebarProps) {
               className={cn(
                 "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
                 item.isActive
-                  ? "bg-blue-600 text-white"
-                  : "text-neutral-400 hover:text-white hover:bg-neutral-900",
+                  ? "bg-foreground text-background"
+                  : "text-muted-foreground hover:text-foreground hover:bg-muted",
                 collapsed && "justify-center px-2"
               )}
               title={collapsed ? item.title : undefined}
@@ -183,11 +184,11 @@ export function AdminSidebar({ courtId }: AdminSidebarProps) {
         </div>
       </nav>
       
-      <div className="p-4 border-t border-neutral-800">
+      <div className="p-4 border-t border-border">
         <button
           onClick={handleLogout}
           className={cn(
-            "flex items-center gap-3 w-full px-3 py-2 rounded-lg text-sm font-medium text-neutral-400 hover:text-white hover:bg-neutral-900 transition-colors",
+            "flex items-center gap-3 w-full px-3 py-2 rounded-lg text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors",
             collapsed && "justify-center px-2"
           )}
           title={collapsed ? "Logout" : undefined}

@@ -8,7 +8,7 @@ export async function PATCH(request, { params }) {
     if (authResult instanceof NextResponse) return authResult
 
     const { user } = authResult
-    const { userId } = params
+    const { userId } = await params
     const { status, role } = await request.json()
 
     if (user.role !== "admin") {

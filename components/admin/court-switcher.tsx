@@ -70,8 +70,8 @@ export function CourtSwitcher({ courts, currentCourt, onCourtChange }: CourtSwit
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button className="flex items-center gap-3 w-full p-3 bg-neutral-900 rounded-lg hover:bg-neutral-800 transition-colors">
-          <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-neutral-800">
+        <button className="flex items-center gap-3 w-full p-3 bg-muted rounded-lg hover:bg-accent transition-colors">
+          <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-background border border-border">
             {currentCourt?.logoUrl ? (
               <img 
                 src={currentCourt.logoUrl} 
@@ -83,14 +83,14 @@ export function CourtSwitcher({ courts, currentCourt, onCourtChange }: CourtSwit
             )}
           </div>
           <div className="flex-1 text-left text-sm min-w-0">
-            <div className="font-semibold text-white truncate">
+            <div className="font-semibold text-foreground truncate">
               {currentCourt?.instituteName || "Select Court"}
             </div>
-            <div className="text-xs text-neutral-400 truncate">
+            <div className="text-xs text-muted-foreground truncate">
               {currentCourt?.courtId || "No court selected"}
             </div>
           </div>
-          <ChevronsUpDown className="h-4 w-4 text-neutral-400" />
+          <ChevronsUpDown className="h-4 w-4 text-muted-foreground" />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent

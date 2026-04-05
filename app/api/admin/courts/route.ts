@@ -1,42 +1,33 @@
 import { NextRequest, NextResponse } from "next/server"
-import jwt from "jsonwebtoken"
-import { User, Court } from "@/models"
+import { Court } from "@/models"
 import { Op } from "sequelize"
-
-const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key"
+import { authenticateRequest, requireAdmin, isSuperAdmin } from "@/lib/auth-helper"
 
 export async function GET(request: NextRequest) {
   try {
-    const authHeader = request.headers.get("authorization")
-    if (!authHeader?.startsWith("Bearer ")) {
+    // Authenticate using NextAuth session or Bearer token
+    const authResult = await authenticateRequest(request)
+    if (!authResult.success) {
       return NextResponse.json(
-        { success: false, message: "Authorization token required" },
-        { status: 401 }
+        { success: false, message: authResult.error },
+        { status: authResult.status }
       )
     }
 
-    const token = authHeader.substring(7)
-    const decoded = jwt.verify(token, JWT_SECRET) as any
+    const user = authResult.user
 
-    if (!decoded.userId) {
+    // Require admin role
+    const adminError = requireAdmin(user)
+    if (adminError) {
       return NextResponse.json(
-        { success: false, message: "Invalid token" },
-        { status: 401 }
-      )
-    }
-
-    // Get the current user to verify admin role
-    const user = await User.findByPk(decoded.userId)
-    if (!user || user.role !== "admin") {
-      return NextResponse.json(
-        { success: false, message: "Admin access required" },
-        { status: 403 }
+        { success: false, message: adminError.error },
+        { status: adminError.status }
       )
     }
 
     // For super admin, get all courts. For regular admin, get courts they manage
     let courts
-    if (user.email === "superadmin@aahaar.com") { // Check if super admin
+    if (isSuperAdmin(user)) {
       courts = await Court.findAll({
         attributes: ['id', 'courtId', 'instituteName', 'instituteType', 'status', 'logoUrl'],
         order: [['createdAt', 'DESC']]
@@ -46,9 +37,12 @@ export async function GET(request: NextRequest) {
       let whereCondition;
       if (user.managedCourtIds && user.managedCourtIds.length > 0) {
         whereCondition = { courtId: { [Op.in]: user.managedCourtIds } };
+      } else if (user.courtId) {
+        // Fallback to single courtId
+        whereCondition = { courtId: user.courtId };
       } else {
-        // Fallback to old method for users without managedCourtIds
-        whereCondition = { contactEmail: user.email };
+        // No courts to show
+        whereCondition = { courtId: '__none__' };
       }
       
       courts = await Court.findAll({
@@ -60,7 +54,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      data: courts
+      data: { courts }
     })
 
   } catch (error) {
@@ -74,30 +68,23 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const authHeader = request.headers.get("authorization")
-    if (!authHeader?.startsWith("Bearer ")) {
+    // Authenticate using NextAuth session or Bearer token
+    const authResult = await authenticateRequest(request)
+    if (!authResult.success) {
       return NextResponse.json(
-        { success: false, message: "Authorization token required" },
-        { status: 401 }
+        { success: false, message: authResult.error },
+        { status: authResult.status }
       )
     }
 
-    const token = authHeader.substring(7)
-    const decoded = jwt.verify(token, JWT_SECRET) as any
+    const user = authResult.user
 
-    if (!decoded.userId) {
+    // Require admin role
+    const adminError = requireAdmin(user)
+    if (adminError) {
       return NextResponse.json(
-        { success: false, message: "Invalid token" },
-        { status: 401 }
-      )
-    }
-
-    // Get the current user to verify admin role
-    const user = await User.findByPk(decoded.userId)
-    if (!user || user.role !== "admin") {
-      return NextResponse.json(
-        { success: false, message: "Admin access required" },
-        { status: 403 }
+        { success: false, message: adminError.error },
+        { status: adminError.status }
       )
     }
 
@@ -124,6 +111,9 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Import User model for updating
+    const { User } = await import("@/models")
+
     // Create new court
     const newCourt = await Court.create({
       courtId,
@@ -136,25 +126,28 @@ export async function POST(request: NextRequest) {
     })
 
     // Update user's managedCourtIds array and set courtId to the newest court
-    const currentManagedCourts = user.managedCourtIds || [];
-    const updatedManagedCourts = [...currentManagedCourts];
-    
-    // Add the new court to managed courts if not already present
-    if (!updatedManagedCourts.includes(courtId)) {
-      updatedManagedCourts.push(courtId);
+    const dbUser = await User.findByPk(user.id)
+    if (dbUser) {
+      const currentManagedCourts = dbUser.managedCourtIds || [];
+      const updatedManagedCourts = [...currentManagedCourts];
+      
+      // Add the new court to managed courts if not already present
+      if (!updatedManagedCourts.includes(courtId)) {
+        updatedManagedCourts.push(courtId);
+      }
+      
+      await User.update(
+        { 
+          courtId: courtId, // Set as current active court
+          managedCourtIds: updatedManagedCourts // Add to managed courts array
+        },
+        { where: { id: user.id } }
+      )
     }
-    
-    await User.update(
-      { 
-        courtId: courtId, // Set as current active court
-        managedCourtIds: updatedManagedCourts // Add to managed courts array
-      },
-      { where: { id: user.id } }
-    )
 
     return NextResponse.json({
       success: true,
-      data: newCourt,
+      data: { court: newCourt },
       message: "Court created successfully"
     })
 

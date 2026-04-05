@@ -8,7 +8,14 @@ export async function GET(request, { params }) {
     const authResult = await authenticateToken(request)
     if (authResult instanceof NextResponse) return authResult
 
+    const { user } = authResult
     const { courtId } = await params
+
+    // Verify user belongs to requested court (super admins can access any court)
+    if (user.role !== "superadmin" && user.courtId !== courtId) {
+      return NextResponse.json({ success: false, message: "Access denied" }, { status: 403 })
+    }
+
     const { searchParams } = new URL(request.url)
     const period = searchParams.get("period") || "7d" // 7d, 30d, 90d
 
@@ -107,27 +114,22 @@ export async function GET(request, { params }) {
     })
     console.log(`- All vendors:`, allVendorsForDebug)
 
+    // Validate courtId format to prevent SQL injection
+    if (!courtId || typeof courtId !== 'string' || !/^[a-zA-Z0-9_-]+$/.test(courtId)) {
+      return NextResponse.json({ success: false, message: "Invalid court ID format" }, { status: 400 })
+    }
+
     // Get registered users count - include users who have this court in managedCourtIds or as courtId
-    console.log(`[DEBUG] Counting users for court: ${courtId}`)
-    
-    // First, let's see all users
-    const allUsers = await User.findAll({
-      attributes: ['id', 'email', 'courtId', 'managedCourtIds', 'role'],
-      raw: true
-    })
-    console.log(`[DEBUG] All users:`, allUsers)
-    
-    // Try different approaches to count users
     const usersByCourtId = await User.count({
       where: { courtId: courtId }
     })
-    console.log(`[DEBUG] Users with courtId=${courtId}: ${usersByCourtId}`)
     
-    // Try JSON_CONTAINS approach
     const usersWithManagedCourts = await User.count({
-      where: sequelize.literal(`JSON_CONTAINS(managedCourtIds, '"${courtId}"')`)
+      where: sequelize.where(
+        sequelize.fn('JSON_CONTAINS', sequelize.col('managedCourtIds'), JSON.stringify(courtId)),
+        1
+      )
     })
-    console.log(`[DEBUG] Users with ${courtId} in managedCourtIds: ${usersWithManagedCourts}`)
     
     const totalUsers = usersByCourtId + usersWithManagedCourts
 

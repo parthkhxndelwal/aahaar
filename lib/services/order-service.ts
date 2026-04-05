@@ -106,7 +106,7 @@ export class OrderService {
           {
             model: Vendor,
             as: 'vendor',
-            attributes: ['id', 'stallName', 'vendorName', 'accountId', 'status', 'averagePreparationTime'],
+            attributes: ['id', 'stallName', 'vendorName', 'razorpayAccountId', 'status', 'averagePreparationTime'],
           },
         ],
       })
@@ -213,8 +213,9 @@ export class OrderService {
     let platformCharge = 0
 
     if (applyCharges) {
-      // In future, move rates to DB/Config
-      const SERVICE_CHARGE_RATE = 0.05
+      // Use ConfigService for rates (imported at top or inline)
+      // For now, keep defaults but mark for ConfigService integration
+      const SERVICE_CHARGE_RATE = 0.05 // TODO: ConfigService.getChargesConfig(courtId)
       const PLATFORM_CHARGE_FIXED = 5
 
       serviceCharge = grandTotal * SERVICE_CHARGE_RATE
@@ -292,7 +293,7 @@ export class OrderService {
           
           vendors: {
             [vendorId]: {
-              accountId: group.vendor.accountId || 'default_acc',
+              accountId: group.vendor.razorpayAccountId || 'default_acc',
               name: group.vendor.stallName || group.vendor.vendorName,
             },
           },
@@ -391,7 +392,7 @@ export class OrderService {
         {
           model: Vendor,
           as: 'vendor',
-          attributes: ['id', 'stallName', 'vendorName', 'imageUrl'],
+          attributes: ['id', 'stallName', 'vendorName', 'logoUrl'],
         },
         {
           model: OrderItem,

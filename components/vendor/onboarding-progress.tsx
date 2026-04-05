@@ -30,8 +30,8 @@ export function OnboardingProgress({ currentStep, steps }: OnboardingProgressPro
   const isLastStep = currentStepIndex === steps.length - 1
 
   return (
-    <div className="min-h-screen bg-neutral-950 flex items-center justify-center p-4">
-      <Card className="w-full max-w-2xl bg-neutral-900 border-neutral-800">
+    <div className="min-h-screen bg-background flex items-center justify-center p-4">
+      <Card className="w-full max-w-2xl bg-muted border-border">
         <CardContent className="p-8">
           <div className="text-center mb-8">
             <div className="relative inline-block mb-6">
@@ -43,21 +43,21 @@ export function OnboardingProgress({ currentStep, steps }: OnboardingProgressPro
                 className="animate-spin"
               />
             </div>
-            <h2 className="text-2xl font-bold text-white mb-2">Setting Up Your Vendor Account</h2>
-            <p className="text-neutral-400">Please wait while we configure your account...</p>
+            <h2 className="text-2xl font-bold text-foreground mb-2">Setting Up Your Vendor Account</h2>
+            <p className="text-muted-foreground">Please wait while we configure your account...</p>
           </div>
 
           {/* Progress Bar */}
           <div className="mb-8">
             <div className="flex justify-between items-center mb-2">
-              <span className="text-sm text-neutral-400">Progress</span>
-              <span className="text-sm text-neutral-400">
+              <span className="text-sm text-muted-foreground">Progress</span>
+              <span className="text-sm text-muted-foreground">
                 {currentStepIndex + 1} of {steps.length}
               </span>
             </div>
-            <div className="w-full bg-neutral-800 rounded-full h-2">
+            <div className="w-full bg-muted rounded-full h-2">
               <div
-                className="bg-blue-600 h-2 rounded-full transition-all duration-500 ease-out"
+                className="bg-foreground h-2 rounded-full transition-all duration-500 ease-out"
                 style={{
                   width: `${((currentStepIndex + 1) / steps.length) * 100}%`,
                 }}
@@ -76,27 +76,27 @@ export function OnboardingProgress({ currentStep, steps }: OnboardingProgressPro
                 <div
                   key={index}
                   className={`flex items-center p-3 rounded-lg transition-all duration-300 ${{
-                    completed: "bg-green-900/30 border border-green-700",
-                    current: "bg-blue-900/30 border border-blue-700",
-                    pending: "bg-neutral-800 border border-neutral-700"
+                    completed: "bg-muted border",
+                    current: "bg-muted border",
+                    pending: "bg-muted border border-border"
                   }[isCompleted ? "completed" : isCurrent ? "current" : "pending"]}`}
                 >
                   {/* Step Icon */}
                   <div
                     className={`flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center mr-3 ${{
-                      completed: "bg-green-600",
-                      current: "bg-blue-600",
-                      pending: "bg-neutral-600"
+                      completed: "bg-foreground",
+                      current: "bg-foreground",
+                      pending: "bg-muted-foreground/30"
                     }[isCompleted ? "completed" : isCurrent ? "current" : "pending"]}`}
                   >
                     {isCompleted ? (
-                      <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-4 h-4 text-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                       </svg>
                     ) : isCurrent ? (
-                      <div className="w-2 h-2 bg-white rounded-full animate-pulse" />
+                      <div className="w-2 h-2 bg-background rounded-full animate-pulse" />
                     ) : (
-                      <div className="w-2 h-2 bg-neutral-400 rounded-full" />
+                      <div className="w-2 h-2 bg-muted-foreground/50 rounded-full" />
                     )}
                   </div>
 
@@ -104,9 +104,9 @@ export function OnboardingProgress({ currentStep, steps }: OnboardingProgressPro
                   <div className="flex-1">
                     <p
                       className={`text-sm font-medium ${{
-                        completed: "text-green-400",
-                        current: "text-blue-400",
-                        pending: "text-neutral-400"
+                        completed: "text-foreground",
+                        current: "text-foreground",
+                        pending: "text-muted-foreground"
                       }[isCompleted ? "completed" : isCurrent ? "current" : "pending"]}`}
                     >
                       {step}
@@ -116,7 +116,7 @@ export function OnboardingProgress({ currentStep, steps }: OnboardingProgressPro
                   {/* Status Indicator */}
                   {isCurrent && !isLastStep && (
                     <div className="flex-shrink-0">
-                      <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                      <div className="w-4 h-4 border-2 border-foreground border-t-transparent rounded-full animate-spin" />
                     </div>
                   )}
                 </div>
@@ -125,10 +125,10 @@ export function OnboardingProgress({ currentStep, steps }: OnboardingProgressPro
           </div>
 
           {/* Current Step Indicator */}
-          <div className="mt-6 p-4 bg-neutral-800 rounded-lg">
-            <p className="text-white font-medium text-center">
+          <div className="mt-6 p-4 bg-muted rounded-lg">
+            <p className="text-foreground font-medium text-center">
               {isLastStep ? (
-                <span className="text-green-400 flex items-center justify-center">
+                <span className="text-foreground flex items-center justify-center">
                   <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                   </svg>
@@ -142,7 +142,7 @@ export function OnboardingProgress({ currentStep, steps }: OnboardingProgressPro
 
           {/* Additional Info */}
           <div className="mt-6 text-center">
-            <p className="text-neutral-500 text-sm">
+            <p className="text-muted-foreground text-sm">
               This process may take a few moments. Please do not close this window.
             </p>
           </div>

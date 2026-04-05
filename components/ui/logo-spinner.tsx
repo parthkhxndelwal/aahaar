@@ -39,7 +39,7 @@ export function LogoSpinner({
         />
         
         {/* Logo Image */}
-        <div className="relative z-10 bg-white dark:bg-neutral-900 rounded-full p-2 shadow-sm">
+        <div className="relative z-10 bg-background rounded-full p-2 shadow-sm">
           <Image
             src="/logo.png"
             alt="Aahaar Logo"

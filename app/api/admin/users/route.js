@@ -2,10 +2,20 @@ import { NextResponse } from "next/server"
 import { Op } from "sequelize"
 import bcrypt from "bcryptjs"
 import db from "@/models"
+import { authenticateToken } from "@/middleware/auth"
 
 // GET - List all users with optional filters
 export async function GET(request) {
   try {
+    const authResult = await authenticateToken(request)
+    if (authResult instanceof NextResponse) return authResult
+
+    const { user } = authResult
+
+    if (user.role !== "admin") {
+      return NextResponse.json({ success: false, message: "Admin access required" }, { status: 403 })
+    }
+
     const { searchParams } = new URL(request.url)
     const courtId = searchParams.get("courtId")
     const role = searchParams.get("role")
@@ -62,6 +72,15 @@ export async function GET(request) {
 // POST - Create a new user
 export async function POST(request) {
   try {
+    const authResult = await authenticateToken(request)
+    if (authResult instanceof NextResponse) return authResult
+
+    const { user } = authResult
+
+    if (user.role !== "admin") {
+      return NextResponse.json({ success: false, message: "Admin access required" }, { status: 403 })
+    }
+
     const body = await request.json()
     const {
       email,
@@ -77,6 +96,24 @@ export async function POST(request) {
       return NextResponse.json(
         { success: false, message: "Missing required fields" },
         { status: 400 }
+      )
+    }
+
+    // Only allow user and vendor roles to be created through this endpoint
+    // Prevent creation of admin or superadmin accounts
+    const allowedRoles = ["user", "vendor"]
+    if (!allowedRoles.includes(role)) {
+      return NextResponse.json(
+        { success: false, message: "Only 'user' or 'vendor' roles can be created through this endpoint" },
+        { status: 403 }
+      )
+    }
+
+    // Only superadmins can create admin-level accounts
+    if (user.role !== "superadmin" && (role === "admin" || role === "superadmin")) {
+      return NextResponse.json(
+        { success: false, message: "Insufficient permissions to create admin-level accounts" },
+        { status: 403 }
       )
     }
 
@@ -117,7 +154,7 @@ export async function POST(request) {
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 12)
 
-    const user = await db.User.create({
+    const newUser = await db.User.create({
       email,
       password: hashedPassword,
       fullName,
@@ -128,7 +165,7 @@ export async function POST(request) {
     })
 
     // Return user without password
-    const { password: _, ...userWithoutPassword } = user.toJSON()
+    const { password: _, ...userWithoutPassword } = newUser.toJSON()
 
     return NextResponse.json({
       success: true,

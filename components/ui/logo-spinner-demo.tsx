@@ -21,12 +21,12 @@ export function LogoSpinnerDemo() {
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center">
-      <div className="bg-white dark:bg-neutral-900 rounded-2xl p-8 max-w-2xl w-full mx-4 space-y-8">
+      <div className="bg-card border border-border rounded-2xl p-8 max-w-2xl w-full mx-4 space-y-8">
         <div className="flex items-center justify-between">
           <h2 className="text-2xl font-bold">Logo Spinner Demo</h2>
           <button
             onClick={() => setShowDemo(false)}
-            className="text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300"
+            className="text-muted-foreground hover:text-foreground:hover:text-neutral-300"
           >
             ✕
           </button>

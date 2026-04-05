@@ -10,7 +10,7 @@ export async function PATCH(request, { params }) {
     }
 
     const { user } = authResult
-    const { orderId } = params
+    const { orderId } = await params
     const { status, note } = await request.json()
 
     // Validate status

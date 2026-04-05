@@ -1,21 +1,21 @@
 "use client"
 
 import { Button } from "@/components/ui/button"
-import { useAuth } from "@/contexts/auth-context"
+import { useUnifiedAuth } from "@/contexts/unified-auth-context"
 import { Bell, User } from "lucide-react"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 
 export function AdminHeader() {
-  const { user, logout } = useAuth()
+  const { user, logout } = useUnifiedAuth()
 
   return (
-    <header className="bg-white shadow-sm border-b px-6 py-4">
+    <header className="bg-background shadow-sm border-b px-6 py-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">
+          <h1 className="text-2xl font-semibold">
             {user?.court?.instituteName || "Food Court Management"}
           </h1>
-          <p className="text-sm text-gray-500">Court ID: {user?.courtId}</p>
+          <p className="text-sm text-muted-foreground">Court ID: {user?.courtId}</p>
         </div>
 
         <div className="flex items-center space-x-4">

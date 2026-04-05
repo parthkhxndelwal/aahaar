@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { User, Order } from "@/models"
+import { User, Order, sequelize } from "@/models"
 import { authenticateToken } from "@/middleware/auth"
 import { Op, fn, col, literal } from "sequelize"
 
@@ -22,10 +22,18 @@ export async function GET(request, { params }) {
       return NextResponse.json({ success: false, message: "Admin access required" }, { status: 403 })
     }
 
+    // Validate courtId format to prevent SQL injection
+    if (!courtId || typeof courtId !== 'string' || !/^[a-zA-Z0-9_-]+$/.test(courtId)) {
+      return NextResponse.json({ success: false, message: "Invalid court ID format" }, { status: 400 })
+    }
+
     const whereClause = {
       [Op.or]: [
         { courtId },
-        literal(`JSON_CONTAINS(managedCourtIds, '"${courtId}"')`)
+        sequelize.where(
+          sequelize.fn('JSON_CONTAINS', sequelize.col('managedCourtIds'), JSON.stringify(courtId)),
+          1
+        )
       ]
     }
     if (role) whereClause.role = role

@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Loader2, ArrowLeft, Building2, MapPin } from "lucide-react"
 import Image from "next/image"
+import { courtApi, apiClient } from "@/lib/api"
 
 interface Court {
   courtId: string
@@ -42,11 +43,10 @@ export default function CourtAuthPage() {
 
   const fetchCourtDetails = async () => {
     try {
-      const response = await fetch(`/api/courts/${courtId}`)
-      const data = await response.json()
+      const data = await courtApi.getById(courtId)
       
-      if (data.success && data.court) {
-        setCourt(data.court)
+      if (data?.court) {
+        setCourt(data.court as any)
       } else {
         setError("Court not found")
       }
@@ -65,26 +65,20 @@ export default function CourtAuthPage() {
     setError("")
 
     try {
-      const response = await fetch('/api/auth/send-otp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          phone,
-          courtId,
-          type: isLogin ? 'login' : 'signup',
-          name: !isLogin ? name : undefined
-        })
-      })
+      const data = await apiClient.post('/auth/send-otp', {
+        phone,
+        courtId,
+        type: isLogin ? 'login' : 'signup',
+        name: !isLogin ? name : undefined
+      }, { skipAuth: true })
 
-      const data = await response.json()
-
-      if (data.success) {
+      if (data) {
         setShowOtpField(true)
       } else {
-        setError(data.message || 'Failed to send OTP')
+        setError('Failed to send OTP')
       }
-    } catch (error) {
-      setError('Something went wrong. Please try again.')
+    } catch (error: any) {
+      setError(error.message || 'Something went wrong. Please try again.')
     } finally {
       setAuthLoading(false)
     }
@@ -98,19 +92,13 @@ export default function CourtAuthPage() {
     setError("")
 
     try {
-      const response = await fetch('/api/auth/verify-otp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          phone,
-          otp,
-          courtId,
-          type: isLogin ? 'login' : 'signup',
-          name: !isLogin ? name : undefined
-        })
-      })
-
-      const data = await response.json()
+      const data = await apiClient.post<{ success: boolean; token: string; user: any; message?: string }>('/auth/verify-otp', {
+        phone,
+        otp,
+        courtId,
+        type: isLogin ? 'login' : 'signup',
+        name: !isLogin ? name : undefined
+      }, { skipAuth: true })
 
       if (data.success) {
         // Store auth token and redirect
@@ -120,8 +108,8 @@ export default function CourtAuthPage() {
       } else {
         setError(data.message || 'Invalid OTP')
       }
-    } catch (error) {
-      setError('Something went wrong. Please try again.')
+    } catch (error: any) {
+      setError(error.message || 'Something went wrong. Please try again.')
     } finally {
       setAuthLoading(false)
     }
@@ -143,7 +131,7 @@ export default function CourtAuthPage() {
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 to-black flex items-center justify-center">
-        <div className="text-center text-white">
+        <div className="text-center text-background">
           <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
           <p>Loading court details...</p>
         </div>
@@ -154,10 +142,10 @@ export default function CourtAuthPage() {
   if (error && !court) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 to-black flex items-center justify-center p-6">
-        <Card className="w-full max-w-md bg-gray-900 border-gray-700 text-white">
+        <Card className="w-full max-w-md bg-muted border-border text-foreground">
           <CardHeader className="text-center">
-            <CardTitle className="text-red-400">Error</CardTitle>
-            <CardDescription className="text-gray-400">{error}</CardDescription>
+            <CardTitle className="text-destructive">Error</CardTitle>
+            <CardDescription className="text-muted-foreground">{error}</CardDescription>
           </CardHeader>
           <CardContent>
             <Button 
@@ -175,14 +163,14 @@ export default function CourtAuthPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 to-black text-white flex flex-col">
+    <div className="min-h-screen bg-background text-foreground flex flex-col">
       {/* Header */}
       <header className="p-6 flex items-center">
         <Button
           variant="ghost"
           size="sm"
           onClick={() => router.push('/app/auth')}
-          className="text-white hover:bg-white/10"
+          className="text-foreground hover:bg-muted"
         >
           <ArrowLeft className="h-4 w-4 mr-2" />
           Scan Different QR
@@ -191,11 +179,11 @@ export default function CourtAuthPage() {
 
       {/* Main Content */}
       <div className="flex-1 flex items-center justify-center p-6">
-        <Card className="w-full max-w-md bg-gray-900/80 backdrop-blur border-gray-700 text-white">
+        <Card className="w-full max-w-md bg-card border-border text-foreground">
           <CardHeader className="text-center space-y-4">
             {/* Court Logo */}
             {court?.logoUrl ? (
-              <div className="mx-auto w-16 h-16 rounded-full overflow-hidden bg-gray-800">
+              <div className="mx-auto w-16 h-16 rounded-full overflow-hidden bg-muted">
                 <Image
                   src={court.logoUrl}
                   alt={court.instituteName}
@@ -205,15 +193,15 @@ export default function CourtAuthPage() {
                 />
               </div>
             ) : (
-              <div className="mx-auto w-16 h-16 rounded-full bg-orange-600 flex items-center justify-center">
-                <Building2 className="h-8 w-8 text-white" />
+              <div className="mx-auto w-16 h-16 rounded-full bg-foreground flex items-center justify-center">
+                <Building2 className="h-8 w-8 text-foreground" />
               </div>
             )}
 
             <div>
               <CardTitle className="text-xl">{court?.instituteName}</CardTitle>
               {court?.address && (
-                <CardDescription className="text-gray-400 flex items-center justify-center gap-1 mt-2">
+                <CardDescription className="text-muted-foreground flex items-center justify-center gap-1 mt-2">
                   <MapPin className="h-3 w-3" />
                   {court.address}
                 </CardDescription>
@@ -223,10 +211,10 @@ export default function CourtAuthPage() {
 
           <CardContent className="space-y-6">
             {/* Auth Mode Toggle */}
-            <div className="flex bg-gray-800 rounded-lg p-1">
+            <div className="flex bg-muted rounded-lg p-1">
               <button
                 className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-all ${
-                  isLogin ? 'bg-orange-600 text-white' : 'text-gray-400 hover:text-white'
+                  isLogin ? 'bg-background text-foreground' : 'text-muted-foreground hover:text-foreground'
                 }`}
                 onClick={() => setIsLogin(true)}
               >
@@ -234,7 +222,7 @@ export default function CourtAuthPage() {
               </button>
               <button
                 className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-all ${
-                  !isLogin ? 'bg-orange-600 text-white' : 'text-gray-400 hover:text-white'
+                  !isLogin ? 'bg-background text-foreground' : 'text-muted-foreground hover:text-foreground'
                 }`}
                 onClick={() => setIsLogin(false)}
               >
@@ -244,8 +232,8 @@ export default function CourtAuthPage() {
 
             {/* Error Alert */}
             {error && (
-              <Alert className="bg-red-900/20 border-red-800">
-                <AlertDescription className="text-red-400">
+              <Alert className="bg-destructive/10 border-destructive">
+                <AlertDescription className="text-destructive">
                   {error}
                 </AlertDescription>
               </Alert>
@@ -264,7 +252,7 @@ export default function CourtAuthPage() {
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     required={!isLogin}
-                    className="bg-gray-800 border-gray-600 text-white placeholder-gray-400"
+                    className="bg-muted border-border text-foreground placeholder:text-muted-foreground"
                   />
                 </div>
               )}
@@ -280,7 +268,7 @@ export default function CourtAuthPage() {
                   onChange={(e) => setPhone(e.target.value)}
                   disabled={showOtpField}
                   required
-                  className="bg-gray-800 border-gray-600 text-white placeholder-gray-400 disabled:opacity-50"
+                  className="bg-muted border-border text-foreground placeholder:text-muted-foreground disabled:opacity-50"
                 />
               </div>
 
@@ -296,9 +284,9 @@ export default function CourtAuthPage() {
                     onChange={(e) => setOtp(e.target.value)}
                     maxLength={6}
                     required
-                    className="bg-gray-800 border-gray-600 text-white placeholder-gray-400 text-center text-lg tracking-wider"
+                    className="bg-muted border-border text-foreground placeholder:text-muted-foreground text-center text-lg tracking-wider"
                   />
-                  <p className="text-xs text-gray-400 text-center">
+                  <p className="text-xs text-muted-foreground text-center">
                     OTP sent to {phone}
                   </p>
                 </div>
@@ -308,7 +296,7 @@ export default function CourtAuthPage() {
               <Button
                 type="submit"
                 disabled={authLoading || (!isLogin && !showOtpField && !name.trim()) || !phone.trim() || (showOtpField && !otp.trim())}
-                className="w-full bg-orange-600 hover:bg-orange-700 disabled:opacity-50"
+                className="w-full bg-foreground hover:bg-foreground/90 text-background disabled:opacity-50"
               >
                 {authLoading ? (
                   <>
@@ -328,7 +316,7 @@ export default function CourtAuthPage() {
                   type="button"
                   variant="ghost"
                   onClick={resetForm}
-                  className="w-full text-gray-400 hover:text-white"
+                  className="w-full text-muted-foreground hover:text-foreground"
                 >
                   Change Phone Number
                 </Button>
@@ -339,7 +327,7 @@ export default function CourtAuthPage() {
             <div className="text-center">
               <button
                 onClick={toggleAuthMode}
-                className="text-sm text-gray-400 hover:text-orange-400 transition-colors"
+                className="text-sm text-muted-foreground hover:text-foreground transition-colors"
               >
                 {isLogin ? "Don't have an account? Sign up" : "Already have an account? Sign in"}
               </button>

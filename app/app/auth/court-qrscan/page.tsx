@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input"
 import { ArrowLeft, QrCode, CheckCircle, XCircle, AlertTriangle, RefreshCw, Keyboard } from "lucide-react"
 import QRScanner from "@/components/ui/qr-scanner"
 import Image from "next/image"
+import { courtApi } from "@/lib/api"
 
 type ValidationState = 'idle' | 'validating' | 'success' | 'error'
 
@@ -118,19 +119,8 @@ export default function CourtQRScanPage() {
         
         abortControllerRef.current = new AbortController()
         
-        const response = await fetch(`/api/courts/${courtId}`, {
-          signal: abortControllerRef.current.signal,
-          headers: {
-            'Cache-Control': 'no-cache',
-          }
-        })
-
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-        }
-
-        const data = await response.json()
-        const isValid = !!(data.success && data.data?.court)
+        const data = await courtApi.getById(courtId)
+        const isValid = !!(data?.court)
         
         // Cache the result
         validationCacheRef.current[courtId] = {
@@ -420,19 +410,19 @@ export default function CourtQRScanPage() {
         return {
           icon: <Image src="/Spinner_white_275x275.svg" alt="Loading" width={20} height={20} />,
           text: "Validating court ID...",
-          className: "text-blue-400 dark:text-blue-400"
+          className: "text-muted-foreground"
         }
       case 'success':
         return {
-          icon: <CheckCircle className="h-5 w-5 text-green-400 dark:text-green-400" />,
+          icon: <CheckCircle className="h-5 w-5 text-primary" />,
           text: `Success! Court ID: ${scanResult}`,
-          className: "text-green-400 dark:text-green-400"
+          className: "text-primary"
         }
       case 'error':
         return {
-          icon: <XCircle className="h-5 w-5 text-red-400 dark:text-red-400" />,
+          icon: <XCircle className="h-5 w-5 text-destructive" />,
           text: null,
-          className: "text-red-400 dark:text-red-400"
+          className: "text-destructive"
         }
       default:
         return null
@@ -442,48 +432,47 @@ export default function CourtQRScanPage() {
   const statusInfo = getStatusInfo()
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-black-950 via-black to-black-950 dark:from-black-950 dark:via-black dark:to-black-950 text-white dark:text-white flex flex-col relative max-w-md mx-auto">
+    <div className="min-h-screen bg-background flex flex-col relative">
       {/* Header */}
-      <header className="relative z-10 p-4 flex items-center justify-between">
+      <header className="relative z-10 p-4 flex items-center justify-between border-b border-border bg-card">
         <Button
           variant="ghost"
           size="sm"
           onClick={handleBack}
-          className="text-white dark:text-white hover:bg-white/10 dark:hover:bg-white/10 transition-colors"
-          disabled={validationState === 'validating'}
+          className="gap-2"
         >
-          <ArrowLeft className="h-4 w-4 mr-2" />
+          <ArrowLeft className="h-4 w-4" />
           Back
         </Button>
         
         {error && (
           <Button
-            variant="ghost"
+            variant="outline"
             size="sm"
             onClick={handleRetry}
-            className="text-white dark:text-white hover:bg-white/10 dark:hover:bg-white/10 transition-colors"
-            disabled={validationState === 'validating'}
+            className="gap-2"
           >
             <RefreshCw className="h-4 w-4" />
+            Retry
           </Button>
         )}
       </header>
 
       {/* Main Content */}
-      <div className={`flex-1 flex flex-col items-center justify-center px-6 py-8 transition-opacity duration-300 ${isTransitioning ? 'opacity-0' : 'opacity-100'}`}>
+      <div className={`flex-1 flex flex-col items-center justify-center px-4 sm:px-6 py-6 sm:py-8 max-w-2xl mx-auto w-full transition-opacity duration-300 ${isTransitioning ? 'opacity-0' : 'opacity-100'}`}>
         {/* Header Section */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-20 h-20 bg-neutral-600/20 dark:bg-neutral-600/20 rounded-full mb-4 border border-blue-500/30 dark:border-blue-500/30">
+        <div className="text-center mb-6 sm:mb-8">
+          <div className="inline-flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 bg-primary/10 rounded-full mb-3 sm:mb-4 border-2 border-primary/20">
             {showManualInput ? (
-              <Keyboard className="h-10 w-10 text-blue-400 dark:text-blue-400" />
+              <Keyboard className="h-8 w-8 sm:h-10 sm:w-10 text-primary" />
             ) : (
-              <QrCode className="h-10 w-10 text-blue-400 dark:text-blue-400" />
+              <QrCode className="h-8 w-8 sm:h-10 sm:w-10 text-primary" />
             )}
           </div>
-          <h1 className="text-3xl font-bold mb-3 bg-gradient-to-r from-white to-gray-300 dark:from-white dark:to-gray-300 bg-clip-text text-transparent">
+          <h1 className="text-2xl sm:text-3xl font-bold mb-2 sm:mb-3 text-foreground">
             {showManualInput ? "Enter Court ID" : "Scan QR Code"}
           </h1>
-          <p className="text-gray-400 dark:text-gray-400 text-lg leading-relaxed">
+          <p className="text-muted-foreground text-base sm:text-lg leading-relaxed max-w-md mx-auto">
             {showManualInput
               ? "Type the court ID from your table or receipt"
               : "Point your camera at the QR code on your table to get started"
@@ -495,10 +484,10 @@ export default function CourtQRScanPage() {
         <div className="w-full max-w-sm mb-6">
           {showManualInput ? (
             /* Manual Input Form */
-            <div className="space-y-6 p-6 bg-neutral-800/50 dark:bg-neutral-800/50 rounded-lg border border-neutral-700/50 dark:border-neutral-700/50 backdrop-blur-sm">
+            <div className="space-y-4 sm:space-y-6 p-4 sm:p-6 bg-card rounded-lg border border-border shadow-sm">
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <label htmlFor="courtId" className="text-sm font-medium text-gray-300 dark:text-gray-300">
+                  <label htmlFor="courtId" className="text-sm font-medium text-foreground">
                     Court ID
                   </label>
                   <Input
@@ -512,7 +501,7 @@ export default function CourtQRScanPage() {
                         .replace(/[^a-z0-9-]/g, '')
                       setManualCourtId(sanitizedValue)
                     }}
-                    className="bg-neutral-700/50 dark:bg-neutral-700/50 border-neutral-600 dark:border-neutral-600 text-white dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-400 focus:border-blue-500 focus:ring-blue-500/20 text-lg font-mono tracking-wider"
+                    className="bg-background text-lg font-mono tracking-wider"
                     disabled={validationState === 'validating'}
                     autoComplete="off"
                     autoFocus
@@ -522,7 +511,7 @@ export default function CourtQRScanPage() {
                       }
                     }}
                   />
-                  <p className="text-xs text-gray-400 dark:text-gray-400">
+                  <p className="text-xs text-muted-foreground">
                     Find this on your table placard, receipt, or menu
                   </p>
                 </div>
@@ -531,7 +520,7 @@ export default function CourtQRScanPage() {
                   <Button
                     onClick={handleManualSubmit}
                     disabled={validationState === 'validating' || !manualCourtId.trim() || manualCourtId.trim().length < 3}
-                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed h-12"
+                    className="flex-1 font-semibold h-11 sm:h-12"
                   >
                     {validationState === 'validating' ? (
                       <>
@@ -550,7 +539,7 @@ export default function CourtQRScanPage() {
                     onClick={toggleManualInput}
                     variant="outline"
                     disabled={validationState === 'validating'}
-                    className="border-neutral-600 dark:border-neutral-600 text-gray-300 dark:text-gray-300 hover:bg-neutral-700/50 dark:hover:bg-neutral-700/50 px-4 h-12"
+                    className="px-4 h-11 sm:h-12"
                     title="Switch to QR Scanner"
                   >
                     <QrCode className="h-5 w-5" />
@@ -559,13 +548,13 @@ export default function CourtQRScanPage() {
               </div>
               
               {/* Help Section */}
-              <div className="border-t border-neutral-700/50 dark:border-neutral-700/50 pt-4">
+              <div className="border-t border-border pt-4">
                 <details className="group">
-                  <summary className="flex items-center gap-2 text-sm text-gray-400 dark:text-gray-400 cursor-pointer hover:text-gray-300 dark:hover:text-gray-300 transition-colors">
-                    <span>Need help finding your Court ID?</span>
+                  <summary className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer hover:text-foreground transition-colors">
                     <AlertTriangle className="h-4 w-4 group-open:rotate-180 transition-transform" />
+                    <span>Need help finding your Court ID?</span>
                   </summary>
-                  <div className="mt-3 space-y-2 text-xs text-gray-400 dark:text-gray-400 pl-2 border-l-2 border-blue-500/30 dark:border-blue-500/30">
+                  <div className="mt-3 space-y-2 text-xs text-muted-foreground pl-2 border-l-2 border-border">
                     <p>• Check the table placard or tent card</p>
                     <p>• Look on your receipt or order slip</p>
                     <p>• Ask a staff member for assistance</p>
@@ -588,17 +577,17 @@ export default function CourtQRScanPage() {
               
               {/* Success Overlay */}
               {validationState === 'success' && (
-                <div className="absolute inset-0 bg-green-500/20 backdrop-blur-sm rounded-lg flex items-center justify-center border-2 border-green-500/50">
-                  <div className="bg-green-500 rounded-full p-4 shadow-lg shadow-green-500/25">
-                    <CheckCircle className="h-12 w-12 text-white" />
+                <div className="absolute inset-0 bg-primary/20 backdrop-blur-sm rounded-lg flex items-center justify-center border-2 border-primary">
+                  <div className="bg-primary rounded-full p-4 shadow-lg">
+                    <CheckCircle className="h-12 w-12 text-primary-foreground" />
                   </div>
                 </div>
               )}
               
               {/* Validation Overlay */}
               {validationState === 'validating' && (
-                <div className="absolute inset-0 bg-neutral-500/20 backdrop-blur-sm rounded-lg flex items-center justify-center border-2 border-blue-500/50">
-                  <div className="bg-neutral-500 rounded-full p-4 shadow-lg shadow-neutral-500/25">
+                <div className="absolute inset-0 bg-muted/50 backdrop-blur-sm rounded-lg flex items-center justify-center border-2 border-border">
+                  <div className="bg-card rounded-full p-4 shadow-lg">
                     <Image src="/Spinner_white_275x275.svg" alt="Loading" width={48} height={48} />
                   </div>
                 </div>
@@ -612,16 +601,16 @@ export default function CourtQRScanPage() {
           <div className={`flex items-center gap-3 mb-6 ${statusInfo.className}`}>
             {statusInfo.icon}
             {statusInfo.text && (
-              <span className="font-medium">{statusInfo.text}</span>
+              <span className="font-medium text-sm sm:text-base">{statusInfo.text}</span>
             )}
           </div>
         )}
 
         {/* Error Alert */}
         {error && (
-          <Alert className="mb-6 max-w-sm border-red-500/50 dark:border-red-500/50 bg-red-500/10 dark:bg-red-500/10 backdrop-blur-sm">
-            <AlertTriangle className="h-4 w-4 text-red-400 dark:text-red-400" />
-            <AlertDescription className="text-red-300 dark:text-red-300 font-medium">
+          <Alert className="mb-6 w-full max-w-sm border-destructive/50 bg-destructive/10">
+            <AlertTriangle className="h-4 w-4 text-destructive" />
+            <AlertDescription className="text-destructive font-medium text-sm">
               {error}
             </AlertDescription>
           </Alert>
@@ -632,7 +621,7 @@ export default function CourtQRScanPage() {
           {error && validationState === 'error' && (
             <Button
               onClick={handleRetry}
-              className="w-full bg-white hover:bg-gray-100 dark:bg-white dark:hover:bg-gray-100 text-black dark:text-black font-semibold transition-all hover:scale-105 active:scale-95"
+              className="w-full font-semibold h-11 sm:h-12"
             >
               <RefreshCw className="h-4 w-4 mr-2" />
               Try Again
@@ -643,8 +632,9 @@ export default function CourtQRScanPage() {
             <Button
               onClick={handleRetry}
               variant="outline"
-              className="w-full border-white/30 dark:border-white/30 text-white dark:text-white hover:bg-white/10 dark:hover:bg-white/10 font-semibold transition-all hover:scale-105 active:scale-95"
+              className="w-full font-semibold h-11 sm:h-12"
             >
+              <QrCode className="h-4 w-4 mr-2" />
               Scan QR Code
             </Button>
           )}
@@ -655,7 +645,7 @@ export default function CourtQRScanPage() {
               onClick={toggleManualInput}
               variant="outline"
               disabled={isTransitioning}
-              className="w-full border-blue-500/50 dark:border-blue-500/50 text-blue-400 dark:text-blue-400 hover:bg-blue-500/10 dark:hover:bg-blue-500/10 font-semibold transition-all hover:scale-105 active:scale-95 disabled:opacity-50"
+              className="w-full font-semibold h-11 sm:h-12"
             >
               {showManualInput ? (
                 <>
@@ -673,16 +663,16 @@ export default function CourtQRScanPage() {
         </div>
 
         {/* Instructions */}
-        <div className="text-center mt-8 space-y-2">
-          <p className="text-gray-400 dark:text-gray-400 text-sm">
+        <div className="text-center mt-6 sm:mt-8 space-y-2">
+          <p className="text-muted-foreground text-xs sm:text-sm">
             {showManualInput
               ? "Enter the court ID from your table or receipt"
               : "Make sure the QR code is clearly visible and well-lit"
             }
           </p>
           {validationState === 'idle' && scanningEnabled && !showManualInput && (
-            <div className="flex items-center justify-center gap-2 text-gray-500 dark:text-gray-500 text-xs">
-              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+            <div className="flex items-center justify-center gap-2 text-muted-foreground text-xs">
+              <div className="w-2 h-2 bg-primary rounded-full animate-pulse"></div>
               <span>Camera active</span>
             </div>
           )}

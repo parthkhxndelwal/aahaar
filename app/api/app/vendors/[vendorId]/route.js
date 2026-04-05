@@ -55,7 +55,7 @@ export async function GET(request, { params }) {
 
     return NextResponse.json({
       success: true,
-      vendor
+      data: { vendor }
     })
 
   } catch (error) {

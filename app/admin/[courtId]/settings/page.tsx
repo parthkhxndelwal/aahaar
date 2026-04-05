@@ -13,52 +13,9 @@ import { Separator } from "@/components/ui/separator"
 import { Spinner } from "@/components/ui/spinner"
 import { useToast } from "@/hooks/use-toast"
 import { Settings, Clock, CreditCard, Users, Shield, Upload, Building, Mail, Phone, Edit3, Save, X } from "lucide-react"
-import { useAdminAuth } from "@/contexts/admin-auth-context"
 import { motion, AnimatePresence } from "framer-motion"
-
-interface CourtSettings {
-  // General Settings
-  instituteName: string
-  instituteType: string
-  logoUrl?: string
-  address: string
-  contactPhone: string
-  
-  // Operating Hours
-  operatingHours: {
-    [key: string]: {
-      isOpen: boolean
-      startTime: string
-      endTime: string
-      breakStart?: string
-      breakEnd?: string
-    }
-  }
-  
-  // Payment Settings
-  enableOnlinePayments: boolean
-  enableCOD: boolean
-  razorpayKeyId?: string
-  platformCommission: number
-  
-  // Order Settings
-  maxOrdersPerStall: number
-  orderBufferTime: number
-  autoConfirmOrders: boolean
-  allowAdvanceOrders: boolean
-  
-  // User Settings
-  requireEmailVerification: boolean
-  requirePhoneVerification: boolean
-  allowedEmailDomains: string[]
-  maxOrdersPerUser: number
-  
-  // Advanced Settings
-  timezone?: string
-  minimumOrderAmount?: number
-  maximumOrderAmount?: number
-  orderCancellationWindow?: number
-}
+import { adminSettingsApi, uploadApi, ApiError } from "@/lib/api"
+import type { CourtSettings } from "@/lib/api"
 
 export default function AdminSettingsPage({ params }: { params: Promise<{ courtId: string }> }) {
   const [settings, setSettings] = useState<CourtSettings>({
@@ -99,7 +56,6 @@ export default function AdminSettingsPage({ params }: { params: Promise<{ courtI
   const [savingCards, setSavingCards] = useState<{[key: string]: boolean}>({})
   const [originalSettings, setOriginalSettings] = useState<CourtSettings | null>(null)
   const { toast } = useToast()
-  const { token } = useAdminAuth()
   const { courtId } = use(params)
 
   useEffect(() => {
@@ -109,15 +65,10 @@ export default function AdminSettingsPage({ params }: { params: Promise<{ courtI
   const fetchSettings = async () => {
     try {
       setLoading(true)
-      const response = await fetch(`/api/courts/${courtId}/settings`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
+      const result = await adminSettingsApi.get(courtId)
       
-      const result = await response.json()
-      if (result.success && result.data.settings) {
-        const fetchedSettings = result.data.settings
+      if (result.settings) {
+        const fetchedSettings = result.settings
         setSettings(prevSettings => ({
           ...prevSettings,
           ...fetchedSettings,
@@ -144,12 +95,12 @@ export default function AdminSettingsPage({ params }: { params: Promise<{ courtI
             ? fetchedSettings.orderCancellationWindow 
             : prevSettings.orderCancellationWindow,
         }))
-        setOriginalSettings(fetchedSettings)
+        setOriginalSettings(fetchedSettings as CourtSettings)
       }
-    } catch (error: any) {
+    } catch (e) {
       toast({
         title: "Error",
-        description: "Failed to load settings",
+        description: e instanceof ApiError ? e.message : "Failed to load settings",
         variant: "destructive",
       })
     } finally {
@@ -172,30 +123,18 @@ export default function AdminSettingsPage({ params }: { params: Promise<{ courtI
   const saveCardSettings = async (cardName: string) => {
     try {
       setSavingCards(prev => ({ ...prev, [cardName]: true }))
-      const response = await fetch(`/api/courts/${courtId}/settings`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(settings),
-      })
+      await adminSettingsApi.update(courtId, settings)
       
-      const result = await response.json()
-      if (result.success) {
-        setEditingCards(prev => ({ ...prev, [cardName]: false }))
-        setOriginalSettings(settings)
-        toast({
-          title: "Success",
-          description: `${cardName} settings saved successfully`,
-        })
-      } else {
-        throw new Error(result.message)
-      }
-    } catch (error: any) {
+      setEditingCards(prev => ({ ...prev, [cardName]: false }))
+      setOriginalSettings(settings)
+      toast({
+        title: "Success",
+        description: `${cardName} settings saved successfully`,
+      })
+    } catch (e) {
       toast({
         title: "Error",
-        description: error.message || `Failed to save ${cardName} settings`,
+        description: e instanceof ApiError ? e.message : `Failed to save ${cardName} settings`,
         variant: "destructive",
       })
     } finally {
@@ -206,29 +145,17 @@ export default function AdminSettingsPage({ params }: { params: Promise<{ courtI
   const saveSettings = async () => {
     // This function is kept for any global save operations if needed
     try {
-      const response = await fetch(`/api/courts/${courtId}/settings`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(settings),
-      })
+      await adminSettingsApi.update(courtId, settings)
       
-      const result = await response.json()
-      if (result.success) {
-        setOriginalSettings(settings)
-        toast({
-          title: "Success",
-          description: "Settings saved successfully",
-        })
-      } else {
-        throw new Error(result.message)
-      }
-    } catch (error: any) {
+      setOriginalSettings(settings)
+      toast({
+        title: "Success",
+        description: "Settings saved successfully",
+      })
+    } catch (e) {
       toast({
         title: "Error",
-        description: error.message || "Failed to save settings",
+        description: e instanceof ApiError ? e.message : "Failed to save settings",
         variant: "destructive",
       })
     }
@@ -275,32 +202,19 @@ export default function AdminSettingsPage({ params }: { params: Promise<{ courtI
 
     try {
       setUploading(true)
-      const formData = new FormData()
-      formData.append("file", file)
-      formData.append("folder", "court-logos")
-
-      const response = await fetch(`/api/upload/image`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-        body: formData,
-      })
-
-      const result = await response.json()
-      if (result.success) {
-        setSettings({ ...settings, logoUrl: result.data.url })
+      const result = await uploadApi.uploadImage(file, { folder: "court-logos" })
+      
+      if (result.url) {
+        setSettings({ ...settings, logoUrl: result.url })
         toast({
           title: "Success",
           description: "Logo uploaded successfully",
         })
-      } else {
-        throw new Error(result.message)
       }
-    } catch (error: any) {
+    } catch (e) {
       toast({
         title: "Error",
-        description: error.message || "Failed to upload logo",
+        description: e instanceof ApiError ? e.message : "Failed to upload logo",
         variant: "destructive",
       })
     } finally {
@@ -383,7 +297,7 @@ export default function AdminSettingsPage({ params }: { params: Promise<{ courtI
           <div className="flex justify-center mb-4">
             <Spinner size={32} variant="white" />
           </div>
-          <p className="text-neutral-400">Loading settings...</p>
+          <p className="text-muted-foreground">Loading settings...</p>
         </div>
       </motion.div>
     )
@@ -404,8 +318,8 @@ export default function AdminSettingsPage({ params }: { params: Promise<{ courtI
         transition={{ duration: 0.4, delay: 0.1 }}
       >
         <div>
-          <h1 className="text-3xl font-bold text-neutral-100">Settings</h1>
-          <p className="text-neutral-400">Configure your food court settings and preferences</p>
+          <h1 className="text-3xl font-bold">Settings</h1>
+          <p className="text-muted-foreground">Configure your food court settings and preferences</p>
         </div>
       </motion.div>
 
@@ -419,7 +333,7 @@ export default function AdminSettingsPage({ params }: { params: Promise<{ courtI
           transition={{ duration: 0.5, delay: 0.2 }}
           className="xl:col-span-2"
         >
-          <Card className="bg-neutral-900">
+          <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -442,7 +356,7 @@ export default function AdminSettingsPage({ params }: { params: Promise<{ courtI
                     onChange={(e) => setSettings({ ...settings, instituteName: e.target.value })}
                     placeholder="Enter institute name"
                     disabled={!editingCards["General"]}
-                    className="bg-[#101010]"
+                    className="bg-background"
                   />
                 </div>
                 <div>
@@ -453,10 +367,10 @@ export default function AdminSettingsPage({ params }: { params: Promise<{ courtI
                     disabled={!editingCards["General"]}
                     
                   >
-                    <SelectTrigger className="bg-[#101010]">
+                    <SelectTrigger className="bg-background">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent className="bg-[#101010]">
+                    <SelectContent className="bg-background">
                       <SelectItem value="school">School</SelectItem>
                       <SelectItem value="college">College</SelectItem>
                       <SelectItem value="university">University</SelectItem>
@@ -472,13 +386,13 @@ export default function AdminSettingsPage({ params }: { params: Promise<{ courtI
 
               <div>
                 <Label className="text-base font-medium">Institute Logo</Label>
-                <p className="text-sm text-gray-500 mb-4">Upload your institute's logo. Recommended size: 200x200px</p>
+                <p className="text-sm text-muted-foreground mb-4">Upload your institute's logo. Recommended size: 200x200px</p>
                 
                 <div className="flex items-start gap-6">
                   {/* Current Logo Display */}
                   <div className="flex flex-col items-center space-y-3">
                     <div 
-                      className="w-24 h-24 rounded-lg border-2 border-dashed border-gray-300 overflow-hidden bg-gray-50 flex items-center justify-center hover:border-gray-400 transition-colors cursor-pointer"
+                      className="w-24 h-24 rounded-lg border-2 border-dashed border-border overflow-hidden bg-muted flex items-center justify-center hover:border-foreground/40 transition-colors cursor-pointer"
                       onClick={() => settings.logoUrl && setShowLogoPreview(true)}
                     >
                       {settings.logoUrl ? (
@@ -489,19 +403,19 @@ export default function AdminSettingsPage({ params }: { params: Promise<{ courtI
                             className="w-full h-full object-cover"
                           />
                           <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all duration-200 flex items-center justify-center">
-                            <span className="text-white text-xs opacity-0 group-hover:opacity-100 transition-opacity">
+                            <span className="text-background text-xs opacity-0 group-hover:opacity-100 transition-opacity">
                               Click to view
                             </span>
                           </div>
                         </div>
                       ) : (
-                        <div className="text-center bg-[#101010]">
-                          <Building className="h-8 w-8 text-gray-400 mx-auto mb-1" />
-                          <p className="text-xs text-gray-500">No logo</p>
+                        <div className="text-center">
+                          <Building className="h-8 w-8 text-muted-foreground mx-auto mb-1" />
+                          <p className="text-xs text-muted-foreground">No logo</p>
                         </div>
                       )}
                     </div>
-                    <p className="text-xs text-gray-500 text-center">
+                    <p className="text-xs text-muted-foreground text-center">
                       {settings.logoUrl ? "Current Logo" : "Upload a logo"}
                     </p>
                   </div>
@@ -518,7 +432,7 @@ export default function AdminSettingsPage({ params }: { params: Promise<{ courtI
                         id="logo-upload"
                       />
                       <Label htmlFor="logo-upload" className="cursor-pointer">
-                        <Button variant="outline" className="bg-[#101010]" disabled={uploading || !editingCards["General"]} asChild>
+                        <Button variant="outline" disabled={uploading || !editingCards["General"]} asChild>
                           <span>
                             <Upload className="h-4 w-4 mr-2" />
                             {uploading ? "Uploading..." : settings.logoUrl ? "Update Logo" : "Upload Logo"}
@@ -531,14 +445,13 @@ export default function AdminSettingsPage({ params }: { params: Promise<{ courtI
                           variant="outline" 
                           onClick={() => setSettings({ ...settings, logoUrl: "" })}
                           disabled={uploading || !editingCards["General"]}
-                          className="bg-[#101010]"
                         >
                           Remove Logo
                         </Button>
                       )}
                     </div>
                     
-                    <div className="text-sm text-gray-500">
+                    <div className="text-muted-foreground text-sm">
                       <p>• Supported formats: JPG, PNG, GIF</p>
                       <p>• Maximum file size: 2MB</p>
                       <p>• Recommended: Square aspect ratio (1:1)</p>
@@ -559,7 +472,7 @@ export default function AdminSettingsPage({ params }: { params: Promise<{ courtI
                     placeholder="Enter complete address"
                     rows={3}
                     disabled={!editingCards["General"]}
-                    className="bg-[#101010]"
+                    className="bg-background"
                   />
                 </div>
                 <div>
@@ -570,7 +483,7 @@ export default function AdminSettingsPage({ params }: { params: Promise<{ courtI
                     onChange={(e) => setSettings({ ...settings, contactPhone: e.target.value })}
                     placeholder="+91 9876543210"
                     disabled={!editingCards["General"]}
-                    className="bg-[#101010]"
+                    className="bg-background"
                   />
                 </div>
               </div>
@@ -584,7 +497,7 @@ export default function AdminSettingsPage({ params }: { params: Promise<{ courtI
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.3 }}
         >
-          <Card className="bg-neutral-900">
+          <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -613,7 +526,7 @@ export default function AdminSettingsPage({ params }: { params: Promise<{ courtI
                       <div>
                         <Label>Start Time</Label>
                         <Input
-                        className="bg-[#101010]"
+                        className="bg-background"
                           type="time"
                           value={settings.operatingHours[day].startTime}
                           onChange={(e) => updateOperatingHours(day, "startTime", e.target.value)}
@@ -623,7 +536,7 @@ export default function AdminSettingsPage({ params }: { params: Promise<{ courtI
                       <div>
                         <Label>End Time</Label>
                         <Input
-                        className="bg-[#101010]"
+                        className="bg-background"
                           type="time"
                           value={settings.operatingHours[day].endTime}
                           onChange={(e) => updateOperatingHours(day, "endTime", e.target.value)}
@@ -644,7 +557,7 @@ export default function AdminSettingsPage({ params }: { params: Promise<{ courtI
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.4 }}
         >
-          <Card className="bg-neutral-900">
+          <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -664,7 +577,7 @@ export default function AdminSettingsPage({ params }: { params: Promise<{ courtI
                     <CreditCard className="h-5 w-5" />
                     <div>
                       <Label>Online Payments</Label>
-                      <p className="text-sm text-gray-500">Accept payments via Razorpay</p>
+                      <p className="text-muted-foreground text-sm">Accept payments via Razorpay</p>
                     </div>
                   </div>
                   <Switch
@@ -675,10 +588,10 @@ export default function AdminSettingsPage({ params }: { params: Promise<{ courtI
                 </div>
                 <div className="flex items-center justify-between p-4 border rounded-lg">
                   <div className="flex items-center gap-3">
-                    <div className="w-5 h-5 rounded bg-green-500 flex items-center justify-center text-white text-xs">₹</div>
+                    <div className="w-5 h-5 rounded bg-foreground flex items-center justify-center text-background text-xs">₹</div>
                     <div>
                       <Label>Cash on Delivery</Label>
-                      <p className="text-sm text-gray-500">Allow cash payments at pickup</p>
+                      <p className="text-muted-foreground text-sm">Allow cash payments at pickup</p>
                     </div>
                   </div>
                   <Switch
@@ -697,9 +610,9 @@ export default function AdminSettingsPage({ params }: { params: Promise<{ courtI
                     onChange={(e) => setSettings({ ...settings, razorpayKeyId: e.target.value })}
                     placeholder="rzp_test_xxxxxxxxxx"
                     disabled={!settings.enableOnlinePayments || !editingCards["Payments"]}
-                    className="bg-[#101010]"
+                    className="bg-background"
                   />
-                  <p className="text-xs text-gray-500 mt-1">Enter your Razorpay Key ID</p>
+                  <p className="text-xs text-muted-foreground mt-1">Enter your Razorpay Key ID</p>
                 </div>
                 <div>
                   <Label htmlFor="platformCommission">Platform Commission (%)</Label>
@@ -712,9 +625,9 @@ export default function AdminSettingsPage({ params }: { params: Promise<{ courtI
                     value={!settings.platformCommission && settings.platformCommission !== 0 ? "" : settings.platformCommission.toString()}
                     onChange={(e) => setSettings({ ...settings, platformCommission: parseFloat(e.target.value) || 0 })}
                     disabled={!editingCards["Payments"]}
-                    className="bg-[#101010]"
+                    className="bg-background"
                   />
-                  <p className="text-xs text-gray-500 mt-1">Commission charged per order</p>
+                  <p className="text-xs text-muted-foreground mt-1">Commission charged per order</p>
                 </div>
               </div>
             </CardContent>
@@ -727,7 +640,7 @@ export default function AdminSettingsPage({ params }: { params: Promise<{ courtI
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.5 }}
         >
-          <Card className="bg-neutral-900">
+          <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -750,7 +663,7 @@ export default function AdminSettingsPage({ params }: { params: Promise<{ courtI
                   value={!settings.maxOrdersPerStall && settings.maxOrdersPerStall !== 0 ? "" : settings.maxOrdersPerStall.toString()}
                   onChange={(e) => setSettings({ ...settings, maxOrdersPerStall: parseInt(e.target.value) || 1 })}
                   disabled={!editingCards["Orders"]}
-                  className="bg-[#101010]"
+                  className="bg-background"
                 />
               </div>
               <div>
@@ -762,13 +675,13 @@ export default function AdminSettingsPage({ params }: { params: Promise<{ courtI
                   value={!settings.orderBufferTime && settings.orderBufferTime !== 0 ? "" : settings.orderBufferTime.toString()}
                   onChange={(e) => setSettings({ ...settings, orderBufferTime: parseInt(e.target.value) || 0 })}
                   disabled={!editingCards["Orders"]}
-                  className="bg-[#101010]"
+                  className="bg-background"
                 />
               </div>
               <div className="flex items-center justify-between p-4 border rounded-lg">
                 <div>
                   <Label>Auto-confirm Orders</Label>
-                  <p className="text-sm text-gray-500">Automatically confirm orders without vendor approval</p>
+                  <p className="text-muted-foreground text-sm">Automatically confirm orders without vendor approval</p>
                 </div>
                 <Switch
                   checked={settings.autoConfirmOrders}
@@ -779,7 +692,7 @@ export default function AdminSettingsPage({ params }: { params: Promise<{ courtI
               <div className="flex items-center justify-between p-4 border rounded-lg">
                 <div>
                   <Label>Allow Advance Orders</Label>
-                  <p className="text-sm text-gray-500">Allow users to place orders for future delivery</p>
+                  <p className="text-muted-foreground text-sm">Allow users to place orders for future delivery</p>
                 </div>
                 <Switch
                   checked={settings.allowAdvanceOrders}
@@ -797,7 +710,7 @@ export default function AdminSettingsPage({ params }: { params: Promise<{ courtI
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.6 }}
         >
-          <Card className="bg-neutral-900">
+          <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -817,7 +730,7 @@ export default function AdminSettingsPage({ params }: { params: Promise<{ courtI
                     <Mail className="h-5 w-5" />
                     <div>
                       <Label>Email Verification</Label>
-                      <p className="text-sm text-gray-500">Require email verification before ordering</p>
+                      <p className="text-muted-foreground text-sm">Require email verification before ordering</p>
                     </div>
                   </div>
                   <Switch
@@ -831,7 +744,7 @@ export default function AdminSettingsPage({ params }: { params: Promise<{ courtI
                     <Phone className="h-5 w-5" />
                     <div>
                       <Label>Phone Verification</Label>
-                      <p className="text-sm text-gray-500">Require phone verification before ordering</p>
+                      <p className="text-muted-foreground text-sm">Require phone verification before ordering</p>
                     </div>
                   </div>
                   <Switch
@@ -851,22 +764,22 @@ export default function AdminSettingsPage({ params }: { params: Promise<{ courtI
                   value={!settings.maxOrdersPerUser && settings.maxOrdersPerUser !== 0 ? "" : settings.maxOrdersPerUser.toString()}
                   onChange={(e) => setSettings({ ...settings, maxOrdersPerUser: parseInt(e.target.value) || 1 })}
                   disabled={!editingCards["Users"]}
-                  className="bg-[#101010]"
+                  className="bg-background"
                 />
-                <p className="text-xs text-gray-500 mt-1">Maximum orders a user can place per day</p>
+                <p className="text-xs text-muted-foreground mt-1">Maximum orders a user can place per day</p>
               </div>
 
               <Separator />
 
               <div>
                 <Label>Allowed Email Domains</Label>
-                <p className="text-sm text-gray-500 mb-3">Restrict registration to specific email domains (optional)</p>
+                <p className="text-sm text-muted-foreground mb-3">Restrict registration to specific email domains (optional)</p>
                 <div className="space-y-3">
                   <div className="flex gap-2">
                     <Input
                       placeholder="e.g., college.edu, company.com"
                       disabled={!editingCards["Users"]}
-                      className="bg-[#101010]"
+                      className="bg-background"
                       onKeyPress={(e) => {
                         if (e.key === 'Enter' && editingCards["Users"]) {
                           addEmailDomain(e.currentTarget.value)
@@ -917,7 +830,7 @@ export default function AdminSettingsPage({ params }: { params: Promise<{ courtI
           transition={{ duration: 0.5, delay: 0.7 }}
           className="xl:col-span-2"
         >
-          <Card className="bg-neutral-900">
+          <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -961,9 +874,9 @@ export default function AdminSettingsPage({ params }: { params: Promise<{ courtI
                     value={!settings.minimumOrderAmount && settings.minimumOrderAmount !== 0 ? "" : settings.minimumOrderAmount.toString()}
                     onChange={(e) => setSettings({ ...settings, minimumOrderAmount: parseFloat(e.target.value) || 0 })}
                     disabled={!editingCards["Advanced"]}
-                    className="bg-[#101010]"
+                    className="bg-background"
                   />
-                  <p className="text-xs text-gray-500 mt-1">Minimum amount required to place an order</p>
+                  <p className="text-xs text-muted-foreground mt-1">Minimum amount required to place an order</p>
                 </div>
                 <div>
                   <Label htmlFor="maximumOrderAmount">Maximum Order Amount (₹)</Label>
@@ -975,9 +888,9 @@ export default function AdminSettingsPage({ params }: { params: Promise<{ courtI
                     value={!settings.maximumOrderAmount && settings.maximumOrderAmount !== 0 ? "" : settings.maximumOrderAmount.toString()}
                     onChange={(e) => setSettings({ ...settings, maximumOrderAmount: parseFloat(e.target.value) || 0 })}
                     disabled={!editingCards["Advanced"]}
-                    className="bg-[#101010]"
+                    className="bg-background"
                   />
-                  <p className="text-xs text-gray-500 mt-1">Maximum amount allowed per order</p>
+                  <p className="text-xs text-muted-foreground mt-1">Maximum amount allowed per order</p>
                 </div>
                 <div>
                   <Label htmlFor="orderCancellationWindow">Order Cancellation Window (minutes)</Label>
@@ -988,9 +901,9 @@ export default function AdminSettingsPage({ params }: { params: Promise<{ courtI
                     value={!settings.orderCancellationWindow && settings.orderCancellationWindow !== 0 ? "" : settings.orderCancellationWindow.toString()}
                     onChange={(e) => setSettings({ ...settings, orderCancellationWindow: parseInt(e.target.value) || 0 })}
                     disabled={!editingCards["Advanced"]}
-                    className="bg-[#101010]"
+                    className="bg-background"
                   />
-                  <p className="text-xs text-gray-500 mt-1">Time allowed for customers to cancel orders</p>
+                  <p className="text-xs text-muted-foreground mt-1">Time allowed for customers to cancel orders</p>
                 </div>
               </div>
 
@@ -1018,7 +931,7 @@ export default function AdminSettingsPage({ params }: { params: Promise<{ courtI
           className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
           onClick={() => setShowLogoPreview(false)}
         >
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+          <div className="bg-background border border-border rounded-lg p-6 max-w-md w-full mx-4">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-semibold">Institute Logo</h3>
               <Button

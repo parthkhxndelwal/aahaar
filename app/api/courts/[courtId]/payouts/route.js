@@ -11,9 +11,9 @@ export async function GET(request, { params }) {
     const { user } = authResult
     const { courtId } = await params
 
-    // Only admins can view payouts
-    if (user.role !== "admin" || user.courtId !== courtId) {
-      return NextResponse.json({ success: false, message: "Admin access required" }, { status: 403 })
+    // Verify user belongs to requested court (super admins can access any court)
+    if (user.role !== "superadmin" && user.courtId !== courtId) {
+      return NextResponse.json({ success: false, message: "Access denied" }, { status: 403 })
     }
 
     // For now, simulate payout data based on completed payments

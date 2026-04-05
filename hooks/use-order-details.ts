@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
+import { orderApi, apiClient } from '@/lib/api'
 
 interface OrderItem {
   id: string
@@ -62,6 +63,11 @@ export const useOrderDetails = (userId: string | null, parentOrderId: string | n
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
+  // Set up token getter for API client
+  useEffect(() => {
+    apiClient.setTokenGetter(() => localStorage.getItem('app_auth_token'))
+  }, [])
+
   // Fetch order details from API
   const fetchOrderDetails = useCallback(async () => {
     if (!userId || !parentOrderId || !courtId) return
@@ -69,29 +75,22 @@ export const useOrderDetails = (userId: string | null, parentOrderId: string | n
     try {
       setError(null)
       
-      const response = await fetch(`/api/app/${courtId}/orders/status`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('app_auth_token')}`
-        },
-        body: JSON.stringify({ parentOrderId })
-      })
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch order details')
-      }
-
-      const data = await response.json()
+      const data = await orderApi.getOrderDetails(courtId, parentOrderId)
       
-      if (data.success) {
-        setOrderDetails(data.data)
-        setLastUpdate(new Date())
-      } else {
-        throw new Error(data.message || 'Failed to fetch order details')
+      // Transform the response to match the expected format
+      const transformedData: OrderDetailsData = {
+        parentOrderId: data.parentOrderId,
+        orderOtp: data.orderOtp,
+        totalAmount: data.totalAmount,
+        orders: data.orders,
+        summary: data.summary
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch order details')
+      
+      setOrderDetails(transformedData)
+      setLastUpdate(new Date())
+    } catch (err: any) {
+      const errorMessage = err.message || 'Failed to fetch order details'
+      setError(errorMessage)
       console.error('Failed to fetch order details:', err)
     } finally {
       setIsLoading(false)

@@ -137,9 +137,6 @@ module.exports = (sequelize, DataTypes) => {
       tableName: "payment_requests",
       indexes: [
         {
-          fields: ["vendorId"],
-        },
-        {
           fields: ["courtId"],
         },
         {
@@ -151,6 +148,7 @@ module.exports = (sequelize, DataTypes) => {
         {
           unique: true,
           fields: ["vendorId"],
+          name: "payment_requests_vendor_id_unique_pending",
           where: {
             status: "pending",
           },

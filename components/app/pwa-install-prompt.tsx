@@ -109,24 +109,24 @@ export function PWAInstallPrompt() {
           exit={{ opacity: 0, y: 100 }}
           className="fixed bottom-20 left-4 right-4 z-50 md:bottom-4 md:left-auto md:right-4 md:max-w-sm"
         >
-          <div className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-2xl p-4 shadow-lg backdrop-blur-sm">
+          <div className="bg-card border border-border rounded-2xl p-4 shadow-lg backdrop-blur-sm">
             <div className="flex items-start justify-between mb-3">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-blue-500 rounded-xl flex items-center justify-center">
-                  <Download className="w-5 h-5 text-white" />
+                <div className="w-10 h-10 bg-foreground rounded-xl flex items-center justify-center">
+                  <Download className="w-5 h-5 text-background" />
                 </div>
                 <div>
-                  <h3 className="font-semibold text-black dark:text-white text-sm">
+                  <h3 className="font-semibold text-foreground text-sm">
                     Install Aahaar App
                   </h3>
-                  <p className="text-xs text-neutral-600 dark:text-neutral-400">
+                  <p className="text-xs text-muted-foreground">
                     Get the full app experience
                   </p>
                 </div>
               </div>
               <button
                 onClick={handleDismiss}
-                className="p-1 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-lg transition-colors"
+                className="p-1 hover:bg-muted rounded-lg transition-colors"
               >
                 <X className="w-4 h-4 text-neutral-500" />
               </button>
@@ -134,10 +134,10 @@ export function PWAInstallPrompt() {
 
             {isIOS ? (
               <div className="space-y-2">
-                <p className="text-xs text-neutral-600 dark:text-neutral-400">
+                <p className="text-xs text-muted-foreground">
                   To install this app on your iPhone:
                 </p>
-                <ol className="text-xs text-neutral-600 dark:text-neutral-400 space-y-1 list-decimal list-inside">
+                <ol className="text-xs text-muted-foreground space-y-1 list-decimal list-inside">
                   <li>Tap the share button in Safari</li>
                   <li>Scroll down and tap "Add to Home Screen"</li>
                   <li>Tap "Add" to install the app</li>
@@ -147,13 +147,13 @@ export function PWAInstallPrompt() {
               <div className="flex gap-2">
                 <button
                   onClick={handleInstallClick}
-                  className="flex-1 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium py-2 px-4 rounded-xl transition-colors"
+                  className="flex-1 bg-foreground hover:bg-foreground/90 text-background text-sm font-medium py-2 px-4 rounded-xl transition-colors"
                 >
                   Install App
                 </button>
                 <button
                   onClick={handleDismiss}
-                  className="px-4 py-2 text-sm text-neutral-600 dark:text-neutral-400 hover:text-black dark:hover:text-white transition-colors"
+                  className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
                 >
                   Later
                 </button>

@@ -7,10 +7,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { FloatingInput } from "@/components/ui/floating-input"
 import { FloatingSelect } from "@/components/ui/floating-select"
 import { useToast } from "@/hooks/use-toast"
-import { useAdminAuth } from "@/contexts/admin-auth-context"
+import { useUnifiedAuth } from "@/contexts/unified-auth-context"
 import { useRouter } from "next/navigation"
 import { X, Building2 } from "lucide-react"
 import { Spinner } from "@/components/ui/spinner"
+import { adminCourtApi } from "@/lib/api"
 export default function AdminOnboardingPage() {
   const [courtData, setCourtData] = useState({
     courtId: "",
@@ -38,14 +39,14 @@ export default function AdminOnboardingPage() {
     pincode: ""
   })
   const { toast } = useToast()
-  const { user, token, logout } = useAdminAuth()
+  const { user, token, logout } = useUnifiedAuth()
   const router = useRouter()
 
   // Check if user has existing courts on component mount
   useEffect(() => {
     const checkExistingCourts = async () => {
       if (!token) {
-        router.push("/admin/auth")
+        router.push("/auth/login")
         return
       }
 
@@ -63,37 +64,27 @@ export default function AdminOnboardingPage() {
       }
 
       try {
-        const response = await fetch("/api/admin/courts", {
-          headers: {
-            "Authorization": `Bearer ${token}`
-          }
-        })
-
-        if (response.ok) {
-          const data = await response.json()
-          console.log("Courts data in onboarding:", data)
-          if (data.success && data.data.length > 0) {
-            // User has existing courts - check if they came from "add court" button
-            
-            if (isAddingCourt) {
-              // User came from "Add Court" button, allow them to create another court
-              console.log("User came from Add Court button, showing form")
-              setHasExistingCourts(true)
-              setAllowFormAccess(true)
-            } else {
-              // User accessed onboarding directly, redirect to their dashboard
-              console.log("User has existing courts and accessed directly, redirecting to dashboard")
-              router.push(`/admin/${data.data[0].courtId}`)
-              return
-            }
-          } else {
-            // No courts - first time setup
-            console.log("User has no courts, showing form")
-            setHasExistingCourts(false)
+        const response = await adminCourtApi.list()
+        const courts = response.courts || []
+        console.log("Courts data in onboarding:", courts)
+        
+        if (courts.length > 0) {
+          // User has existing courts - check if they came from "add court" button
+          
+          if (isAddingCourt) {
+            // User came from "Add Court" button, allow them to create another court
+            console.log("User came from Add Court button, showing form")
+            setHasExistingCourts(true)
             setAllowFormAccess(true)
+          } else {
+            // User accessed onboarding directly, redirect to their dashboard
+            console.log("User has existing courts and accessed directly, redirecting to dashboard")
+            router.push(`/admin/${courts[0].courtId}`)
+            return
           }
         } else {
-          console.log("Failed to fetch courts, showing form")
+          // No courts - first time setup
+          console.log("User has no courts, showing form")
           setHasExistingCourts(false)
           setAllowFormAccess(true)
         }
@@ -112,10 +103,10 @@ export default function AdminOnboardingPage() {
   // Show loading while checking courts
   if (checkingCourts || !allowFormAccess) {
     return (
-        <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="min-h-screen bg-background flex items-center justify-center">
             <div className="text-center">
                 <Spinner className="w-8 h-8 mx-auto mb-4" variant="white" />
-                <p className="text-white/80">Calibrating...</p>
+                <p className="text-foreground/80">Calibrating...</p>
             </div>
         </div>
     )
@@ -237,31 +228,19 @@ export default function AdminOnboardingPage() {
     setLoading(true)
     try {
       if (!token) {
-        router.push("/admin/auth")
+        router.push("/auth/login")
         return false
       }
 
-      const response = await fetch("/api/admin/courts", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`
-        },
-        body: JSON.stringify(courtData),
+      const response = await adminCourtApi.create({
+        courtId: courtData.courtId,
+        instituteName: courtData.instituteName,
+        instituteType: courtData.instituteType,
+        // Additional fields passed as part of data
+        ...courtData as any
       })
 
-      console.log("Court creation response status:", response.status)
-      console.log("Court creation response:", response)
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        console.error("Court creation error:", errorData)
-        showErrorWithAnimation(errorData.message || "Failed to create court")
-        return false
-      }
-
-      const data = await response.json()
-      console.log("Court creation success:", data)
+      console.log("Court creation success:", response)
 
       toast({
         title: "Success",
@@ -269,10 +248,12 @@ export default function AdminOnboardingPage() {
       })
 
       // Redirect to the new court's dashboard
-      router.push(`/admin/${data.data.courtId}`)
+      const newCourtId = (response as any).court?.courtId || courtData.courtId
+      router.push(`/admin/${newCourtId}`)
       return true
     } catch (error: any) {
-      showErrorWithAnimation("An error occurred while creating the court. Please try again.")
+      console.error("Court creation error:", error)
+      showErrorWithAnimation(error.message || "An error occurred while creating the court. Please try again.")
       return false
     } finally {
       setLoading(false)
@@ -280,7 +261,7 @@ export default function AdminOnboardingPage() {
   }
 
   return (
-    <div className="min-h-screen bg-neutral-950 flex flex-col relative overflow-hidden">
+    <div className="min-h-screen bg-background flex flex-col relative overflow-hidden">
       {/* Header */}
       <header className="relative z-30 w-full bg-transparent">
         <div className="px-4 sm:px-6">
@@ -296,13 +277,13 @@ export default function AdminOnboardingPage() {
             
             {/* User Info & Logout */}
             <div className="flex items-center space-x-4">
-              <span className="text-sm text-neutral-300">
-                Logged in as <span className="text-white font-medium">{user?.fullName}</span>
+              <span className="text-sm text-foreground">
+                Logged in as <span className="text-foreground font-medium">{user?.fullName}</span>
               </span>
-              <span className="text-neutral-500">•</span>
+              <span className="text-muted-foreground">•</span>
               <button
                 onClick={() => logout()}
-                className="text-sm text-blue-400 hover:text-blue-300 transition-colors"
+                className="text-sm text-foreground hover:text-muted-foreground transition-colors"
               >
                 Not you? Logout
               </button>
@@ -329,7 +310,7 @@ export default function AdminOnboardingPage() {
       <div className="absolute inset-0 backdrop-blur-2xl z-5"></div>
       
       {/* Dark overlay */}
-      <div className="absolute inset-0 bg-black/60 z-10"></div>
+      <div className="absolute inset-0 bg-background/60 z-10"></div>
       
       {/* Content container */}
       <div className="z-20 relative w-full max-w-2xl">
@@ -338,33 +319,32 @@ export default function AdminOnboardingPage() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
         >
-          <Card className="w-full overflow-hidden rounded-3xl bg-neutral-950/90">
+          <Card className="w-full overflow-hidden rounded-3xl bg-background/90">
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 mb-2">
-                  <Building2 className="h-6 w-6 text-blue-400" />
-                  <CardTitle className="text-white">
+                  <Building2 className="h-6 w-6 text-foreground" />
+                  <CardTitle className="text-foreground">
                     {hasExistingCourts ? "Add New Court" : "Create Your First Court"}
                   </CardTitle>
                 </div>
                 {hasExistingCourts && (
                   <button
-                    onClick={() => {
+                    onClick={async () => {
                       // Fetch courts and redirect to the first available court
-                      fetch("/api/admin/courts", {
-                        headers: { "Authorization": `Bearer ${token}` }
-                      })
-                      .then(res => res.json())
-                      .then(data => {
-                        if (data.success && data.data.length > 0) {
-                          router.push(`/admin/${data.data[0].courtId}`)
+                      try {
+                        const response = await adminCourtApi.list()
+                        const courts = response.courts || []
+                        if (courts.length > 0) {
+                          router.push(`/admin/${courts[0].courtId}`)
                         } else {
-                          router.push("/admin/auth")
+                          router.push("/admin/dashboard")
                         }
-                      })
-                      .catch(() => router.push("/admin/auth"))
+                      } catch {
+                        router.push("/admin/dashboard")
+                      }
                     }}
-                    className="p-2 hover:bg-neutral-800 rounded-full transition-colors text-neutral-400 hover:text-white"
+                    className="p-2 hover:bg-muted rounded-full transition-colors text-muted-foreground hover:text-foreground"
                     aria-label="Close and return to dashboard"
                   >
                     <X className="h-5 w-5" />
@@ -394,7 +374,7 @@ export default function AdminOnboardingPage() {
                     }}
                     className="overflow-hidden mb-6"
                   >
-                    <div className="p-3 text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-md relative">
+                    <div className="p-3 text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-md relative">
                       <div className="pr-8">
                         {error}
                       </div>
@@ -406,10 +386,10 @@ export default function AdminOnboardingPage() {
                           setShowError(false)
                           setTimeout(() => setError(""), 300)
                         }}
-                        className="absolute top-2 right-2 p-1 hover:bg-red-500/20 rounded-full transition-colors"
+                        className="absolute top-2 right-2 p-1 hover:bg-destructive/20 rounded-full transition-colors"
                         aria-label="Dismiss error"
                       >
-                        <X size={16} className="text-red-400" />
+                        <X size={16} className="text-destructive" />
                       </button>
                     </div>
                   </motion.div>

@@ -17,8 +17,9 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
-import { useVendorAuth } from "@/contexts/vendor-auth-context"
+import { useUnifiedAuth } from "@/contexts/unified-auth-context"
 import { useRouter } from "next/navigation"
+import { vendorApi } from "@/lib/api"
 
 interface SettingsOption {
   id: string
@@ -29,7 +30,7 @@ interface SettingsOption {
 }
 
 export default function VendorSettings({ params }: { params: Promise<{ courtId: string }> }) {
-  const { user, token } = useVendorAuth()
+  const { user } = useUnifiedAuth()
   const { courtId } = use(params)
   const router = useRouter()
   
@@ -76,17 +77,9 @@ export default function VendorSettings({ params }: { params: Promise<{ courtId: 
 
   const fetchVendorStatus = async () => {
     try {
-      const response = await fetch(`/api/vendors/me`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        if (data.success && data.data.vendor) {
-          setIsOnline(data.data.vendor.isOnline || false)
-        }
+      const data = await vendorApi.getMe()
+      if (data.vendor) {
+        setIsOnline((data.vendor as any).isOnline || false)
       }
     } catch (error) {
       console.error("Error fetching vendor status:", error)
@@ -100,28 +93,13 @@ export default function VendorSettings({ params }: { params: Promise<{ courtId: 
     
     try {
       console.log('Updating vendor status to:', checked)
-      const response = await fetch(`/api/vendors/me/status`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          isOnline: checked
-        }),
-      })
-
-      const data = await response.json()
+      const data = await vendorApi.updateMyStatus(checked ? 'active' : 'inactive')
       console.log('Status update response:', data)
 
-      if (response.ok && data.success) {
-        setIsOnline(checked)
-        setSuccess(`Successfully went ${checked ? 'online' : 'offline'}`)
-        // Clear success message after 3 seconds
-        setTimeout(() => setSuccess(null), 3000)
-      } else {
-        throw new Error(data.message || 'Failed to update status')
-      }
+      setIsOnline(checked)
+      setSuccess(`Successfully went ${checked ? 'online' : 'offline'}`)
+      // Clear success message after 3 seconds
+      setTimeout(() => setSuccess(null), 3000)
     } catch (error) {
       console.error("Error updating vendor status:", error)
       setError(error instanceof Error ? error.message : 'Failed to update status')
@@ -137,35 +115,34 @@ export default function VendorSettings({ params }: { params: Promise<{ courtId: 
   }
 
   return (
-    <div className="min-h-screen bg-neutral-50 dark:bg-neutral-950 p-4">
+    <div className="min-h-screen bg-background p-4">
       <div className="max-w-4xl mx-auto space-y-6">
         {/* Header */}
-        <div className="bg-white dark:bg-neutral-900 rounded-2xl p-6">
-          {/* Error Message */}
+        <div className="bg-card border border-border rounded-2xl p-6">
           {error && (
-            <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg flex items-center gap-2">
-              <AlertCircle className="h-4 w-4 text-red-600" />
-              <span className="text-red-800 dark:text-red-400 text-sm">{error}</span>
+            <div className="mb-4 p-3 bg-destructive/10 border border-destructive/30 rounded-lg flex items-center gap-2">
+              <AlertCircle className="h-4 w-4 text-destructive" />
+              <span className="text-destructive text-sm">{error}</span>
             </div>
           )}
           
           {/* Success Message */}
           {success && (
-            <div className="mb-4 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4 text-green-600" />
-              <span className="text-green-800 dark:text-green-400 text-sm">{success}</span>
+            <div className="mb-4 p-3 bg-muted border border-border rounded-lg flex items-center gap-2">
+              <CheckCircle2 className="h-4 w-4 text-foreground" />
+              <span className="text-foreground text-sm">{success}</span>
             </div>
           )}
           
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-2xl font-bold mb-2">Settings</h1>
-              <p className="text-neutral-600 dark:text-neutral-400">
+              <p className="text-muted-foreground">
                 Manage your vendor account and preferences
               </p>
               {user && (
                 <div className="mt-2 flex items-center gap-2">
-                  <span className="text-sm text-neutral-500">Logged in as:</span>
+                  <span className="text-sm text-muted-foreground">Logged in as:</span>
                   <span className="text-sm font-medium">{user.fullName || user.email}</span>
                 </div>
               )}
@@ -177,8 +154,8 @@ export default function VendorSettings({ params }: { params: Promise<{ courtId: 
                 <div className="text-sm font-medium">Vendor Status</div>
                 <Badge 
                   className={isOnline 
-                    ? "bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400" 
-                    : "bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400"
+                    ? "bg-muted text-foreground" 
+                    : "bg-muted text-muted-foreground"
                   }
                 >
                   {updating ? "Updating..." : (isOnline ? "Online" : "Offline")}
@@ -188,9 +165,9 @@ export default function VendorSettings({ params }: { params: Promise<{ courtId: 
                 {updating ? (
                   <div className="h-5 w-5 border-2 border-neutral-300 border-t-neutral-600 rounded-full animate-spin" />
                 ) : isOnline ? (
-                  <Power className="h-5 w-5 text-green-600" />
+                  <Power className="h-5 w-5 text-foreground" />
                 ) : (
-                  <PowerOff className="h-5 w-5 text-red-600" />
+                  <PowerOff className="h-5 w-5 text-muted-foreground" />
                 )}
                 <Switch
                   checked={isOnline}
@@ -204,7 +181,7 @@ export default function VendorSettings({ params }: { params: Promise<{ courtId: 
 
         {/* Settings Options */}
         <div className="space-y-4">
-          <h2 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">
+          <h2 className="text-lg font-semibold">
             Settings & Support
           </h2>
           
@@ -217,23 +194,23 @@ export default function VendorSettings({ params }: { params: Promise<{ courtId: 
                 transition={{ delay: index * 0.1 }}
               >
                 <Card 
-                  className="cursor-pointer transition-all duration-200 hover:shadow-md hover:bg-neutral-50 dark:hover:bg-neutral-800"
+                  className="cursor-pointer transition-all duration-200 hover:shadow-md hover:bg-muted"
                   onClick={() => handleSettingClick(option.href)}
                 >
                   <CardContent className="p-6">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-4">
-                        <div className="p-3 bg-neutral-100 dark:bg-neutral-800 rounded-xl">
+                        <div className="p-3 bg-muted rounded-xl">
                           {option.icon}
                         </div>
                         <div>
                           <h3 className="font-semibold text-lg">{option.title}</h3>
-                          <p className="text-neutral-600 dark:text-neutral-400 text-sm">
+                          <p className="text-muted-foreground text-sm">
                             {option.description}
                           </p>
                         </div>
                       </div>
-                      <ChevronRight className="h-5 w-5 text-neutral-400" />
+                      <ChevronRight className="h-5 w-5 text-muted-foreground" />
                     </div>
                   </CardContent>
                 </Card>
@@ -243,34 +220,34 @@ export default function VendorSettings({ params }: { params: Promise<{ courtId: 
         </div>
 
         {/* Status Information */}
-        <div className="bg-white dark:bg-neutral-900 rounded-2xl p-6">
+        <div className="bg-card border border-border rounded-2xl p-6">
           <h3 className="font-semibold mb-3">Vendor Information</h3>
           <div className="space-y-2 text-sm">
             <div className="flex justify-between">
-              <span className="text-neutral-600 dark:text-neutral-400">Court ID:</span>
+              <span className="text-muted-foreground">Court ID:</span>
               <span className="font-medium">{courtId}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-neutral-600 dark:text-neutral-400">Status:</span>
+              <span className="text-muted-foreground">Status:</span>
               <Badge 
                 className={isOnline 
-                  ? "bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400" 
-                  : "bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400"
+                  ? "bg-muted text-foreground" 
+                  : "bg-muted text-muted-foreground"
                 }
               >
                 {isOnline ? "Accepting Orders" : "Not Accepting Orders"}
               </Badge>
             </div>
             {isOnline && (
-              <div className="mt-2 p-2 bg-green-50 dark:bg-green-900/20 rounded-lg">
-                <div className="text-green-800 dark:text-green-400 text-xs">
+              <div className="mt-2 p-2 bg-muted rounded-lg">
+                <div className="text-foreground text-xs">
                   ✓ Your vendor account is online and ready to receive orders
                 </div>
               </div>
             )}
             {!isOnline && (
-              <div className="mt-2 p-2 bg-red-50 dark:bg-red-900/20 rounded-lg">
-                <div className="text-red-800 dark:text-red-400 text-xs">
+              <div className="mt-2 p-2 bg-muted rounded-lg">
+                <div className="text-muted-foreground text-xs">
                   ⚠️ Your vendor account is offline. Toggle online to start receiving orders
                 </div>
               </div>

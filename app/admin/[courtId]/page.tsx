@@ -1,6 +1,6 @@
 "use client"
 import { useEffect, useState, use } from "react"
-import { useAdminAuth } from "@/contexts/admin-auth-context"
+import { useUnifiedAuth } from "@/contexts/unified-auth-context"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -8,6 +8,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Users, Store, ShoppingCart, DollarSign, TrendingUp, Plus, Eye } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { AuditLogsPreview } from "@/components/admin/audit-logs-preview"
+import { adminCourtApi, analyticsApi, orderApi, apiClient } from "@/lib/api"
+import { Spinner } from "@/components/ui/spinner"
 
 interface DashboardStats {
   totalOrders: number
@@ -31,49 +33,52 @@ interface RecentOrder {
 }
 
 export default function AdminDashboard({ params }: { params: Promise<{ courtId: string }> }) {
-  const { user, token } = useAdminAuth()
+  const { user, token, loading: authLoading } = useUnifiedAuth()
   const router = useRouter()
   const { courtId } = use(params)
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [recentOrders, setRecentOrders] = useState<RecentOrder[]>([])
   const [loading, setLoading] = useState(true)
+  const [accessChecked, setAccessChecked] = useState(false)
+
+  // Set up API client token
+  useEffect(() => {
+    if (token) {
+      apiClient.setTokenGetter(() => token)
+    }
+  }, [token])
 
   useEffect(() => {
+    // Wait for auth to finish loading
+    if (authLoading) return
+
     if (!user || user.role !== "admin") {
-      router.push("/admin/auth")
+      router.push("/auth/login")
       return
     }
 
     // Check if user has access to this court
     checkAccess()
-  }, [user, courtId])
+  }, [user, authLoading, courtId])
 
   const checkAccess = async () => {
     try {
       // Verify user has access to this court
-      const response = await fetch(`/api/admin/courts`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        const hasAccess = data.data.some((court: any) => court.courtId === courtId)
-        
-        if (!hasAccess) {
-          router.push("/admin/auth")
-          return
-        }
-        
-        // User has access, fetch dashboard data
-        fetchDashboardData()
-      } else {
-        router.push("/admin/auth")
+      const data = await adminCourtApi.list()
+      const hasAccess = data.courts?.some((court) => court.courtId === courtId)
+      
+      if (!hasAccess) {
+        // Redirect to admin index which will pick the right court
+        router.push("/admin")
+        return
       }
+      
+      setAccessChecked(true)
+      // User has access, fetch dashboard data
+      fetchDashboardData()
     } catch (error) {
       console.error("Error checking access:", error)
-      router.push("/admin/auth")
+      router.push("/admin")
     }
   }
 
@@ -81,25 +86,24 @@ export default function AdminDashboard({ params }: { params: Promise<{ courtId: 
     try {
       setLoading(true)
 
-      // Fetch dashboard stats
-      const statsResponse = await fetch(`/api/analytics/${courtId}/dashboard`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
+      // Fetch dashboard stats and recent orders in parallel
+      const [statsResult, ordersResult] = await Promise.allSettled([
+        analyticsApi.getDashboard(courtId),
+        orderApi.getCourtOrders(courtId, { limit: 10 })
+      ])
 
-      if (statsResponse.ok) {
-        const statsData = await statsResponse.json()
-        // Extract data from the summary object returned by analytics API
+      // Handle stats
+      if (statsResult.status === 'fulfilled') {
+        const statsData = statsResult.value as any
         setStats({
-          totalOrders: statsData.data?.summary?.totalOrders || 0,
-          totalRevenue: statsData.data?.summary?.totalRevenue || 0,
-          activeVendors: statsData.data?.summary?.activeVendors || 0,
-          totalUsers: statsData.data?.summary?.totalUsers || 0,
-          todayOrders: statsData.data?.summary?.todayOrders || 0,
-          todayRevenue: statsData.data?.summary?.todayRevenue || 0,
-          pendingOrders: statsData.data?.summary?.pendingOrders || 0,
-          completedOrders: statsData.data?.summary?.completedOrders || 0,
+          totalOrders: statsData?.summary?.totalOrders || 0,
+          totalRevenue: statsData?.summary?.totalRevenue || 0,
+          activeVendors: statsData?.summary?.activeVendors || 0,
+          totalUsers: statsData?.summary?.totalUsers || 0,
+          todayOrders: statsData?.summary?.todayOrders || 0,
+          todayRevenue: statsData?.summary?.todayRevenue || 0,
+          pendingOrders: statsData?.summary?.pendingOrders || 0,
+          completedOrders: statsData?.summary?.completedOrders || 0,
         })
       } else {
         // Set default stats for new court
@@ -115,16 +119,9 @@ export default function AdminDashboard({ params }: { params: Promise<{ courtId: 
         })
       }
 
-      // Fetch recent orders
-      const ordersResponse = await fetch(`/api/courts/${courtId}/orders?limit=10`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
-
-      if (ordersResponse.ok) {
-        const ordersData = await ordersResponse.json()
-        setRecentOrders(ordersData.data?.orders || [])
+      // Handle orders
+      if (ordersResult.status === 'fulfilled') {
+        setRecentOrders((ordersResult.value as any)?.orders || [])
       } else {
         setRecentOrders([])
       }
@@ -138,24 +135,24 @@ export default function AdminDashboard({ params }: { params: Promise<{ courtId: 
   const getStatusColor = (status: string) => {
     switch (status) {
       case "pending":
-        return "bg-yellow-100 text-yellow-800"
+        return "bg-muted text-muted-foreground"
       case "preparing":
-        return "bg-orange-100 text-orange-800"
+        return "bg-muted text-foreground"
       case "ready":
-        return "bg-purple-100 text-purple-800"
+        return "bg-muted text-foreground"
       case "completed":
-        return "bg-green-100 text-green-800"
+        return "bg-muted text-foreground"
       case "cancelled":
-        return "bg-red-100 text-red-800"
+        return "bg-destructive/10 text-destructive"
       default:
-        return "bg-gray-100 text-gray-800"
+        return "bg-muted text-foreground"
     }
   }
 
-  if (loading) {
+  if (authLoading || loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
+      <div className="flex items-center justify-center min-h-[50vh]">
+        <Spinner size={48} />
       </div>
     )
   }
@@ -165,15 +162,15 @@ export default function AdminDashboard({ params }: { params: Promise<{ courtId: 
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold text-white">Dashboard</h1>
-          <p className="text-neutral-500">Welcome back, {user?.fullName}</p>
+          <h1 className="text-3xl font-bold">Dashboard</h1>
+          <p className="text-muted-foreground">Welcome back, {user?.fullName}</p>
         </div>
         <div className="flex gap-2">
           <Button  onClick={() => router.push(`/admin/${courtId}/vendors`)}>
             <Plus className="h-4 w-4 mr-2" />
             Add Vendor
           </Button>
-          <Button className="text-white" variant="outline" onClick={() => router.push(`/admin/${courtId}/orders`)}>
+          <Button variant="outline" onClick={() => router.push(`/admin/${courtId}/orders`)}>
             <Eye className="h-4 w-4 mr-2" />
             View All Orders
           </Button>
@@ -309,10 +306,10 @@ export default function AdminDashboard({ params }: { params: Promise<{ courtId: 
                         <span className="font-medium">{order.orderNumber}</span>
                         <Badge className={getStatusColor(order.status)}>{order.status}</Badge>
                       </div>
-                      <p className="text-sm text-gray-600">
+                      <p className="text-sm text-muted-foreground">
                         {order.customerName} • {order.vendorName}
                       </p>
-                      <p className="text-xs text-gray-500">{new Date(order.createdAt).toLocaleString()}</p>
+                      <p className="text-xs text-muted-foreground">{new Date(order.createdAt).toLocaleString()}</p>
                     </div>
                     <div className="text-right">
                       <p className="font-medium">₹{order.totalAmount}</p>
@@ -332,8 +329,8 @@ export default function AdminDashboard({ params }: { params: Promise<{ courtId: 
             </CardHeader>
             <CardContent>
               <div className="text-center py-8">
-                <TrendingUp className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-                <p className="text-gray-600">Detailed analytics coming soon</p>
+                <TrendingUp className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                <p className="text-muted-foreground">Detailed analytics coming soon</p>
               </div>
             </CardContent>
           </Card>

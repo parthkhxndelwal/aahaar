@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Loader2, ArrowLeft, Building2, Mail, Eye, EyeOff } from "lucide-react"
-import { useAppAuth } from "@/contexts/app-auth-context"
+import { useUnifiedAuth } from "@/contexts/unified-auth-context"
 import { InputOTP, InputOTPGroup, InputOTPSlot, InputOTPSeparator } from "@/components/ui/input-otp"
 
 type AuthStep = 'email' | 'otp' | 'password' | 'onboarding'
@@ -18,7 +18,7 @@ type AuthStep = 'email' | 'otp' | 'password' | 'onboarding'
 export default function UserLogin() {
   const params = useParams()
   const router = useRouter()
-  const { login, user, token } = useAppAuth()
+  const { login, user, token } = useUnifiedAuth()
   const courtId = params.courtId as string
 
   // Get return URL from query parameters
@@ -34,11 +34,15 @@ export default function UserLogin() {
 
   // Redirect already authenticated users
   useEffect(() => {
+    console.log("🔄 Login page useEffect:", { user, token, courtId })
     if (user && token) {
       const redirectUrl = returnTo || `/app/${courtId}`
+      console.log("🔄 Already authenticated, redirecting to:", redirectUrl)
       setTimeout(() => {
         router.replace(redirectUrl)
       }, 100)
+    } else {
+      console.log("🔄 Not authenticated, staying on login page")
     }
   }, [user, token, returnTo, courtId, router])
 
@@ -60,6 +64,7 @@ export default function UserLogin() {
   const [emailTouched, setEmailTouched] = useState(false)
   const [emailValidationTimeout, setEmailValidationTimeout] = useState<NodeJS.Timeout | null>(null)
   const [otp, setOtp] = useState("")
+  const isSubmittingOTP = useRef(false) // Guard to prevent double OTP submission
   const [password, setPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
   const [name, setName] = useState("")
@@ -226,12 +231,19 @@ export default function UserLogin() {
   }
 
   const handleOTPSubmit = async (): Promise<boolean> => {
+    // Guard against double submission
+    if (isSubmittingOTP.current) {
+      console.log("🚫 OTP submission already in progress, ignoring...")
+      return false
+    }
+    
     if (!otp || otp.length !== 6) {
       setError("Please enter a valid 6-digit OTP")
       return false
     }
 
     setError("")
+    isSubmittingOTP.current = true // Set guard
 
     try {
       const response = await fetch("/api/auth/login", {
@@ -257,18 +269,30 @@ export default function UserLogin() {
             hasPassword: data.data.user?.hasPassword,
             fullName: data.data.user?.fullName 
           })
+          isSubmittingOTP.current = false // Reset guard for onboarding
         } else {
           // User has complete profile - login immediately
           console.log("✅ User with complete profile, logging in:", data.data.user)
+          console.log("📝 Calling login with token:", data.data.token?.substring(0, 20) + "...")
+          console.log("📝 User details:", { 
+            id: data.data.user?.id, 
+            email: data.data.user?.email, 
+            fullName: data.data.user?.fullName,
+            role: data.data.user?.role,
+            courtId: data.data.user?.courtId
+          })
           login(data.data.token, data.data.user)
+          // Don't reset guard here - user is being redirected
         }
         return true
       } else {
         setError(data.message || "Invalid OTP")
+        isSubmittingOTP.current = false // Reset guard on error
         return false
       }
     } catch (error: any) {
       setError("Login failed")
+      isSubmittingOTP.current = false // Reset guard on error
       return false
     }
   }
@@ -393,7 +417,7 @@ export default function UserLogin() {
   // Show loading while validating court
   if (courtLoading) {
     return (
-      <div className="h-full bg-neutral-950 flex items-center justify-center p-4">
+      <div className="h-full bg-background flex items-center justify-center p-4">
         <div className="flex items-center space-x-4">
           <Loader2 className="h-8 w-8 animate-spin text-blue-400" />
           <span className="text-lg text-white">Loading food court...</span>
@@ -405,7 +429,7 @@ export default function UserLogin() {
   // Show loading while checking authentication
   if (user && token) {
     return (
-      <div className="h-full bg-neutral-950 flex items-center justify-center p-4">
+      <div className="h-full bg-background flex items-center justify-center p-4">
         <div className="flex items-center space-x-4">
           <Loader2 className="h-8 w-8 animate-spin text-blue-400" />
           <span className="text-lg text-white">Already logged in, redirecting...</span>
@@ -417,7 +441,7 @@ export default function UserLogin() {
   // Show error if court not found
   if (courtError) {
     return (
-      <div className="h-full bg-neutral-950 flex items-center justify-center p-4">
+      <div className="h-full bg-background flex items-center justify-center p-4">
         <div className="w-full max-w-md">
           <Card>
             <CardHeader className="text-center">
@@ -439,7 +463,7 @@ export default function UserLogin() {
   }
 
   return (
-    <div className="h-full bg-neutral-950 flex items-center justify-center p-4">
+    <div className="h-full bg-background flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="mb-6">
           <Button variant="ghost" onClick={goBack} className="mb-4">
@@ -449,7 +473,7 @@ export default function UserLogin() {
           
           {/* Court Info Display */}
           {courtInfo && (
-            <div className="p-4 bg-neutral-900 rounded-lg border border-neutral-800 mb-4">
+            <div className="p-4 bg-muted rounded-lg border mb-4">
               <div className="flex items-center gap-3">
                 {courtInfo.logoUrl || courtInfo.imageUrl ? (
                   <img
@@ -458,20 +482,20 @@ export default function UserLogin() {
                     className="w-12 h-12 rounded-lg object-cover"
                   />
                 ) : (
-                  <div className="w-12 h-12 bg-blue-600/20 rounded-lg flex items-center justify-center">
-                    <Building2 className="h-6 w-6 text-blue-400" />
+                  <div className="w-12 h-12 bg-muted rounded-lg flex items-center justify-center">
+                    <Building2 className="h-6 w-6 text-muted-foreground" />
                   </div>
                 )}
                 <div>
-                  <h3 className="font-medium text-white">{courtInfo.instituteName || courtInfo.name}</h3>
-                  <p className="text-sm text-neutral-400">{courtInfo.address || courtInfo.location || 'No location provided'}</p>
+                  <h3 className="font-medium">{courtInfo.instituteName || courtInfo.name}</h3>
+                  <p className="text-sm text-muted-foreground">{courtInfo.address || courtInfo.location || 'No location provided'}</p>
                 </div>
               </div>
             </div>
           )}
         </div>
 
-        <Card className="dark:bg-neutral-950">
+        <Card>
           <CardHeader className="text-center">
             <CardTitle>
               {currentStep === 'email' && 'Welcome'}
@@ -524,10 +548,10 @@ export default function UserLogin() {
                 <div className="space-y-3">
                   <div className="relative">
                     <div className="absolute inset-0 flex items-center">
-                      <span className="w-full border-t border-neutral-300" />
+                      <span className="w-full border-t" />
                     </div>
                     <div className="relative flex justify-center text-xs uppercase">
-                      <span className="bg-white px-2 text-neutral-500">Or continue with</span>
+                      <span className="bg-background px-2 text-muted-foreground">Or continue with</span>
                     </div>
                   </div>
 
@@ -599,7 +623,12 @@ export default function UserLogin() {
                         maxLength={6}
                         value={otp}
                         onChange={setOtp}
-                        onComplete={(val) => { setOtp(val); handleOTPSubmit() }}
+                        onComplete={(val) => { 
+                          setOtp(val)
+                          // Auto-submit on complete
+                          console.log("🔢 OTP complete, auto-submitting...")
+                          handleOTPSubmit() 
+                        }}
                         aria-label="Enter the 6-digit verification code"
                       >
                         <InputOTPGroup>

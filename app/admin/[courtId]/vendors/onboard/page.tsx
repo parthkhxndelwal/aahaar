@@ -3,6 +3,7 @@
 import React, { useState } from "react"
 import { useParams, useSearchParams, useRouter } from "next/navigation"
 import { VendorOnboardingForm } from "@/components/vendor/vendor-onboarding-form"
+import { adminVendorApi } from "@/lib/api"
 
 export default function AdminVendorOnboardPage() {
   const [isProcessing, setIsProcessing] = useState(false)
@@ -13,13 +14,13 @@ export default function AdminVendorOnboardPage() {
 
   if (!courtId) {
     return (
-      <div className="min-h-screen bg-neutral-950 flex items-center justify-center">
+      <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-white mb-4">Invalid Request</h1>
-          <p className="text-neutral-400 mb-6">Court ID is required to create a vendor.</p>
+          <h1 className="text-2xl font-bold text-foreground mb-4">Invalid Request</h1>
+          <p className="text-muted-foreground mb-6">Court ID is required to create a vendor.</p>
           <button
             onClick={() => router.back()}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg"
+            className="bg-foreground hover:bg-foreground/90 text-background px-6 py-2 rounded-lg"
           >
             Go Back
           </button>
@@ -29,19 +30,20 @@ export default function AdminVendorOnboardPage() {
   }
 
   const handleFormSubmit = async (formData: any) => {
-    console.log("📨 Page handleFormSubmit called with:", formData)
+    console.log("Page handleFormSubmit called with:", formData)
     // Keep inline, do not show spinner/progress page. Surface server errors back to form.
     try {
-      console.log("🌐 Making API request to /api/admin/vendors")
+      console.log("Making API request to create vendor")
+      // Use fetch directly since vendorApi expects different parameters
       const response = await fetch("/api/admin/vendors", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...formData, courtId }),
       })
 
-      console.log("📥 API response status:", response.status)
+      console.log("API response status:", response.status)
       const payload = await response.json()
-      console.log("📦 API response payload:", payload)
+      console.log("API response payload:", payload)
 
       if (!response.ok || !payload.success) {
         // Throw with server-provided message so form can show it inline
@@ -49,22 +51,22 @@ export default function AdminVendorOnboardPage() {
       }
 
       const vendorId = payload?.data?.vendor?.id
-      console.log("✅ Vendor created successfully, redirecting...")
+      console.log("Vendor created successfully, redirecting...")
       router.push(`/admin/${courtId}/vendors?success=true${vendorId ? `&vendorId=${vendorId}` : ''}`)
     } catch (error) {
-      console.error("❌ Page handleFormSubmit error:", error)
+      console.error("Page handleFormSubmit error:", error)
       // Re-throw to let the form show inline error
       throw error
     }
   }
 
   return (
-    <div className="bg-neutral-950">
+    <div className="bg-background">
       <div className="container mx-auto px-4 py-8">
         <div className="max-w-4xl mx-auto">
           <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-white mb-2">Vendor Onboarding</h1>
-            <p className="text-neutral-400">Create a new vendor account with complete setup</p>
+            <h1 className="text-3xl font-bold text-foreground mb-2">Vendor Onboarding</h1>
+            <p className="text-muted-foreground">Create a new vendor account with complete setup</p>
           </div>
 
           <VendorOnboardingForm

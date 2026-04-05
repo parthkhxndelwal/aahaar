@@ -1,11 +1,10 @@
 "use client"
 import { use, useEffect, useState, useMemo } from "react"
 import { useCart } from "@/contexts/cart-context"
-import { motion, AnimatePresence } from "framer-motion"
-import { Plus, Minus, Trash2, ArrowRight, MapPin, ArrowLeft, AlertTriangle } from "lucide-react"
+import { ArrowRight, MapPin, ArrowLeft, AlertTriangle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerTrigger } from "@/components/ui/drawer"
-import { useAppAuth } from "@/contexts/app-auth-context"
+import { useUnifiedAuth } from "@/contexts/unified-auth-context"
 import Image from "next/image"
 import { useRouter } from "next/navigation"
 import DummyPaymentGateway from "@/components/app/dummy-payment-gateway"
@@ -156,7 +155,7 @@ function calculateSplit(totalAmount: number, vendorAmounts: number[]) {
 export default function CartPage({ params }: { params: Promise<{ courtId: string }> }) {
   const { courtId } = use(params)
   const { cart, isLoading, hasActiveOrder, activeOrderError, checkActiveOrders, clearCart } = useCart()
-  const { user, token } = useAppAuth()
+  const { user, token } = useUnifiedAuth()
   const { isCartValid, hasInvalidItems, validateCart, getItemIssues, isItemValid } = useCartValidation(courtId)
   const [isDrawerOpen, setIsDrawerOpen] = useState(false)
   const [showPaymentGateway, setShowPaymentGateway] = useState(false)
@@ -181,19 +180,6 @@ export default function CartPage({ params }: { params: Promise<{ courtId: string
   const customerPayableRupees = transformedOrderPreview?.customerPayable ? transformedOrderPreview.customerPayable / 100 : undefined
 
   // Total to pay will be computed after totalAmount is known (see below)
-
-  // Page transition variants
-  const pageVariants = {
-    initial: { opacity: 0, x: 20 },
-    in: { opacity: 1, x: 0 },
-    out: { opacity: 0, x: -20 }
-  }
-
-  const pageTransition = {
-    type: "tween" as const,
-    ease: "anticipate" as const,
-    duration: 0.4
-  }
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -297,13 +283,16 @@ export default function CartPage({ params }: { params: Promise<{ courtId: string
         },
       })
 
-      const validationData = await validationResponse.json()
+      const validationResponse_json = await validationResponse.json()
       
       if (!validationResponse.ok) {
-        console.error("Cart validation failed:", validationData.message)
-        alert(validationData.message || "Failed to validate cart items. Please try again.")
+        console.error("Cart validation failed:", validationResponse_json.message)
+        alert(validationResponse_json.message || "Failed to validate cart items. Please try again.")
         return
       }
+
+      // Extract the actual validation data from the response wrapper
+      const validationData = validationResponse_json.data
 
       if (!validationData.valid) {
         console.error("Cart has invalid items:", validationData)
@@ -311,18 +300,18 @@ export default function CartPage({ params }: { params: Promise<{ courtId: string
         // Create detailed error message
         let errorMessage = "Some items in your cart are no longer available:\n\n"
         
-        if (validationData.summary.offlineVendors.length > 0) {
-          errorMessage += `🔴 Offline Vendors: ${validationData.summary.offlineVendors.join(", ")}\n`
+        if (validationData.summary?.offlineVendors?.length > 0) {
+          errorMessage += `Offline Vendors: ${validationData.summary.offlineVendors.join(", ")}\n`
         }
         
-        if (validationData.summary.unavailableItems.length > 0) {
-          errorMessage += `❌ Unavailable Items: ${validationData.summary.unavailableItems.join(", ")}\n`
+        if (validationData.summary?.unavailableItems?.length > 0) {
+          errorMessage += `Unavailable Items: ${validationData.summary.unavailableItems.join(", ")}\n`
         }
         
-        if (validationData.summary.stockIssues.length > 0) {
-          errorMessage += `📦 Stock Issues:\n`
+        if (validationData.summary?.stockIssues?.length > 0) {
+          errorMessage += `Stock Issues:\n`
           validationData.summary.stockIssues.forEach((issue: any) => {
-            errorMessage += `   • ${issue.name}: Only ${issue.available} available (you requested ${issue.requested})\n`
+            errorMessage += `   - ${issue.name}: Only ${issue.available} available (you requested ${issue.requested})\n`
           })
         }
         
@@ -366,22 +355,20 @@ export default function CartPage({ params }: { params: Promise<{ courtId: string
       // Save order data locally
       setOrderData(data.data)
 
-      // If server returned razorpay order info, open Razorpay Checkout
+      // If server returned razorpay order info, redirect to payment page
       if (data.data?.razorpayOrderId) {
-        try {
-          await loadRazorpayScript()
-          await openRazorpayCheckout({
-            razorpayOrderId: data.data.razorpayOrderId,
-            amount: data.data.razorpayOrderAmount,
-            localOrderId: data.data?.orders?.[0]?.id || data.data?.orders?.[0]?.orderNumber || data.data?.parentOrderId,
-            transformedOrder,
-            orderData: data.data,
-          })
-          // Payment success will be handled by the state change in the handler
-        } catch (err) {
-          console.error("Payment failed or cancelled:", err)
-          alert("Payment failed or cancelled")
-        }
+        // Store order data in sessionStorage for the callback page
+        sessionStorage.setItem('pendingPayment', JSON.stringify({
+          razorpayOrderId: data.data.razorpayOrderId,
+          amount: data.data.razorpayOrderAmount,
+          localOrderId: data.data?.orders?.[0]?.id || data.data?.parentOrderId,
+          transformedOrder,
+          orderData: data.data,
+          courtId,
+        }))
+        
+        // Redirect to our payment page which will handle Razorpay checkout
+        router.push(`/app/${courtId}/payment?orderId=${data.data.razorpayOrderId}`)
       } else {
         // Fallback to existing dummy gateway behavior
         setShowPaymentGateway(true)
@@ -562,7 +549,7 @@ export default function CartPage({ params }: { params: Promise<{ courtId: string
           contact: user?.phone || "",
         },
         notes: { localOrderId },
-        theme: { color: "#22c55e" },
+        theme: { color: "#000000" },
       }
 
       // Diagnostic log: preview the key used by client (first 8 chars) and NODE_ENV
@@ -603,108 +590,57 @@ export default function CartPage({ params }: { params: Promise<{ courtId: string
 
   if (cart.items.length === 0) {
     return (
-      <motion.div 
-        className="h-screen bg-neutral-50 dark:bg-neutral-950 flex items-center justify-center px-4 w-full max-w-full overflow-hidden"
-        variants={pageVariants}
-        initial="initial"
-        animate="in"
-        exit="out"
-        transition={pageTransition}
-      >
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="text-center w-full max-w-sm"
-        >
-          <motion.div 
-            className="w-24 h-24 mx-auto mb-4 bg-neutral-200 dark:bg-neutral-800 rounded-full flex items-center justify-center"
-            whileHover={{ scale: 1.05 }}
-            transition={{ type: "spring", stiffness: 300 }}
-          >
+      <div className="h-screen bg-background flex items-center justify-center px-4 w-full max-w-full overflow-hidden">
+        <div className="text-center w-full max-w-sm">
+          <div className="w-24 h-24 mx-auto mb-4 bg-muted rounded-full flex items-center justify-center">
             <span className="text-4xl">🛒</span>
-          </motion.div>
-          <h2 className="text-xl font-semibold text-neutral-900 dark:text-white mb-2">Your cart is empty</h2>
-          <p className="text-neutral-600 dark:text-neutral-400 mb-6 text-sm">Add some delicious items to get started!</p>
-          <motion.div
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-          >
-            <Button 
-              onClick={handleBackNavigation}
-              className="bg-black dark:bg-white text-white dark:text-black hover:bg-neutral-800 dark:hover:bg-neutral-200 w-full"
-            >
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Continue Shopping
-            </Button>
-          </motion.div>
-        </motion.div>
-      </motion.div>
+          </div>
+          <h2 className="text-xl font-semibold text-foreground mb-2">Your cart is empty</h2>
+          <p className="text-muted-foreground mb-6 text-sm">Add some delicious items to get started!</p>
+          <Button onClick={handleBackNavigation} className="w-full">
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Continue Shopping
+          </Button>
+        </div>
+      </div>
     )
   }
 
   return (
-    <motion.div 
-      className="h-screen bg-neutral-50 dark:bg-neutral-950 flex flex-col w-full max-w-full overflow-hidden"
-      variants={pageVariants}
-      initial="initial"
-      animate="in"
-      exit="out"
-      transition={pageTransition}
-    >
+    <div className="h-screen bg-background flex flex-col w-full max-w-full overflow-hidden">
       {/* Header */}
-      <motion.div 
-        className="bg-white dark:bg-neutral-950 shadow-sm sticky top-0 z-10 w-full border-b border-neutral-200 dark:border-neutral-900 rounded-2xl"
-        initial={{ y: -50, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        transition={{ delay: 0.1 }}
+      <div
+        className="bg-background shadow-sm sticky top-0 z-10 w-full border-b border-border rounded-2xl"
       >
         <div className="px-4 py-4 w-full flex items-center gap-3 overflow-hidden">
-          <motion.button
+          <button
             onClick={handleBackNavigation}
-            className="p-2 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors flex-shrink-0"
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
+            className="p-2 rounded-lg hover:bg-muted transition-colors flex-shrink-0"
           >
-            <ArrowLeft className="h-5 w-5 text-neutral-700 dark:text-neutral-300" />
-          </motion.button>
+            <ArrowLeft className="h-5 w-5 text-foreground" />
+          </button>
           <div className="flex-1 min-w-0">
-            <h1 className="text-xl font-semibold text-neutral-900 dark:text-white truncate">Your Cart</h1>
-            <p className="text-sm text-neutral-600 dark:text-neutral-400 truncate">{cart.items.length} items</p>
+            <h1 className="text-xl font-semibold text-foreground truncate">Your Cart</h1>
+            <p className="text-sm text-muted-foreground truncate">{cart.items.length} items</p>
           </div>
         </div>
-      </motion.div>
+      </div>
 
       {/* Warning Banner for Invalid Items */}
       {hasInvalidItems && (
-        <motion.div
-          className="mx-4 mt-4 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg"
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-        >
+        <div className="mx-4 mt-4 p-3 bg-muted border border-border rounded-lg">
           <div className="flex items-start gap-2">
-            <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+            <AlertTriangle className="h-4 w-4 text-foreground flex-shrink-0 mt-0.5" />
             <div className="flex-1">
-              <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
-                Cart validation issues detected
-              </p>
-              <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
-                Some items may not be available for checkout. Please review marked items below.
-              </p>
+              <p className="text-sm font-medium text-foreground">Cart validation issues detected</p>
+              <p className="text-xs text-muted-foreground mt-1">Some items may not be available for checkout. Please review marked items below.</p>
             </div>
           </div>
-        </motion.div>
+        </div>
       )}
 
       {/* Cart Items */}
-      <motion.div 
-        className="flex-1 px-4 py-4 space-y-4 w-full overflow-y-auto overflow-x-hidden"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.2 }}
-      >
-        <AnimatePresence mode="popLayout">
+      <div className="flex-1 px-4 py-4 space-y-4 w-full overflow-y-auto overflow-x-hidden">
           {cart.items.filter(item => !removedItems.has(item.menuItemId)).map((item, index) => (
             <CartItem
               key={item.menuItemId}
@@ -716,171 +652,98 @@ export default function CartPage({ params }: { params: Promise<{ courtId: string
               validationIssues={getItemIssues(item.menuItemId)}
             />
           ))}
-        </AnimatePresence>
-      </motion.div>
+      </div>
 
       {/* To-Pay Button */}
-      <motion.div 
-        className="px-4 py-4 bg-white dark:bg-neutral-950 w-full"
-        initial={{ y: 50, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        transition={{ delay: 0.5 }}
-      >
+      <div className="px-4 py-4 bg-background w-full">
         <Drawer open={isDrawerOpen} onOpenChange={setIsDrawerOpen}>
           <DrawerTrigger asChild>
-            <motion.button
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              className="w-full bg-white dark:bg-neutral-900 dark:text-white rounded-lg py-4 px-4 flex items-center justify-between font-medium hover:bg-neutral-200 dark:hover:bg-neutral-800 transition-colors"
+            <button
+              className="w-full bg-background border border-border rounded-lg py-4 px-4 flex items-center justify-between font-medium hover:bg-muted transition-colors"
             >
               <span className="font-medium">To Pay</span>
               <div className="w-auto flex flex-row gap-2 font-bold">
                 ₹{Number((toPayTotalRupees !== undefined ? toPayTotalRupees : totalAmount) || 0).toFixed(2)}
-                <motion.div
-                animate={{ x: [0, 5, 0] }}
-                transition={{ repeat: Infinity, duration: 1.5, ease: "easeInOut" }}
-              >
                 <ArrowRight className="h-5 w-5" />
-              </motion.div>
               </div>
-            </motion.button>
+            </button>
           </DrawerTrigger>
-          <DrawerContent className="bg-white dark:bg-neutral-900 border-t border-neutral-200 dark:border-neutral-800">
+          <DrawerContent className="bg-background border-t border-border">
             <DrawerHeader>
-              <DrawerTitle className="text-neutral-900 dark:text-white">Bill Summary</DrawerTitle>
+              <DrawerTitle>Bill Summary</DrawerTitle>
             </DrawerHeader>
-            <motion.div 
-              className="px-4 pb-6"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 }}
-            >
+            <div className="px-4 pb-6">
               <div className="space-y-3">
-                <motion.div 
-                  className="flex justify-between"
-                  initial={{ x: -20, opacity: 0 }}
-                  animate={{ x: 0, opacity: 1 }}
-                  transition={{ delay: 0.1 }}
-                >
-                  <span className="text-neutral-600 dark:text-neutral-400">Item Total (Incl. GST)</span>
-                  <span className="font-medium text-neutral-900 dark:text-white">{transformedOrderPreview ? transformedOrderPreview.feeBreakdown?.customerBill?.Base_Price || `₹${(transformedOrderPreview.baseAmount/100).toFixed(2)}` : `₹${Number(itemTotal || 0).toFixed(2)}`}</span>
-                </motion.div>
-                <motion.div 
-                  className="flex justify-between"
-                  initial={{ x: -20, opacity: 0 }}
-                  animate={{ x: 0, opacity: 1 }}
-                  transition={{ delay: 0.2 }}
-                >
-                  <span className="text-neutral-600 dark:text-neutral-400">Service Charge</span>
-                  <span className="font-medium text-neutral-900 dark:text-white">{transformedOrderPreview ? `₹${(transformedOrderPreview.razorpayFee/100).toFixed(2)}` : `₹0.00`}</span>
-                </motion.div>
-                <motion.div 
-                  className="flex justify-between"
-                  initial={{ x: -20, opacity: 0 }}
-                  animate={{ x: 0, opacity: 1 }}
-                  transition={{ delay: 0.15 }}
-                >
-                  <span className="text-neutral-600 dark:text-neutral-400">Platform charges</span>
-                  <span className="font-medium text-neutral-900 dark:text-white">{(() => {
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Item Total (Incl. GST)</span>
+                  <span className="font-medium">{transformedOrderPreview ? transformedOrderPreview.feeBreakdown?.customerBill?.Base_Price || `₹${(transformedOrderPreview.baseAmount/100).toFixed(2)}` : `₹${Number(itemTotal || 0).toFixed(2)}`}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Service Charge</span>
+                  <span className="font-medium">{transformedOrderPreview ? `₹${(transformedOrderPreview.razorpayFee/100).toFixed(2)}` : `₹0.00`}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Platform charges</span>
+                  <span className="font-medium">{(() => {
                     if (!transformedOrderPreview) return `₹${platformCharge.toFixed(2)}`
                     const customerPlatform = (transformedOrderPreview.customerPayable - transformedOrderPreview.baseAmount) / 100
                     const platformRevenue = (transformedOrderPreview.platformRevenue || 0) / 100
                     return `₹${(customerPlatform + platformRevenue).toFixed(2)}`
                   })()}</span>
-                </motion.div>
-                <motion.div 
-                  className="border-t border-neutral-200 dark:border-neutral-700 pt-3"
-                  initial={{ scale: 0.95, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  transition={{ delay: 0.25 }}
-                >
+                </div>
+                <div className="border-t border-border pt-3">
                   <div className="flex justify-between font-semibold text-lg">
-                    <span className="text-neutral-900 dark:text-white">Total Amount</span>
-                    <span className="text-neutral-900 dark:text-white">₹{(toPayTotalRupees !== undefined ? toPayTotalRupees : totalAmount).toFixed(2)}</span>
+                    <span>Total Amount</span>
+                    <span>₹{(toPayTotalRupees !== undefined ? toPayTotalRupees : totalAmount).toFixed(2)}</span>
                   </div>
-                </motion.div>
+                </div>
               </div>
-            </motion.div>
+            </div>
           </DrawerContent>
         </Drawer>
-      </motion.div>
+      </div>
 
       {/* Pickup Location and Checkout */}
-      <motion.div 
-        className="bg-white dark:bg-neutral-950 border mb-3 border-neutral-200 dark:border-neutral-800 px-4 py-4 w-full"
-        initial={{ y: 50, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        transition={{ delay: 0.4 }}
-      >
-        <motion.div 
-          className="flex items-center justify-between mb-4 w-full min-w-0"
-          initial={{ x: -20, opacity: 0 }}
-          animate={{ x: 0, opacity: 1 }}
-          transition={{ delay: 0.5 }}
-        >
+      <div className="bg-background border mb-3 border-border px-4 py-4 w-full">
+        <div className="flex items-center justify-between mb-4 w-full min-w-0">
           <div className="flex items-center gap-2 flex-1 min-w-0">
-            <motion.div
-              animate={{ rotate: [0, 10, -10, 0] }}
-              transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
-            >
-              <MapPin className="h-4 w-4 text-neutral-600 dark:text-neutral-400 flex-shrink-0" />
-            </motion.div>
-            <span className="text-sm text-neutral-600 dark:text-neutral-400 truncate">{vendorText}</span>
+            <MapPin className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+            <span className="text-sm text-muted-foreground truncate">{vendorText}</span>
           </div>
-          <motion.div
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
+          <Button 
+            variant="outline" 
+            size="sm"
+            className="ml-2 flex-shrink-0"
+            onClick={() => {
+              console.log("See where clicked - not implemented yet")
+            }}
           >
-            <Button 
-              variant="outline" 
-              size="sm"
-              className="ml-2 flex-shrink-0 border-neutral-300 dark:border-neutral-600 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-800"
-              onClick={() => {
-                // Placeholder for "See Where" functionality
-                console.log("See where clicked - not implemented yet")
-              }}
-            >
-              See Where
-            </Button>
-          </motion.div>
-        </motion.div>
+            See Where
+          </Button>
+        </div>
         
-        <motion.div
-          initial={{ scale: 0.95, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ delay: 0.6 }}
-          whileHover={{ scale: hasActiveOrder ? 1 : 1.02 }}
-          whileTap={{ scale: hasActiveOrder ? 1 : 0.98 }}
-        >
+        <div>
           {hasActiveOrder ? (
             <div className="w-full space-y-3">
-              <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3">
-                <div className="text-yellow-800 dark:text-yellow-200 text-sm font-medium">
-                  ⚠️ Active Order Found
-                </div>
-                <div className="text-yellow-700 dark:text-yellow-300 text-xs mt-1">
-                  {activeOrderError}
-                </div>
+              <div className="bg-muted border border-border rounded-lg p-3">
+                <div className="text-foreground text-sm font-medium">⚠️ Active Order Found</div>
+                <div className="text-muted-foreground text-xs mt-1">{activeOrderError}</div>
               </div>
-              <Button
-                className="w-full bg-gray-400 cursor-not-allowed text-white font-medium py-3"
-                disabled={true}
-              >
+              <Button className="w-full" disabled={true}>
                 Checkout Disabled - Active Order
               </Button>
             </div>
           ) : hasInvalidItems ? (
             <div className="w-full space-y-3">
-              <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
-                <div className="text-amber-800 dark:text-amber-200 text-sm font-medium">
-                  ⚠️ Cart Issues Detected
-                </div>
-                <div className="text-amber-700 dark:text-amber-300 text-xs mt-1">
+              <div className="bg-muted border border-border rounded-lg p-3">
+                <div className="text-foreground text-sm font-medium">⚠️ Cart Issues Detected</div>
+                <div className="text-muted-foreground text-xs mt-1">
                   Some items are no longer available. Please remove invalid items to proceed.
                 </div>
               </div>
               <Button
-                className="w-full bg-amber-500 hover:bg-amber-600 text-white font-medium py-3 transition-colors"
+                className="w-full"
+                variant="outline"
                 onClick={() => validateCart()}
                 disabled={checkoutLoading}
               >
@@ -889,15 +752,15 @@ export default function CartPage({ params }: { params: Promise<{ courtId: string
             </div>
           ) : (
             <Button
-              className="w-full bg-neutral-600 hover:bg-neutral-700 dark:bg-neutral-100 dark:hover:bg-neutral-50 text-white dark:text-black font-medium py-3 transition-colors"
+              className="w-full"
               onClick={handleCheckout}
               disabled={checkoutLoading}
             >
               {checkoutLoading ? "Processing..." : "Proceed to Checkout"}
             </Button>
           )}
-        </motion.div>
-      </motion.div>
-    </motion.div>
+        </div>
+      </div>
+    </div>
   )
 }

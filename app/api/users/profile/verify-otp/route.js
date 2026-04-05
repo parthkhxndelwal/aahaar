@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server"
 import { authenticateToken } from "@/middleware/auth"
+import { OTP } from "@/models"
+import { Op } from "sequelize"
 
 // Import the database-backed OTP store
 const { otpStore } = require("@/lib/otp-store")
@@ -11,6 +13,22 @@ export async function POST(request) {
 
     const { user: authenticatedUser } = authResult
     const { changedFields, emailValue, phoneValue, otp } = await request.json()
+
+    // Rate limiting - count failed verification attempts in last 5 minutes
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000)
+    const failedAttempts = await OTP.count({
+      where: {
+        userId: authenticatedUser.id,
+        verified: false,
+        createdAt: { [Op.gte]: fiveMinutesAgo }
+      }
+    })
+    if (failedAttempts > 10) {
+      return NextResponse.json(
+        { success: false, message: "Too many failed verification attempts. Please try again later." },
+        { status: 429 }
+      )
+    }
 
     const storeSize = await otpStore.getSize()
     const allKeys = await otpStore.keys()
@@ -62,8 +80,8 @@ export async function POST(request) {
         }, { status: 400 })
       }
 
-      // Mark as verified
-      await otpStore.markAsVerified(otpKey)
+      // Delete the OTP record after successful verification
+      await otpStore.delete(otpKey)
       verificationResults.push({ field, verified: true })
     }
 

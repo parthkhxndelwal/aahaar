@@ -20,12 +20,12 @@ export async function POST(request) {
       return NextResponse.json({ success: false, message: "Type must be 'email' or 'phone'" }, { status: 400 })
     }
 
-    // Generate OTP
-    const otp = Math.floor(100000 + Math.random() * 900000).toString()
+    // Generate OTP using cryptographically secure random
+    const otp = (await import('crypto')).randomInt(100000, 999999).toString()
     
     // Store OTP with expiration (5 minutes)
     const otpKey = `${authenticatedUser.id}-${type}-${value}`
-    console.log("🔑 Storing OTP with key:", otpKey, "OTP:", otp)
+    console.log("🔑 Storing OTP with key:", otpKey)
     
     await otpStore.set(otpKey, {
       otp,
@@ -42,7 +42,7 @@ export async function POST(request) {
     })
 
     // TODO: Send actual email/SMS
-    console.log(`OTP for ${type} ${value}: ${otp}`) // For development
+    console.log(`OTP sent for ${type} verification`) // For development
 
     return NextResponse.json({
       success: true,

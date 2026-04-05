@@ -7,6 +7,7 @@ import { FloatingInput } from "@/components/ui/floating-input"
 import { FloatingSelect } from "@/components/ui/floating-select"
 import { useToast } from "@/hooks/use-toast"
 import { Plus } from "lucide-react"
+import { adminCourtApi } from "@/lib/api"
 
 interface CreateCourtDialogProps {
   token: string
@@ -78,45 +79,34 @@ export function CreateCourtDialog({ token, onCourtCreated }: CreateCourtDialogPr
 
     setLoading(true)
     try {
-      const response = await fetch("/api/admin/courts", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`
-        },
-        body: JSON.stringify(formData)
+      const response = await adminCourtApi.create({
+        courtId: formData.courtId,
+        instituteName: formData.instituteName,
+        instituteType: formData.instituteType,
+        contactEmail: formData.contactEmail,
+        contactPhone: formData.contactPhone,
       })
 
-      const data = await response.json()
-
-      if (data.success) {
-        toast({
-          title: "Success",
-          description: "Court created successfully!"
-        })
-        setOpen(false)
-        setFormData({
-          courtId: "",
-          instituteName: "",
-          instituteType: "college",
-          contactEmail: "",
-          contactPhone: "",
-          address: "",
-        })
-        setErrors({})
-        onCourtCreated()
-      } else {
-        toast({
-          title: "Error",
-          description: data.message || "Failed to create court",
-          variant: "destructive"
-        })
-      }
-    } catch (error) {
+      toast({
+        title: "Success",
+        description: "Court created successfully!"
+      })
+      setOpen(false)
+      setFormData({
+        courtId: "",
+        instituteName: "",
+        instituteType: "college",
+        contactEmail: "",
+        contactPhone: "",
+        address: "",
+      })
+      setErrors({})
+      onCourtCreated()
+    } catch (error: any) {
       console.error("Error creating court:", error)
       toast({
         title: "Error",
-        description: "An error occurred while creating the court",
+        description: error.message || "An error occurred while creating the court",
         variant: "destructive"
       })
     } finally {
@@ -127,15 +117,15 @@ export function CreateCourtDialog({ token, onCourtCreated }: CreateCourtDialogPr
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button className="bg-blue-600 hover:bg-blue-700">
+        <Button className="bg-foreground hover:bg-foreground/90 text-background">
           <Plus className="h-4 w-4 mr-2" />
           Add New Court
         </Button>
       </DialogTrigger>
-      <DialogContent className="bg-neutral-950 border-neutral-800 max-w-md">
+      <DialogContent className="bg-background border-border max-w-md">
         <DialogHeader>
-          <DialogTitle className="text-white">Create New Court</DialogTitle>
-          <DialogDescription className="text-neutral-400">
+          <DialogTitle className="text-foreground">Create New Court</DialogTitle>
+          <DialogDescription className="text-muted-foreground">
             Add a new food court to your management system
           </DialogDescription>
         </DialogHeader>
@@ -199,14 +189,14 @@ export function CreateCourtDialog({ token, onCourtCreated }: CreateCourtDialogPr
               type="button"
               variant="outline"
               onClick={() => setOpen(false)}
-              className="flex-1 border-neutral-700 text-neutral-300 hover:bg-neutral-800"
+              className="flex-1"
             >
               Cancel
             </Button>
             <Button
               type="submit"
               disabled={loading}
-              className="flex-1 bg-blue-600 hover:bg-blue-700"
+              className="flex-1 bg-foreground hover:bg-foreground/90 text-background"
             >
               {loading ? "Creating..." : "Create Court"}
             </Button>

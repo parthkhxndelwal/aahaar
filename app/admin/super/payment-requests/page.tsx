@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
@@ -13,6 +13,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Spinner } from "@/components/ui/spinner"
 import Image from "next/image"
 import { useToast } from "@/hooks/use-toast"
+import { adminPaymentApi } from "@/lib/api"
 
 interface PaymentRequest {
   id: string
@@ -98,17 +99,32 @@ export default function SuperAdminPaymentRequestsPage() {
   }, [isAuthenticated, currentPage])
 
   const handlePinAuthentication = async () => {
-    if (pin !== "1199") {
-      alert("Invalid PIN")
-      return
-    }
-
     setAuthLoading(true)
-    // Simulate authentication delay
-    setTimeout(() => {
-      setIsAuthenticated(true)
+    try {
+      const response = await fetch('/api/admin/verify-pin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin }),
+      })
+      const result = await response.json()
+      if (result.success) {
+        setIsAuthenticated(true)
+      } else {
+        toast({
+          title: "Invalid PIN",
+          description: "Please enter the correct PIN to continue.",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      toast({
+        title: "Authentication failed",
+        description: "Please try again.",
+        variant: "destructive",
+      })
+    } finally {
       setAuthLoading(false)
-    }, 1000)
+    }
   }
 
   const copyToClipboard = async (text: string, label: string, fieldId: string) => {
@@ -173,7 +189,7 @@ export default function SuperAdminPaymentRequestsPage() {
           id: approveDialog.request.id,
           action: 'approve',
           razorpayAccountId: razorpayAccountId.trim(),
-          pin: '1199',
+          pin: pin,
         }),
       })
 
@@ -214,7 +230,7 @@ export default function SuperAdminPaymentRequestsPage() {
           id: rejectDialog.request.id,
           action: 'reject',
           rejectionReason: rejectionReason.trim(),
-          pin: '1199',
+          pin: pin,
         }),
       })
 
@@ -239,23 +255,23 @@ export default function SuperAdminPaymentRequestsPage() {
   const getStatusColor = (status: string) => {
     switch (status) {
       case "pending":
-        return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200"
+        return "bg-muted text-muted-foreground"
       case "approved":
-        return "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
+        return "bg-muted text-foreground"
       case "rejected":
-        return "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
+        return "bg-destructive/10 text-destructive"
       default:
-        return "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200"
+        return "bg-muted text-muted-foreground"
     }
   }
 
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-neutral-900">
+      <div className="min-h-screen flex items-center justify-center bg-background">
         <Card className="w-full max-w-md">
           <CardHeader className="text-center">
-            <div className="mx-auto mb-4 w-12 h-12 bg-red-100 dark:bg-red-900 rounded-full flex items-center justify-center">
-              <Lock className="h-6 w-6 text-red-600 dark:text-red-400" />
+            <div className="mx-auto mb-4 w-12 h-12 bg-muted rounded-full flex items-center justify-center">
+              <Lock className="h-6 w-6 text-foreground" />
             </div>
             <CardTitle className="text-2xl">Super Admin Access</CardTitle>
             <CardDescription>
@@ -298,12 +314,12 @@ export default function SuperAdminPaymentRequestsPage() {
     <div className="space-y-6 p-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold dark:text-neutral-200">Payment Requests</h1>
-          <p className="text-muted-foreground dark:text-neutral-400">
+          <h1 className="text-3xl font-bold">Payment Requests</h1>
+          <p className="text-muted-foreground">
             Review and manage vendor payment setup requests
           </p>
         </div>
-        <Badge variant="outline" className="bg-red-50 text-red-700 dark:bg-red-900 dark:text-red-200">
+        <Badge variant="outline">
           Super Admin Access
         </Badge>
       </div>
@@ -325,7 +341,7 @@ export default function SuperAdminPaymentRequestsPage() {
       ) : (
         <div className="space-y-4">
           {paymentRequests.map((request) => (
-            <Card key={request.id} className="dark:bg-neutral-900 dark:border-neutral-800">
+            <Card key={request.id}>
               <CardHeader>
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-3">
@@ -338,14 +354,14 @@ export default function SuperAdminPaymentRequestsPage() {
                         className="rounded-lg object-cover"
                       />
                     ) : (
-                      <div className="w-12 h-12 bg-neutral-200 dark:bg-neutral-700 rounded-lg flex items-center justify-center">
+                      <div className="w-12 h-12 bg-muted rounded-lg flex items-center justify-center">
                         <CreditCard className="h-6 w-6 text-muted-foreground" />
                       </div>
                     )}
                     <div>
-                      <CardTitle className="text-lg dark:text-white">{request.vendor.stallName}</CardTitle>
-                      <CardDescription className="dark:text-neutral-400">
-                        {request.vendor.vendorName} • {request.court.name}
+                      <CardTitle className="text-lg">{request.vendor.stallName}</CardTitle>
+                      <CardDescription>
+                        {request.vendor.vendorName} â€¢ {request.court.name}
                       </CardDescription>
                     </div>
                   </div>
@@ -364,7 +380,7 @@ export default function SuperAdminPaymentRequestsPage() {
                       <p className="flex items-center gap-2">
                         <span><strong>Account:</strong> {request.accountNumber}</span>
                         {copiedField === `${request.id}-accountNumber` ? (
-                          <CheckCircle className="h-4 w-4 text-green-600" />
+                          <CheckCircle className="h-4 w-4 text-foreground" />
                         ) : (
                           <Copy 
                             className="h-4 w-4 text-muted-foreground hover:text-foreground cursor-pointer" 
@@ -375,7 +391,7 @@ export default function SuperAdminPaymentRequestsPage() {
                       <p className="flex items-center gap-2">
                         <span><strong>IFSC:</strong> {request.ifscCode}</span>
                         {copiedField === `${request.id}-ifscCode` ? (
-                          <CheckCircle className="h-4 w-4 text-green-600" />
+                          <CheckCircle className="h-4 w-4 text-foreground" />
                         ) : (
                           <Copy 
                             className="h-4 w-4 text-muted-foreground hover:text-foreground cursor-pointer" 
@@ -386,7 +402,7 @@ export default function SuperAdminPaymentRequestsPage() {
                       <p className="flex items-center gap-2">
                         <span><strong>Holder:</strong> {request.beneficiaryName}</span>
                         {copiedField === `${request.id}-beneficiaryName` ? (
-                          <CheckCircle className="h-4 w-4 text-green-600" />
+                          <CheckCircle className="h-4 w-4 text-foreground" />
                         ) : (
                           <Copy 
                             className="h-4 w-4 text-muted-foreground hover:text-foreground cursor-pointer" 
@@ -397,7 +413,7 @@ export default function SuperAdminPaymentRequestsPage() {
                       <p className="flex items-center gap-2">
                         <span><strong>Bank:</strong> {request.bankName}</span>
                         {copiedField === `${request.id}-bankName` ? (
-                          <CheckCircle className="h-4 w-4 text-green-600" />
+                          <CheckCircle className="h-4 w-4 text-foreground" />
                         ) : (
                           <Copy 
                             className="h-4 w-4 text-muted-foreground hover:text-foreground cursor-pointer" 
@@ -413,7 +429,7 @@ export default function SuperAdminPaymentRequestsPage() {
                       <p className="flex items-center gap-2">
                         <span><strong>Business Name:</strong> {request.businessName}</span>
                         {copiedField === `${request.id}-businessName` ? (
-                          <CheckCircle className="h-4 w-4 text-green-600" />
+                          <CheckCircle className="h-4 w-4 text-foreground" />
                         ) : (
                           <Copy 
                             className="h-4 w-4 text-muted-foreground hover:text-foreground cursor-pointer" 
@@ -424,7 +440,7 @@ export default function SuperAdminPaymentRequestsPage() {
                       <p className="flex items-center gap-2">
                         <span><strong>Type:</strong> {request.businessType}</span>
                         {copiedField === `${request.id}-businessType` ? (
-                          <CheckCircle className="h-4 w-4 text-green-600" />
+                          <CheckCircle className="h-4 w-4 text-foreground" />
                         ) : (
                           <Copy 
                             className="h-4 w-4 text-muted-foreground hover:text-foreground cursor-pointer" 
@@ -435,7 +451,7 @@ export default function SuperAdminPaymentRequestsPage() {
                       <p className="flex items-center gap-2">
                         <span><strong>Category:</strong> {request.businessCategory}</span>
                         {copiedField === `${request.id}-businessCategory` ? (
-                          <CheckCircle className="h-4 w-4 text-green-600" />
+                          <CheckCircle className="h-4 w-4 text-foreground" />
                         ) : (
                           <Copy 
                             className="h-4 w-4 text-muted-foreground hover:text-foreground cursor-pointer" 
@@ -446,7 +462,7 @@ export default function SuperAdminPaymentRequestsPage() {
                       <p className="flex items-center gap-2">
                         <span><strong>Vendor Email:</strong> {request.vendor.contactEmail}</span>
                         {copiedField === `${request.id}-contactEmail` ? (
-                          <CheckCircle className="h-4 w-4 text-green-600" />
+                          <CheckCircle className="h-4 w-4 text-foreground" />
                         ) : (
                           <Copy 
                             className="h-4 w-4 text-muted-foreground hover:text-foreground cursor-pointer" 
@@ -457,7 +473,7 @@ export default function SuperAdminPaymentRequestsPage() {
                       <p className="flex items-center gap-2">
                         <span><strong>Vendor Phone:</strong> {request.vendor.contactPhone}</span>
                         {copiedField === `${request.id}-contactPhone` ? (
-                          <CheckCircle className="h-4 w-4 text-green-600" />
+                          <CheckCircle className="h-4 w-4 text-foreground" />
                         ) : (
                           <Copy 
                             className="h-4 w-4 text-muted-foreground hover:text-foreground cursor-pointer" 
@@ -470,28 +486,28 @@ export default function SuperAdminPaymentRequestsPage() {
                 </div>
 
                 {request.resubmissionMessage && (
-                  <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+                  <div className="bg-muted border rounded-lg p-3">
                     <div className="flex items-start gap-2">
-                      <AlertTriangle className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+                      <AlertTriangle className="h-4 w-4 text-foreground mt-0.5 flex-shrink-0" />
                       <div className="flex-1">
                         <div className="flex items-center gap-2">
-                          <Label className="font-semibold text-blue-800 dark:text-blue-200">Resubmission Message</Label>
+                          <Label className="font-semibold text-foreground">Resubmission Message</Label>
                           {copiedField === `${request.id}-resubmissionMessage` ? (
-                            <CheckCircle className="h-4 w-4 text-green-600" />
+                            <CheckCircle className="h-4 w-4 text-foreground" />
                           ) : (
                             <Copy 
-                              className="h-4 w-4 text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200 cursor-pointer" 
+                              className="h-4 w-4 text-muted-foreground hover:text-foreground cursor-pointer" 
                               onClick={() => copyToClipboard(request.resubmissionMessage!, "Resubmission Message", `${request.id}-resubmissionMessage`)}
                             />
                           )}
                         </div>
-                        <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">{request.resubmissionMessage}</p>
+                        <p className="text-sm text-muted-foreground mt-1">{request.resubmissionMessage}</p>
                       </div>
                     </div>
                   </div>
                 )}
 
-                <div className="flex items-center justify-between pt-4 border-t dark:border-neutral-700">
+                <div className="flex items-center justify-between pt-4 border-t">
                   <div className="text-sm text-muted-foreground">
                     Requested on {new Date(request.createdAt).toLocaleDateString()}
                   </div>
@@ -500,7 +516,7 @@ export default function SuperAdminPaymentRequestsPage() {
                       <>
                         <Dialog open={approveDialog.open && approveDialog.request?.id === request.id} onOpenChange={(open) => setApproveDialog({ open, request: open ? request : undefined })}>
                           <DialogTrigger asChild>
-                            <Button variant="default" size="sm" className="gap-2 bg-green-600 hover:bg-green-700">
+                            <Button variant="default" size="sm" className="gap-2 bg-foreground hover:bg-foreground/90 text-background">
                               <CheckCircle className="h-4 w-4" />
                               Approve
                             </Button>
@@ -530,7 +546,7 @@ export default function SuperAdminPaymentRequestsPage() {
                               <Button
                                 onClick={handleApprove}
                                 disabled={actionLoading === `approve-${request.id}` || !razorpayAccountId.trim()}
-                                className="bg-green-600 hover:bg-green-700"
+                                className="bg-foreground hover:bg-foreground/90 text-background"
                               >
                                 {actionLoading === `approve-${request.id}` ? (
                                   <>
@@ -595,13 +611,13 @@ export default function SuperAdminPaymentRequestsPage() {
                       </>
                     )}
                     {request.status === 'approved' && request.razorpayAccountId && (
-                      <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
+                      <div className="flex items-center gap-2 text-sm text-foreground">
                         <CheckCircle className="h-4 w-4" />
                         Account: {request.razorpayAccountId}
                       </div>
                     )}
                     {request.status === 'rejected' && request.rejectionReason && (
-                      <div className="flex items-center gap-2 text-sm text-red-600 dark:text-red-400">
+                      <div className="flex items-center gap-2 text-sm text-destructive">
                         <AlertTriangle className="h-4 w-4" />
                         {request.rejectionReason}
                       </div>

@@ -1,6 +1,7 @@
 import crypto from "crypto"
-import { NextResponse } from "next/server"
 import { Payment, Order } from "@/models"
+import { CartService } from "@/lib/services/cart-service"
+import { successResponse, errorResponse, handleServiceError } from "@/lib/api-response"
 
 export async function POST(request) {
   try {
@@ -8,7 +9,7 @@ export async function POST(request) {
     const { razorpay_payment_id, razorpay_order_id, razorpay_signature, localOrderId } = body
 
     if (!razorpay_payment_id || !razorpay_order_id || !razorpay_signature) {
-      return NextResponse.json({ success: false, message: "Missing Razorpay parameters" }, { status: 400 })
+      return errorResponse("Missing Razorpay parameters", 400)
     }
 
     const secret = process.env.RAZORPAY_KEY_SECRET
@@ -16,7 +17,7 @@ export async function POST(request) {
 
     if (expected !== razorpay_signature) {
       console.warn("Razorpay signature mismatch", { expected, received: razorpay_signature })
-      return NextResponse.json({ success: false, message: "Invalid signature" }, { status: 400 })
+      return errorResponse("Invalid signature", 400, "INVALID_SIGNATURE")
     }
 
     // Update payment and order records if present
@@ -41,10 +42,28 @@ export async function POST(request) {
         const order = await Order.findByPk(localOrderId)
         if (order) {
           // If order already marked as paid, skip
-          if (order.paymentStatus === "paid" || order.status === "accepted") {
+          if (order.paymentStatus === "paid") {
             console.log("Order already confirmed:", localOrderId)
           } else {
-            await order.update({ status: "accepted", paymentStatus: "paid" })
+            // Keep status as "pending" so vendor can accept/reject
+            // Only update paymentStatus to "paid"
+            await order.update({ 
+              paymentStatus: "paid",
+              statusHistory: [
+                ...(order.statusHistory || []),
+                {
+                  status: order.status,
+                  timestamp: new Date(),
+                  note: 'Payment verified and completed'
+                }
+              ]
+            })
+            
+            // Clear cart only after successful payment verification
+            if (order.userId && order.courtId) {
+              await CartService.clearCart(order.userId, order.courtId)
+              console.log("Cart cleared for user:", order.userId, "courtId:", order.courtId)
+            }
           }
         }
       } catch (err) {
@@ -52,9 +71,9 @@ export async function POST(request) {
       }
     }
 
-    return NextResponse.json({ success: true, message: "Payment verified" }, { status: 200 })
-  } catch (err) {
-    console.error("Error verifying razorpay payment", err)
-    return NextResponse.json({ success: false, message: err.message }, { status: 500 })
+    return successResponse(null, "Payment verified")
+  } catch (error) {
+    console.error("Error verifying razorpay payment", error)
+    return handleServiceError(error)
   }
 }

@@ -1,7 +1,7 @@
-import { NextResponse } from "next/server"
 import bcrypt from "bcryptjs"
 import jwt from "jsonwebtoken"
 import { User, Court, CourtSettings, AuditLog } from "@/models"
+import { successResponse, errorResponse, handleServiceError } from "@/lib/api-response"
 
 export async function POST(request) {
   try {
@@ -9,13 +9,7 @@ export async function POST(request) {
     const contentLength = request.headers.get('content-length')
     if (!contentLength || contentLength === '0') {
       console.log("❌ Empty request body")
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Request body is empty",
-        },
-        { status: 400 },
-      )
+      return errorResponse("Request body is empty", 400)
     }
 
     // Parse JSON with error handling
@@ -24,13 +18,7 @@ export async function POST(request) {
       requestData = await request.json()
     } catch (parseError) {
       console.error("❌ JSON parse error:", parseError)
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Invalid JSON in request body",
-        },
-        { status: 400 },
-      )
+      return errorResponse("Invalid JSON in request body", 400)
     }
 
     const {
@@ -41,7 +29,6 @@ export async function POST(request) {
       courtId,
       instituteName,
       instituteType = "college",
-      role = "admin",
     } = requestData
 
     console.log("📝 Registration attempt:", { 
@@ -49,42 +36,23 @@ export async function POST(request) {
       fullName, 
       phone, 
       courtId, 
-      instituteName, 
-      role 
+      instituteName
     })
 
     // Basic validation for admin registration
     if (!email || !password || !fullName) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Email, password, and full name are required",
-        },
-        { status: 400 },
-      )
+      return errorResponse("Email, password, and full name are required", 400)
     }
 
     // For court creation (not admin registration), validate court fields
     if (courtId || instituteName) {
       if (!courtId || !instituteName) {
-        return NextResponse.json(
-          {
-            success: false,
-            message: "Both court ID and institute name are required for court creation",
-          },
-          { status: 400 },
-        )
+        return errorResponse("Both court ID and institute name are required for court creation", 400)
       }
 
       // Validate courtId format (alphanumeric, hyphens, underscores only)
       if (!/^[a-zA-Z0-9-_]+$/.test(courtId)) {
-        return NextResponse.json(
-          {
-            success: false,
-            message: "Court ID can only contain letters, numbers, hyphens, and underscores",
-          },
-          { status: 400 },
-        )
+        return errorResponse("Court ID can only contain letters, numbers, hyphens, and underscores", 400)
       }
 
       // Check if court ID is already taken
@@ -93,13 +61,7 @@ export async function POST(request) {
       })
 
       if (existingCourt) {
-        return NextResponse.json(
-          {
-            success: false,
-            message: "Court ID is already taken",
-          },
-          { status: 400 },
-        )
+        return errorResponse("Court ID is already taken", 400)
       }
     }
 
@@ -111,13 +73,7 @@ export async function POST(request) {
     })
 
     if (existingUser) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "User with this email already exists",
-        },
-        { status: 400 },
-      )
+      return errorResponse("User with this email already exists", 400)
     }
 
     // Hash password
@@ -169,14 +125,14 @@ export async function POST(request) {
     // For admin registration without court info, leave courtId as null
     // They will create their court in the onboarding process
 
-    // Create admin user
+    // Create user with hardcoded "user" role - never accept role from client input
     const user = await User.create({
-      courtId: userCourtId, // Will be null for initial admin registration
+      courtId: userCourtId,
       email: email.toLowerCase(),
       password: hashedPassword,
       fullName,
       phone,
-      role,
+      role: "user",
       status: "active",
       emailVerified: true,
     })
@@ -223,36 +179,22 @@ export async function POST(request) {
       { expiresIn: process.env.JWT_EXPIRES_IN || "7d" },
     )
 
-    return NextResponse.json(
-      {
-        success: true,
-        message: "Registration successful",
-        data: {
-          token,
-          user: {
-            id: user.id,
-            email: user.email,
-            fullName: user.fullName,
-            role: user.role,
-            courtId: user.courtId,
-            court: court ? {
-              courtId: court.courtId,
-              instituteName: court.instituteName,
-            } : null,
-          },
-        },
+    return successResponse({
+      token,
+      user: {
+        id: user.id,
+        email: user.email,
+        fullName: user.fullName,
+        role: user.role,
+        courtId: user.courtId,
+        court: court ? {
+          courtId: court.courtId,
+          instituteName: court.instituteName,
+        } : null,
       },
-      { status: 201 },
-    )
+    }, "Registration successful", 201)
   } catch (error) {
     console.error("Registration error:", error)
-    return NextResponse.json(
-      {
-        success: false,
-        message: "Internal server error",
-        error: process.env.NODE_ENV === "development" ? error.message : undefined,
-      },
-      { status: 500 },
-    )
+    return handleServiceError(error)
   }
 }

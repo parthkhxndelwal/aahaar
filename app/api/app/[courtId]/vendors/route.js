@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server"
-import { Vendor, MenuItem, MenuCategory, sequelize } from "@/models"
+import { Vendor, sequelize } from "@/models"
+import { successResponse, errorResponse, handleServiceError } from "@/lib/api-response"
 
 export async function GET(request, { params }) {
   try {
@@ -10,10 +10,7 @@ export async function GET(request, { params }) {
     console.log("🔍 [VendorsAPI] GET /api/app/[courtId]/vendors called", { courtId, vendorIds })
 
     if (!courtId) {
-      return NextResponse.json(
-        { error: "Court ID is required" },
-        { status: 400 }
-      )
+      return errorResponse("Court ID is required", 400, "MISSING_COURT_ID")
     }
 
     // Build where clause
@@ -69,19 +66,10 @@ export async function GET(request, { params }) {
       vendorCount: vendors.length 
     })
 
-    return NextResponse.json({
-      success: true,
-      data: { vendors }
-    })
+    return successResponse({ vendors })
 
   } catch (error) {
     console.error("❌ [VendorsAPI] Error fetching vendors:", error)
-    return NextResponse.json(
-      { 
-        error: "Failed to fetch vendors",
-        details: error.message 
-      },
-      { status: 500 }
-    )
+    return handleServiceError(error)
   }
 }

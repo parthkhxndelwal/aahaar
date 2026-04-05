@@ -1,12 +1,12 @@
-import { NextResponse } from "next/server"
 import { Cart, CartItem, MenuItem, Vendor } from "@/models"
 import { authenticateTokenNextJS } from "@/middleware/auth"
+import { successResponse, errorResponse, handleServiceError } from "@/lib/api-response"
 
 export async function POST(request, { params }) {
   try {
     const authResult = await authenticateTokenNextJS(request)
     if (authResult.error) {
-      return NextResponse.json({ success: false, message: authResult.error }, { status: authResult.status })
+      return errorResponse(authResult.error, authResult.status)
     }
 
     const { user } = authResult
@@ -41,8 +41,7 @@ export async function POST(request, { params }) {
     })
 
     if (!cart || !cart.items || cart.items.length === 0) {
-      return NextResponse.json({
-        success: true,
+      return successResponse({
         valid: true,
         message: "Cart is empty",
         validationResults: []
@@ -149,25 +148,16 @@ export async function POST(request, { params }) {
         }))
     }
 
-    return NextResponse.json({
-      success: true,
+    return successResponse({
       valid: !hasInvalidItems,
-      message: hasInvalidItems 
-        ? "Some items in your cart are no longer available" 
-        : "All cart items are valid",
       validationResults,
       summary
-    })
+    }, hasInvalidItems 
+      ? "Some items in your cart are no longer available" 
+      : "All cart items are valid")
 
   } catch (error) {
     console.error("Cart validation error:", error)
-    return NextResponse.json(
-      {
-        success: false,
-        message: "Failed to validate cart",
-        error: error.message,
-      },
-      { status: 500 }
-    )
+    return handleServiceError(error)
   }
 }

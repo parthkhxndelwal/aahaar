@@ -95,10 +95,11 @@ export function ImageCropper({
 
     ctx.restore()
 
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       canvas.toBlob((blob) => {
         if (!blob) {
-          throw new Error('Canvas is empty')
+          reject(new Error('Canvas is empty'))
+          return
         }
         resolve(blob)
       }, 'image/jpeg', 0.95)

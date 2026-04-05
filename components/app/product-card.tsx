@@ -382,7 +382,7 @@ export function ProductCard({
 
   return (
     <motion.div
-      className={`bg-white dark:bg-neutral-900 rounded-2xl overflow-hidden shadow-sm border border-neutral-200 dark:border-neutral-800 ${className}`}
+      className={`bg-card rounded-2xl overflow-hidden shadow-sm border border-border ${className}`}
       whileHover={{ scale: 1.02 }}
       transition={{ type: "spring", stiffness: 400, damping: 25 }}
       data-product-name={name}
@@ -391,7 +391,7 @@ export function ProductCard({
       data-discount={discount}
     >
       {/* Image Section */}
-      <div className="relative h-24 bg-neutral-100 dark:bg-neutral-800">
+      <div className="relative h-24 bg-muted">
         {imageUrl ? (
           <Image
             src={imageUrl}
@@ -400,26 +400,26 @@ export function ProductCard({
             className="object-cover"
           />
         ) : (
-          <div className="flex items-center justify-center h-full bg-neutral-200 dark:bg-neutral-700">
-            <div className="text-neutral-400 text-[10px]">No Image</div>
+          <div className="flex items-center justify-center h-full bg-muted">
+            <div className="text-muted-foreground text-[10px]">No Image</div>
           </div>
         )}
         
         {/* Discount Badge */}
         {discount > 0 && (
-          <div className="absolute top-2 left-2 bg-red-500 text-white text-[10px] px-2 py-1 rounded font-semibold shadow-sm">
+          <div className="absolute top-2 left-2 bg-destructive text-destructive-foreground text-[10px] px-2 py-1 rounded font-semibold shadow-sm">
             {discount}% OFF
           </div>
         )}
         
         {/* Stock Status Badge */}
         {stockStatus.status === 'out_of_stock' && (
-          <div className="absolute top-2 right-2 bg-red-600 text-white text-[10px] px-2 py-1 rounded font-semibold shadow-sm">
+          <div className="absolute top-2 right-2 bg-destructive text-destructive-foreground text-[10px] px-2 py-1 rounded font-semibold shadow-sm">
             Out of Stock
           </div>
         )}
         {stockStatus.status === 'low_stock' && (
-          <div className="absolute top-2 right-2 bg-orange-500 text-white text-[10px] px-2 py-1 rounded font-semibold shadow-sm">
+          <div className="absolute top-2 right-2 bg-foreground/80 text-background text-[10px] px-2 py-1 rounded font-semibold shadow-sm">
             Low Stock
           </div>
         )}
@@ -428,7 +428,7 @@ export function ProductCard({
       {/* Content Section */}
       <div className="p-3 space-y-1">
         {/* Title */}
-        <h2 className="font-bold text-[14px] text-black dark:text-white line-clamp-1 truncate">
+        <h2 className="font-bold text-[14px] text-foreground line-clamp-1 truncate">
           {name}
         </h2>
 
@@ -442,10 +442,10 @@ export function ProductCard({
         {/* Vendor Name */}
         {vendorName && (
           <div className="flex items-center gap-1">
-            <span className="text-[9px] text-neutral-500 dark:text-neutral-400">
+            <span className="text-[9px] text-muted-foreground">
               by
             </span>
-            <span className="text-[9px] text-neutral-600 dark:text-neutral-300 font-medium truncate">
+            <span className="text-[9px] text-muted-foreground font-medium truncate">
               {vendorName}
             </span>
           </div>
@@ -453,16 +453,16 @@ export function ProductCard({
 
         {/* Price Section */}
         <div className="flex items-center pt-2 gap-2">
-          <span className="font-bold text-[16px] text-black dark:text-white">
+          <span className="font-bold text-[16px] text-foreground">
             ₹{price}
           </span>
           {mrp && mrp > price && (
             <>
-              <span className="text-[10px] text-neutral-500 line-through">
+              <span className="text-[10px] text-muted-foreground line-through">
                 ₹{mrp}
               </span>
               {discount > 0 && (
-                <span className="text-[9px] text-green-600 dark:text-green-400 font-medium">
+                <span className="text-[9px] text-muted-foreground font-medium">
                   {discount}% off
                 </span>
               )}
@@ -473,21 +473,21 @@ export function ProductCard({
         {/* Add to Cart Section */}
         <div className="flex items-center justify-between pt-1">
           {/* Stock Status Display */}
-          <div className="text-[10px] text-neutral-500 dark:text-neutral-400">
+          <div className="text-[10px] text-muted-foreground">
             {stockStatus.status === 'vendor_offline' ? (
-              <span className="text-amber-600 dark:text-amber-400 font-medium">
+              <span className="text-muted-foreground font-medium">
                 Vendor Offline
               </span>
             ) : stockStatus.status === 'out_of_stock' ? (
-              <span className="text-red-600 dark:text-red-400 font-medium">
+              <span className="text-destructive font-medium">
                 {stockStatus.message}
               </span>
             ) : stockStatus.status === 'low_stock' ? (
-              <span className="text-orange-600 dark:text-orange-400 font-medium">
+              <span className="text-foreground font-medium">
                 {stockStatus.message}
               </span>
             ) : stockStatus.status === 'in_stock' ? (
-              <span className="text-green-600 dark:text-green-400">
+              <span className="text-muted-foreground">
                 {stockStatus.message}
               </span>
             ) : (
@@ -498,11 +498,11 @@ export function ProductCard({
         <div className="flex items-center justify-center pt-1">
           {!isVendorOnline ? (
             /* Vendor Offline State */
-            <div className="w-full px-3 py-1.5 rounded-xl text-center bg-amber-100 dark:bg-amber-900/30 border border-amber-300 dark:border-amber-700/50">
-              <div className="text-[10px] font-medium text-amber-700 dark:text-amber-300">
+            <div className="w-full px-3 py-1.5 rounded-xl text-center bg-muted border border-border">
+              <div className="text-[10px] font-medium text-foreground">
                 Vendor Offline
               </div>
-              <div className="text-[9px] text-amber-600 dark:text-amber-400 mt-0.5">
+              <div className="text-[9px] text-muted-foreground mt-0.5">
                 Check back soon
               </div>
             </div>
@@ -512,8 +512,8 @@ export function ProductCard({
               disabled={!stockStatus.canOrder}
               className={`flex items-center justify-center gap-1 px-3 py-1.5 rounded-xl text-[10px] font-medium transition-colors w-full ${
                 !stockStatus.canOrder
-                  ? 'bg-neutral-300 dark:bg-neutral-700 text-neutral-500 dark:text-neutral-400 cursor-not-allowed'
-                  : 'bg-neutral-100 dark:bg-neutral-100 text-white dark:text-black hover:bg-neutral-200 dark:hover:bg-neutral-200'
+                  ? 'bg-muted text-muted-foreground cursor-not-allowed'
+                  : 'bg-foreground text-background hover:bg-foreground/90'
               }`}
               whileHover={stockStatus.canOrder ? { scale: 1.05 } : {}}
               whileTap={stockStatus.canOrder ? { scale: 0.95 } : {}}
@@ -525,14 +525,14 @@ export function ProductCard({
             <div className="flex items-center justify-center gap-2 w-full">
               <motion.button
                 onClick={handleRemoveFromCart}
-                className="w-6 h-6 rounded-full bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-colors"
+                className="w-6 h-6 rounded-full bg-muted flex items-center justify-center hover:bg-muted/80 transition-colors"
                 whileHover={{ scale: 1.1 }}
                 whileTap={{ scale: 0.9 }}
               >
-                <Minus className="h-3 w-3 text-black dark:text-white" />
+                <Minus className="h-3 w-3 text-foreground" />
               </motion.button>
               
-              <span className="text-[14px] font-medium text-black dark:text-white min-w-[20px] text-center">
+              <span className="text-[14px] font-medium text-foreground min-w-[20px] text-center">
                 {displayQuantity}
               </span>
               
@@ -541,8 +541,8 @@ export function ProductCard({
                 disabled={!stockStatus.canOrder || (hasStock && displayQuantity >= stockQuantity)}
                 className={`w-6 h-6 rounded-full flex items-center justify-center transition-colors ${
                   !stockStatus.canOrder || (hasStock && displayQuantity >= stockQuantity)
-                    ? 'bg-neutral-300 dark:bg-neutral-700 text-neutral-500 dark:text-neutral-400 cursor-not-allowed'
-                    : 'bg-black dark:bg-white hover:bg-neutral-800 dark:hover:bg-neutral-200'
+                    ? 'bg-muted text-muted-foreground cursor-not-allowed'
+                    : 'bg-foreground hover:bg-foreground/90'
                 }`}
                 whileHover={
                   stockStatus.canOrder && (!hasStock || displayQuantity < stockQuantity) 
@@ -557,8 +557,8 @@ export function ProductCard({
               >
                 <Plus className={`h-3 w-3 ${
                   !stockStatus.canOrder || (hasStock && displayQuantity >= stockQuantity)
-                    ? 'text-neutral-500 dark:text-neutral-400'
-                    : 'text-white dark:text-black'
+                    ? 'text-muted-foreground'
+                    : 'text-background'
                 }`} />
               </motion.button>
             </div>

@@ -3,6 +3,10 @@ import { Order, User, Payment, OrderItem, MenuItem, Vendor, Cart, CartItem } fro
 import { authenticateTokenNextJS } from "@/middleware/auth"
 
 export async function GET(request, { params }) {
+  if (process.env.NODE_ENV === "production") {
+    return NextResponse.json({ success: false, message: "Debug endpoints disabled in production" }, { status: 404 })
+  }
+
   try {
     const authResult = await authenticateTokenNextJS(request)
     if (authResult.error) {

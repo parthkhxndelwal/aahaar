@@ -13,8 +13,9 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Spinner } from "@/components/ui/spinner"
 import { useToast } from "@/hooks/use-toast"
 import { Search, UserPlus, Mail, Phone, Trash2 } from "lucide-react"
-import { useAdminAuth } from "@/contexts/admin-auth-context"
+import { useUnifiedAuth } from "@/contexts/unified-auth-context"
 import { useParams } from "next/navigation"
+import { courtApi, userApi, apiClient } from "@/lib/api"
 
 interface User {
   id: string
@@ -30,18 +31,16 @@ interface User {
 }
 
 const statusColors = {
-  active: "bg-green-100 text-green-800",
-  inactive: "bg-gray-100 text-gray-800",
-  blocked: "bg-red-100 text-red-800"
+  active: "bg-muted text-foreground",
+  inactive: "bg-muted text-muted-foreground",
+  blocked: "bg-destructive/10 text-destructive"
 }
 
 const roleColors = {
-  user: "bg-blue-100 text-blue-800",
-  vendor: "bg-purple-100 text-purple-800",
-  admin: "bg-orange-100 text-orange-800"
+  user: "bg-muted text-foreground",
+  vendor: "bg-muted text-foreground",
+  admin: "bg-muted text-foreground"
 }
-
-// Animation variants - removed unused variants to match orders page pattern
 
 export default function AdminUsersPage() {
   const [users, setUsers] = useState<User[]>([])
@@ -52,51 +51,38 @@ export default function AdminUsersPage() {
   const [statusFilter, setStatusFilter] = useState("all")
   const [selectedUser, setSelectedUser] = useState<User | null>(null)
   const { toast } = useToast()
-  const { token } = useAdminAuth()
+  const { token } = useUnifiedAuth()
   const routeParams = useParams()
   const courtId = routeParams.courtId as string
 
-  // Debug logs
-  console.log("AdminUsersPage rendered", { token, courtId, loading, users: users.length })
+  // Set up API client token
+  useEffect(() => {
+    if (token) {
+      apiClient.setTokenGetter(() => token)
+    }
+  }, [token])
 
   useEffect(() => {
     if (token && courtId) {
       fetchUsers()
-    } else {
-      console.log("Missing token or courtId", { token: !!token, courtId })
     }
   }, [roleFilter, statusFilter, token, courtId])
 
   const fetchUsers = async () => {
     try {
       setLoading(true)
-      console.log("Fetching users...", { courtId, token: !!token })
       
       if (!token) {
-        console.log("No token available")
         setLoading(false)
         return
       }
       
-      const params = new URLSearchParams()
-      
-      if (roleFilter !== "all") params.append("role", roleFilter)
-      if (statusFilter !== "all") params.append("status", statusFilter)
-      
-      const response = await fetch(`/api/courts/${courtId}/users?${params}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+      const result = await courtApi.getUsers(courtId, {
+        role: roleFilter !== "all" ? roleFilter : undefined,
+        status: statusFilter !== "all" ? statusFilter : undefined,
       })
       
-      const result = await response.json()
-      console.log("API response:", result)
-      
-      if (result.success) {
-        setUsers(result.data.users || [])
-      } else {
-        throw new Error(result.message)
-      }
+      setUsers((result as any).users || [])
     } catch (error: any) {
       console.error("Error fetching users:", error)
       toast({
@@ -112,40 +98,13 @@ export default function AdminUsersPage() {
   const deleteUser = async (userId: string) => {
     try {
       setDeletingUser(userId)
-      const response = await fetch(`/api/users/${userId}`, {
-        method: "DELETE",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
+      await userApi.updateById(userId, { status: 'inactive' } as any)
+      
+      setUsers(users.filter(user => user.id !== userId))
+      toast({
+        title: "Success",
+        description: "User deleted successfully",
       })
-      
-      // Check if response is ok first
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
-      }
-      
-      // Check if response has content before trying to parse JSON
-      const contentType = response.headers.get('content-type')
-      let result
-      
-      if (contentType && contentType.includes('application/json')) {
-        const text = await response.text()
-        result = text ? JSON.parse(text) : { success: true }
-      } else {
-        // If no JSON content, assume success if status is ok
-        result = { success: true }
-      }
-      
-      if (result.success !== false) {
-        setUsers(users.filter(user => user.id !== userId))
-        toast({
-          title: "Success",
-          description: "User deleted successfully",
-        })
-      } else {
-        throw new Error(result.message || "Failed to delete user")
-      }
     } catch (error: any) {
       console.error("Delete user error:", error)
       toast({
@@ -191,8 +150,8 @@ export default function AdminUsersPage() {
         transition={{ duration: 0.4, delay: 0.1 }}
       >
         <div>
-          <h1 className="text-3xl font-bold text-neutral-100">User Management</h1>
-          <p className="text-neutral-400">Manage users and their access to the food court</p>
+          <h1 className="text-3xl font-bold">User Management</h1>
+          <p className="text-muted-foreground">Manage users and their access to the food court</p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => {
@@ -223,7 +182,7 @@ export default function AdminUsersPage() {
               <div className="flex justify-center mb-4">
                 <Spinner size={32} variant="white" />
               </div>
-              <p className="text-neutral-400">Loading users data...</p>
+              <p className="text-muted-foreground">Loading users data...</p>
             </div>
           </motion.div>
         ) : (
@@ -354,7 +313,7 @@ export default function AdminUsersPage() {
                     <TableBody>
                       {filteredUsers.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={8} className="text-center py-8 text-neutral-500">
+                          <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                             No users found matching your criteria
                           </TableCell>
                         </TableRow>
@@ -365,7 +324,7 @@ export default function AdminUsersPage() {
                             initial={{ opacity: 0, y: 10 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ duration: 0.3, delay: index * 0.05 }}
-                            className="border-b border-neutral-800 hover:bg-neutral-900/50"
+                            className="border-b border-border hover:bg-muted/50"
                             style={{ display: "table-row" }}
                           >
                             <TableCell className="font-medium">{user.fullName}</TableCell>
@@ -411,7 +370,7 @@ export default function AdminUsersPage() {
                                         size="sm"
                                         disabled={deletingUser === user.id}
                                         title="Delete user"
-                                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                        className="text-destructive hover:text-destructive hover:bg-destructive/10"
                                       >
                                         {deletingUser === user.id ? (
                                           <Spinner size={16} variant="white" />
@@ -431,7 +390,7 @@ export default function AdminUsersPage() {
                                         <AlertDialogCancel>Cancel</AlertDialogCancel>
                                         <AlertDialogAction
                                           onClick={() => deleteUser(user.id)}
-                                          className="bg-red-600 hover:bg-red-700"
+                                          className="bg-destructive hover:bg-destructive/90"
                                         >
                                           Delete
                                         </AlertDialogAction>

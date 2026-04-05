@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server"
 import { uploadImage, generateTransformationUrl, transformationPresets } from "@/utils/cloudinary"
+import { authenticateToken } from "@/middleware/auth"
 
 export async function POST(request) {
   try {
+    const authResult = await authenticateToken(request)
+    if (authResult instanceof NextResponse) return authResult
+
     const formData = await request.formData()
     const file = formData.get("file")
     const upload_preset = formData.get("upload_preset") || "general"

@@ -1,6 +1,10 @@
 const { MenuItem, Vendor, MenuCategory } = require("@/models")
 
 export async function GET(request) {
+  if (process.env.NODE_ENV === "production") {
+    return Response.json({ success: false, error: "Debug endpoints disabled in production" }, { status: 404 })
+  }
+
   try {
     console.log("=== DEBUG: Testing menu items query ===")
     

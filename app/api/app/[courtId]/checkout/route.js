@@ -46,8 +46,9 @@ export async function POST(request, { params }) {
       }
     })
 
-    // 4. Clear Cart on Success
-    await CartService.clearCart(user.id, courtId)
+    // 4. Store cart info for later clearing (after payment verification)
+    // Cart will be cleared in the payment verification endpoint
+    // This prevents cart from being cleared if payment fails
 
     // 5. Build Response Data structure
     const responseData = {

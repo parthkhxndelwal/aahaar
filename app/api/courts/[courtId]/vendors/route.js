@@ -273,10 +273,17 @@ export async function POST(request, { params }) {
     // Only proceed with vendor creation if Razorpay account was created successfully
     console.log("📝 Creating vendor user account and profile...")
 
-    // Use master password for all vendors
-    const masterPassword = 'aahaar341$'
-    console.log(`🔐 Setting master password for vendor: ${email}`)
-    const hashedPassword = await bcrypt.hash(masterPassword, 12)
+    // Generate a random secure password for the vendor
+    const generateSecurePassword = () => {
+      const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*'
+      let password = ''
+      for (let i = 0; i < 16; i++) {
+        password += chars.charAt(Math.floor(Math.random() * chars.length))
+      }
+      return password
+    }
+    const vendorPassword = generateSecurePassword()
+    const hashedPassword = await bcrypt.hash(vendorPassword, 12)
 
     const user = await User.create({
       fullName: vendorName,
@@ -290,7 +297,7 @@ export async function POST(request, { params }) {
       phoneVerified: false, // Fixed field name
     })
 
-    console.log(`✅ Vendor user created: ${email} with master password: ${masterPassword}`)
+    console.log(`✅ Vendor user created: ${email}`)
 
     // Create vendor profile with Razorpay account ID
     const vendor = await Vendor.create({
@@ -340,11 +347,8 @@ export async function POST(request, { params }) {
     return NextResponse.json(
       {
         success: true,
-        message: "Vendor and Razorpay account created successfully. Master password has been set.",
-        data: {
-          ...responseData,
-          masterPassword: 'aahaar341$'
-        },
+      message: "Vendor and Razorpay account created successfully. A secure password has been set.",
+      data: responseData,
       },
       { status: 201 },
     )

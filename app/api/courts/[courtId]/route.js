@@ -48,7 +48,19 @@ export async function PATCH(request, { params }) {
       return NextResponse.json({ success: false, message: "Court not found" }, { status: 404 })
     }
 
-    await court.update(updateData)
+    // Define allowed fields for court update (prevent mass assignment)
+    const allowedFields = [
+      'instituteName', 'instituteType', 'contactEmail', 'contactPhone',
+      'address', 'logoUrl', 'status'
+    ]
+    const sanitizedData = {}
+    for (const field of allowedFields) {
+      if (updateData[field] !== undefined) {
+        sanitizedData[field] = updateData[field]
+      }
+    }
+
+    await court.update(sanitizedData)
 
     return NextResponse.json({
       success: true,

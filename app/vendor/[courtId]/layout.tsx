@@ -2,9 +2,9 @@
 
 import { use } from "react"
 import { useState, useEffect } from "react"
-import { useVendorAuth } from "@/contexts/vendor-auth-context"
+import { useUnifiedAuth } from "@/contexts/unified-auth-context"
 import { useRouter } from "next/navigation"
-import { DashboardShell } from "@/components/dashboard-shell"
+import { MainLayout } from "@/components/layout/main-layout"
 import { LayoutDashboard, UtensilsCrossed, ClipboardList, Settings, Box } from "lucide-react"
 import { Spinner } from "@/components/ui/spinner"
 
@@ -15,7 +15,7 @@ export default function VendorLayout({
   children: React.ReactNode
   params: Promise<{ courtId: string }>
 }) {
-  const { user, loading, logout } = useVendorAuth()
+  const { user, loading, logout } = useUnifiedAuth()
   const router = useRouter()
   const { courtId } = use(params)
   const [mounted, setMounted] = useState(false)
@@ -36,7 +36,7 @@ export default function VendorLayout({
 
   if (loading || !mounted) {
     return (
-      <div className="h-screen w-full flex items-center justify-center bg-muted/20">
+      <div className="h-screen w-full flex items-center justify-center">
         <Spinner size={32} />
       </div>
     )
@@ -53,17 +53,18 @@ export default function VendorLayout({
   ]
 
   return (
-    <DashboardShell
-        navItems={navItems}
-        user={{
-            name: user.vendorProfile?.stallName || user.fullName,
-            email: user.email || user.phone || 'No email',
-            role: "Vendor",
-        }}
-        onLogout={logout}
-        appName="Vendor Portal"
+    <MainLayout
+      navItems={navItems}
+      user={{
+        name: user.vendorProfile?.stallName || user.fullName,
+        email: user.email || user.phone || "No email",
+        role: "Vendor",
+      }}
+      onLogout={logout}
+      appName="Vendor Portal"
+      courtId={courtId}
     >
-        {children}
-    </DashboardShell>
+      {children}
+    </MainLayout>
   )
 }

@@ -57,7 +57,7 @@ export function BottomNavigation({ courtId }: BottomNavigationProps) {
 
     return (
         <motion.div 
-            className="fixed bottom-0 mb-3 left-0 right-0 bg-white dark:bg-neutral-950 z-50"
+            className="fixed bottom-0 mb-3 left-0 right-0 bg-background z-50"
             initial={{ y: 100 }}
             animate={{ y: 0 }}
             transition={{ type: "spring", stiffness: 300, damping: 30 }}
@@ -107,7 +107,7 @@ export function BottomNavigation({ courtId }: BottomNavigationProps) {
                                 style={{ overflow: "visible" }}
                             >
                                 <motion.button 
-                                    className="flex items-center gap-1 px-2 py-2 h-14 rounded-2xl bg-neutral-100 dark:bg-neutral-800 text-black dark:text-white justify-center"
+                                    className="flex items-center gap-1 px-2 py-2 h-14 rounded-2xl bg-muted text-foreground justify-center"
                                     style={{ width: 120 }}
                                     whileHover={{ scale: 1.05 }}
                                     whileTap={{ scale: 0.95 }}
@@ -140,7 +140,7 @@ export function BottomNavigation({ courtId }: BottomNavigationProps) {
                                         height="10px" 
                                         viewBox="0 -960 960 960" 
                                         width="10px" 
-                                        className="flex-shrink-0 fill-black dark:fill-white"
+                                        className="flex-shrink-0 fill-foreground"
                                         initial={{ x: -5, opacity: 0 }}
                                         animate={{ x: 0, opacity: 1 }}
                                         transition={{ delay: 0.3 }}
@@ -159,7 +159,7 @@ export function BottomNavigation({ courtId }: BottomNavigationProps) {
                         transition={{ type: "spring", stiffness: 400, damping: 25 }}
                     >
                         <motion.div 
-                            className="flex items-center bg-white dark:bg-neutral-900 rounded-2xl px-1 py-1 h-14"
+                            className="flex items-center bg-background rounded-2xl px-1 py-1 h-14"
                             layout
                             style={{ minWidth: "180px" }} // Ensure nav links have minimum space
                         >
@@ -180,8 +180,8 @@ export function BottomNavigation({ courtId }: BottomNavigationProps) {
                                             className={cn(
                                                 "flex flex-col items-center justify-center gap-0.5 px-2 py-1 rounded-2xl text-xs font-medium transition-colors min-w-[50px] h-12 w-full",
                                                 isActive
-                                                    ? "bg-black dark:bg-white text-white dark:text-black"
-                                                    : "text-black dark:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                                                    ? "bg-foreground text-background"
+                                                    : "text-foreground hover:bg-muted"
                                             )}
                                         >
                                             <motion.div
@@ -235,7 +235,7 @@ export function BottomNavigation({ courtId }: BottomNavigationProps) {
                             >
                                 <Link href={`/app/${courtId}/cart`}>
                                     <motion.div
-                                        className="flex items-center gap-1 px-2 py-2 h-14 rounded-2xl bg-neutral-100 dark:bg-neutral-800 text-black dark:text-white hover:bg-neutral-200 dark:hover:bg-neutral-700 active:bg-neutral-300 dark:active:bg-neutral-600 focus:bg-neutral-100 dark:focus:bg-neutral-800 transition-colors justify-center"
+                                        className="flex items-center gap-1 px-2 py-2 h-14 rounded-2xl bg-muted text-foreground hover:bg-muted/80 active:bg-muted/60 focus:bg-muted transition-colors justify-center"
                                         style={{ width: shouldOrderBeVisible ? 60 : 120 }}
                                         whileHover={{ scale: 1.05 }}
                                         whileTap={{ scale: 0.95 }}
@@ -265,13 +265,13 @@ export function BottomNavigation({ courtId }: BottomNavigationProps) {
                                         {/* Cart badge - show count when items in cart */}
                                         {totalCartItems > 0 && (
                                             <motion.div
-                                                className="w-4 h-4 bg-red-500 text-white rounded-full flex items-center justify-center flex-shrink-0"
+                                                className="w-4 h-4 bg-foreground text-background rounded-full flex items-center justify-center flex-shrink-0"
                                                 animate={badgeAnim ? { scale: [1, 1.15, 1], rotate: [0, 5, -5, 0] } : { scale: 1, rotate: 0 }}
                                                 transition={{ duration: 0.5, ease: "easeInOut" }}
                                                 initial={{ scale: 0 }}
                                                 whileInView={{ scale: 1 }}
                                             >
-                                                <span className="text-[10px] text-white font-bold">
+                                                <span className="text-[10px] text-background font-bold">
                                                     {totalCartItems > 99 ? '99+' : totalCartItems}
                                                 </span>
                                             </motion.div>

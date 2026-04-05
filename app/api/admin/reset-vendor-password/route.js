@@ -1,9 +1,22 @@
 import { NextResponse } from "next/server"
 import { User } from "@/models"
 import bcrypt from "bcryptjs"
+import { authenticateToken } from "@/middleware/auth"
 
 export async function POST(request) {
   try {
+    const authResult = await authenticateToken(request)
+    if (authResult instanceof NextResponse) return authResult
+
+    const { user } = authResult
+
+    if (user.role !== "admin") {
+      return NextResponse.json(
+        { success: false, message: "Admin access required" },
+        { status: 403 }
+      )
+    }
+
     const { email, courtId, newPassword } = await request.json()
 
     if (!email || !courtId || !newPassword) {
@@ -16,10 +29,10 @@ export async function POST(request) {
       )
     }
 
-    console.log(`🔧 Admin: Resetting password for ${email} in court ${courtId}`)
+    console.log(`🔧 Admin ${user.id}: Resetting password for ${email} in court ${courtId}`)
 
     // Find user
-    const user = await User.findOne({
+    const vendorUser = await User.findOne({
       where: {
         email: email.toLowerCase(),
         courtId,
@@ -27,7 +40,7 @@ export async function POST(request) {
       }
     })
 
-    if (!user) {
+    if (!vendorUser) {
       return NextResponse.json({
         success: false,
         message: "Vendor user not found",
@@ -38,17 +51,17 @@ export async function POST(request) {
     const hashedPassword = await bcrypt.hash(newPassword, 12)
 
     // Update password
-    await user.update({ password: hashedPassword })
+    await vendorUser.update({ password: hashedPassword })
 
-    console.log(`✅ Password reset for ${email}`)
+    console.log(`✅ Password reset for ${email} by admin ${user.id}`)
 
     return NextResponse.json({
       success: true,
       message: "Password reset successfully",
       data: {
-        email: user.email,
-        courtId: user.courtId,
-        role: user.role
+        email: vendorUser.email,
+        courtId: vendorUser.courtId,
+        role: vendorUser.role
       }
     })
 
@@ -58,7 +71,6 @@ export async function POST(request) {
       {
         success: false,
         message: "Internal server error",
-        error: error.message,
       },
       { status: 500 }
     )

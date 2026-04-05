@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "skills": {
+    "landing-page-copywriter": {
+      "source": "onewave-ai/claude-skills",
+      "sourceType": "github",
+      "computedHash": "af0145f315f49ed498f27478d3a4f17842cbf23d7fe724a05075938027162fc2"
+    },
+    "landing-page-design": {
+      "source": "inferen-sh/skills",
+      "sourceType": "github",
+      "computedHash": "c2588da4b3c084ad762e28388d36bfafbbe2c1870d52a0f98d6e4095ee01b26d"
+    },
+    "ugc-scriptwriter": {
+      "source": "motion-creative/skills",
+      "sourceType": "github",
+      "computedHash": "585274332ea88147e299784eb4344887149729f1418a6e4c9821f477d31ded5e"
+    }
+  }
+}

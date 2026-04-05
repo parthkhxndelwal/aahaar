@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Activity, User, ShoppingCart, Settings, Shield, AlertTriangle, Eye, ArrowRight } from "lucide-react"
 import { useRouter } from "next/navigation"
+import { adminAuditApi } from "@/lib/api"
 
 interface AuditLog {
   id: string
@@ -47,16 +48,8 @@ export function AuditLogsPreview({ courtId, token }: AuditLogsPreviewProps) {
   const fetchAuditLogsPreview = async () => {
     try {
       setLoading(true)
-      const response = await fetch(`/api/admin/audit-logs/preview`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        setLogs(data.data.logs)
-      }
+      const response = await adminAuditApi.getPreview({ courtId, limit: 5 })
+      setLogs(response.auditLogs as AuditLog[])
     } catch (error) {
       console.error("Error fetching audit logs preview:", error)
     } finally {
@@ -65,21 +58,21 @@ export function AuditLogsPreview({ courtId, token }: AuditLogsPreviewProps) {
   }
 
   const getActionIcon = (action: string) => {
-    if (action.includes("CREATE") || action.includes("ADD")) return <Activity className="h-4 w-4 text-green-500" />
-    if (action.includes("UPDATE") || action.includes("EDIT")) return <Settings className="h-4 w-4 text-blue-500" />
-    if (action.includes("DELETE") || action.includes("REMOVE")) return <AlertTriangle className="h-4 w-4 text-red-500" />
-    if (action.includes("LOGIN") || action.includes("AUTH")) return <Shield className="h-4 w-4 text-purple-500" />
-    if (action.includes("ORDER")) return <ShoppingCart className="h-4 w-4 text-orange-500" />
-    return <User className="h-4 w-4 text-gray-500" />
+    if (action.includes("CREATE") || action.includes("ADD")) return <Activity className="h-4 w-4 text-foreground" />
+    if (action.includes("UPDATE") || action.includes("EDIT")) return <Settings className="h-4 w-4 text-foreground" />
+    if (action.includes("DELETE") || action.includes("REMOVE")) return <AlertTriangle className="h-4 w-4 text-destructive" />
+    if (action.includes("LOGIN") || action.includes("AUTH")) return <Shield className="h-4 w-4 text-foreground" />
+    if (action.includes("ORDER")) return <ShoppingCart className="h-4 w-4 text-foreground" />
+    return <User className="h-4 w-4 text-muted-foreground" />
   }
 
   const getActionColor = (action: string) => {
-    if (action.includes("CREATE") || action.includes("ADD")) return "bg-green-100 text-green-800"
-    if (action.includes("UPDATE") || action.includes("EDIT")) return "bg-blue-100 text-blue-800"
-    if (action.includes("DELETE") || action.includes("REMOVE")) return "bg-red-100 text-red-800"
-    if (action.includes("LOGIN") || action.includes("AUTH")) return "bg-purple-100 text-purple-800"
-    if (action.includes("ORDER")) return "bg-orange-100 text-orange-800"
-    return "bg-gray-100 text-gray-800"
+    if (action.includes("CREATE") || action.includes("ADD")) return "bg-muted text-foreground"
+    if (action.includes("UPDATE") || action.includes("EDIT")) return "bg-muted text-foreground"
+    if (action.includes("DELETE") || action.includes("REMOVE")) return "bg-destructive/10 text-destructive"
+    if (action.includes("LOGIN") || action.includes("AUTH")) return "bg-muted text-foreground"
+    if (action.includes("ORDER")) return "bg-muted text-foreground"
+    return "bg-muted text-foreground"
   }
 
   const formatTimeAgo = (dateString: string) => {
@@ -142,7 +135,7 @@ export function AuditLogsPreview({ courtId, token }: AuditLogsPreviewProps) {
         </CardHeader>
         <CardContent>
           <div className="flex items-center justify-center py-8">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-foreground"></div>
           </div>
         </CardContent>
       </Card>
@@ -173,16 +166,16 @@ export function AuditLogsPreview({ courtId, token }: AuditLogsPreviewProps) {
       <CardContent>
         {logs.length === 0 ? (
           <div className="text-center py-8">
-            <Activity className="h-12 w-12 mx-auto text-gray-400 dark:text-gray-500 mb-4" />
-            <p className="text-gray-600 dark:text-gray-400">No recent activity</p>
+            <Activity className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+            <p className="text-muted-foreground">No recent activity</p>
           </div>
         ) : (
           <div className="space-y-4">
             {logs.map((log) => (
               <div
                 key={log.id}
-                className={`flex items-start gap-3 p-3 rounded-lg border border-gray-200 dark:border-gray-700 transition-colors ${
-                  getEntityLink(log) ? 'hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer' : ''
+                className={`flex items-start gap-3 p-3 rounded-lg border transition-colors ${
+                  getEntityLink(log) ? 'hover:bg-muted cursor-pointer' : ''
                 }`}
                 onClick={() => {
                   const link = getEntityLink(log)
@@ -197,22 +190,22 @@ export function AuditLogsPreview({ courtId, token }: AuditLogsPreviewProps) {
                     <Badge className={getActionColor(log.action)} variant="secondary">
                       {log.action.replace(/_/g, ' ')}
                     </Badge>
-                    <span className="text-xs text-gray-500 dark:text-gray-400">
+                    <span className="text-xs text-muted-foreground">
                       {formatTimeAgo(log.createdAt)}
                     </span>
                   </div>
-                  <p className="text-sm text-gray-900 dark:text-gray-100 leading-tight">
+                  <p className="text-sm leading-tight">
                     {getLogDescription(log)}
                   </p>
                   {log.entityId && (
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    <p className="text-xs text-muted-foreground mt-1">
                       ID: {log.entityId}
                     </p>
                   )}
                 </div>
                 {getEntityLink(log) && (
                   <div className="flex-shrink-0">
-                    <ArrowRight className="h-4 w-4 text-gray-400 dark:text-gray-500" />
+                    <ArrowRight className="h-4 w-4 text-muted-foreground" />
                   </div>
                 )}
               </div>

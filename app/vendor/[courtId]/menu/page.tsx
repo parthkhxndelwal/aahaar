@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, use } from "react"
-import { useVendorAuth } from "@/contexts/vendor-auth-context"
+import { useUnifiedAuth } from "@/contexts/unified-auth-context"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -14,6 +14,8 @@ import { Drawer, DrawerClose, DrawerContent, DrawerDescription, DrawerFooter, Dr
 import { useToast } from "@/hooks/use-toast"
 import { useRouter } from "next/navigation"
 import { Plus, Edit, Trash2, Upload, X, Tag, Search, Package, Loader2 } from "lucide-react"
+import { vendorApi } from "@/lib/api"
+import { uploadApi } from "@/lib/api/services/upload"
 
 interface MenuItem {
   id: string
@@ -62,7 +64,7 @@ interface MenuCategory {
 }
 
 export default function VendorMenuPage({ params }: { params: Promise<{ courtId: string }> }) {
-  const { user, token } = useVendorAuth()
+  const { user } = useUnifiedAuth()
   const router = useRouter()
   const { toast } = useToast()
   const { courtId } = use(params)
@@ -138,28 +140,19 @@ export default function VendorMenuPage({ params }: { params: Promise<{ courtId: 
 
   const fetchVendorProfile = async () => {
     try {
-      const response = await fetch(`/api/users/${user?.id}/vendor-profile`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
-
-      if (response.ok) {
-        const profileData = await response.json()
-        if (profileData.success && profileData.data.vendorProfile) {
-          // Update the user context with vendor profile
-          const updatedUser = {
-            ...user,
-            vendorProfile: profileData.data.vendorProfile
-          }
-          // Update localStorage to persist the vendor profile
-          localStorage.setItem("auth_user", JSON.stringify(updatedUser))
-          fetchMenuData()
-        } else {
-          throw new Error("Vendor profile not found")
+      // Use vendorApi.getMe to get vendor profile
+      const data = await vendorApi.getMe()
+      if (data.vendor) {
+        // Update the user context with vendor profile
+        const updatedUser = {
+          ...user,
+          vendorProfile: data.vendor
         }
+        // Update localStorage to persist the vendor profile
+        localStorage.setItem("auth_user", JSON.stringify(updatedUser))
+        fetchMenuData()
       } else {
-        throw new Error("Failed to fetch vendor profile")
+        throw new Error("Vendor profile not found")
       }
     } catch (error) {
       console.error("Error fetching vendor profile:", error)
@@ -176,36 +169,23 @@ export default function VendorMenuPage({ params }: { params: Promise<{ courtId: 
     try {
       setLoading(true)
       
-      // Fetch categories first
-      const categoriesResponse = await fetch(`/api/vendors/${user?.vendorProfile?.id}/categories`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
+      const vendorId = user?.vendorProfile?.id
+      if (!vendorId) return
       
-      if (categoriesResponse.ok) {
-        const categoriesData = await categoriesResponse.json()
-        setCategories(categoriesData.data?.categories || [])
-      }
+      // Fetch categories first
+      const categoriesData = await vendorApi.getCategories(vendorId)
+      setCategories(categoriesData.categories || [])
       
       // Fetch menu items with category details
-      const menuResponse = await fetch(`/api/vendors/${user?.vendorProfile?.id}/menu?include=categories`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
-
-      if (menuResponse.ok) {
-        const menuData = await menuResponse.json()
-        const menuItems = menuData.data?.menuItems || []
-        // Map backend fields to frontend fields
-        const mappedItems = menuItems.map((item: any) => ({
-          ...item,
-          isVeg: item.isVegetarian, // Map isVegetarian to isVeg for frontend
-          category: item.menuCategory?.name || item.category || 'Other'
-        }))
-        setMenuItems(mappedItems)
-      }
+      const menuData = await vendorApi.getMenu(vendorId)
+      const menuItemsArr = menuData.menuItems || []
+      // Map backend fields to frontend fields
+      const mappedItems = menuItemsArr.map((item: any) => ({
+        ...item,
+        isVeg: item.isVegetarian, // Map isVegetarian to isVeg for frontend
+        category: item.menuCategory?.name || item.category || 'Other'
+      }))
+      setMenuItems(mappedItems)
     } catch (error) {
       console.error("Error fetching menu data:", error)
       toast({
@@ -247,78 +227,64 @@ export default function VendorMenuPage({ params }: { params: Promise<{ courtId: 
         throw new Error("Vendor profile not found. Please log in again.")
       }
       
-      const url = editingItem 
-        ? `/api/vendors/${user.vendorProfile.id}/menu/${editingItem.id}`
-        : `/api/vendors/${user.vendorProfile.id}/menu`
-        
-      const method = editingItem ? "PUT" : "POST"
-
-      const response = await fetch(url, {
-        method,
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(mappedData),
-      })
-
-      if (response.ok) {
-        const responseData = await response.json()
-        const savedItem = responseData.data?.menuItem
-        
-        if (editingItem && savedItem) {
-          // Update existing item in the list
-          setMenuItems(prev => prev.map(item => 
-            item.id === editingItem.id 
-              ? { 
-                  ...savedItem, 
-                  isVeg: savedItem.isVegetarian, // Map backend field to frontend
-                  category: savedItem.menuCategory?.name || savedItem.category || 'Other'
-                }
-              : item
-          ))
-        } else if (savedItem) {
-          // Add new item to the list
-          const newItemWithMapping = {
-            ...savedItem,
-            isVeg: savedItem.isVegetarian, // Map backend field to frontend
-            category: savedItem.menuCategory?.name || savedItem.category || 'Other'
-          }
-          setMenuItems(prev => [...prev, newItemWithMapping])
-        }
-        
-        toast({
-          title: "Success",
-          description: `Menu item ${editingItem ? 'updated' : 'added'} successfully`,
-        })
-        setIsAddDialogOpen(false)
-        setEditingItem(null)
-        setNewItem({
-          name: "",
-          description: "",
-          price: 0,
-          mrp: undefined,
-          category: "",
-          categoryId: "",
-          isAvailable: true,
-          preparationTime: 15,
-          isVeg: true,
-          ingredients: [],
-          allergens: [],
-          hasStock: false,
-          stockQuantity: undefined,
-          minStockLevel: 5,
-          maxStockLevel: 100,
-          stockUnit: "pieces",
-        })
-        
-        // Only refetch if the response doesn't include the saved item data
-        if (!savedItem) {
-          fetchMenuData()
-        }
+      let savedItem: any
+      if (editingItem) {
+        const response = await vendorApi.updateMenuItem(user.vendorProfile.id, editingItem.id, mappedData as any)
+        savedItem = response.menuItem
       } else {
-        const errorData = await response.json()
-        throw new Error(errorData.message || errorData.error || 'Failed to save menu item')
+        const response = await vendorApi.createMenuItem(user.vendorProfile.id, mappedData as any)
+        savedItem = response.menuItem
+      }
+
+      if (editingItem && savedItem) {
+        // Update existing item in the list
+        setMenuItems(prev => prev.map(item => 
+          item.id === editingItem.id 
+            ? { 
+                ...savedItem, 
+                isVeg: savedItem.isVegetarian, // Map backend field to frontend
+                category: savedItem.menuCategory?.name || savedItem.category || 'Other'
+              }
+            : item
+        ))
+      } else if (savedItem) {
+        // Add new item to the list
+        const newItemWithMapping = {
+          ...savedItem,
+          isVeg: savedItem.isVegetarian, // Map backend field to frontend
+          category: savedItem.menuCategory?.name || savedItem.category || 'Other'
+        }
+        setMenuItems(prev => [...prev, newItemWithMapping])
+      }
+      
+      toast({
+        title: "Success",
+        description: `Menu item ${editingItem ? 'updated' : 'added'} successfully`,
+      })
+      setIsAddDialogOpen(false)
+      setEditingItem(null)
+      setNewItem({
+        name: "",
+        description: "",
+        price: 0,
+        mrp: undefined,
+        category: "",
+        categoryId: "",
+        isAvailable: true,
+        preparationTime: 15,
+        isVeg: true,
+        ingredients: [],
+        allergens: [],
+        hasStock: false,
+        stockQuantity: undefined,
+        minStockLevel: 5,
+        maxStockLevel: 100,
+        stockUnit: "pieces",
+      })
+      
+      // Only refetch if the response doesn't include the saved item data
+      if (!savedItem) {
+        fetchMenuData()
       }
     } catch (error) {
       console.error("Error saving menu item:", error)
@@ -335,28 +301,18 @@ export default function VendorMenuPage({ params }: { params: Promise<{ courtId: 
       // Set loading state for this specific item
       setUpdatingItems(prev => ({ ...prev, [id]: true }))
       
-      const response = await fetch(`/api/vendors/${user?.vendorProfile?.id}/menu/${id}`, {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+      const vendorId = user?.vendorProfile?.id
+      if (!vendorId) return
+      
+      await vendorApi.deleteMenuItem(vendorId, id)
+      
+      // Remove the item from the list instead of refetching all data
+      setMenuItems(prev => prev.filter(item => item.id !== id))
+      
+      toast({
+        title: "Success",
+        description: "Menu item deleted successfully",
       })
-
-      if (response.ok) {
-        // Remove the item from the list instead of refetching all data
-        setMenuItems(prev => prev.filter(item => item.id !== id))
-        
-        toast({
-          title: "Success",
-          description: "Menu item deleted successfully",
-        })
-      } else {
-        toast({
-          title: "Error",
-          description: "Failed to delete menu item",
-          variant: "destructive",
-        })
-      }
     } catch (error) {
       console.error("Error deleting menu item:", error)
       toast({
@@ -375,32 +331,20 @@ export default function VendorMenuPage({ params }: { params: Promise<{ courtId: 
       // Set loading state for this specific item
       setUpdatingItems(prev => ({ ...prev, [id]: true }))
       
-      const response = await fetch(`/api/vendors/${user?.vendorProfile?.id}/menu/${id}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ isAvailable }),
+      const vendorId = user?.vendorProfile?.id
+      if (!vendorId) return
+      
+      await vendorApi.toggleItemAvailability(vendorId, id, isAvailable)
+      
+      // Update only the specific item instead of refetching all data
+      setMenuItems(prev => prev.map(item => 
+        item.id === id ? { ...item, isAvailable } : item
+      ))
+      
+      toast({
+        title: "Success",
+        description: `Item ${isAvailable ? 'made available' : 'made unavailable'} successfully`,
       })
-
-      if (response.ok) {
-        // Update only the specific item instead of refetching all data
-        setMenuItems(prev => prev.map(item => 
-          item.id === id ? { ...item, isAvailable } : item
-        ))
-        
-        toast({
-          title: "Success",
-          description: `Item ${isAvailable ? 'made available' : 'made unavailable'} successfully`,
-        })
-      } else {
-        toast({
-          title: "Error",
-          description: "Failed to update item availability",
-          variant: "destructive",
-        })
-      }
     } catch (error) {
       console.error("Error updating availability:", error)
       toast({
@@ -428,40 +372,29 @@ export default function VendorMenuPage({ params }: { params: Promise<{ courtId: 
         return
       }
 
-      const url = editingCategory 
-        ? `/api/vendors/${user?.vendorProfile?.id}/categories/${editingCategory.id}`
-        : `/api/vendors/${user?.vendorProfile?.id}/categories`
-        
-      const method = editingCategory ? "PUT" : "POST"
+      const vendorId = user?.vendorProfile?.id
+      if (!vendorId) return
 
-      const response = await fetch(url, {
-        method,
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(categoryData),
-      })
-
-      if (response.ok) {
-        toast({
-          title: "Success",
-          description: `Category ${editingCategory ? 'updated' : 'added'} successfully`,
-        })
-        setIsCategoryDialogOpen(false)
-        setEditingCategory(null)
-        setNewCategory({
-          name: "",
-          description: "",
-          displayOrder: 0,
-          isActive: true,
-          color: "#000000"
-        })
-        fetchMenuData()
+      if (editingCategory) {
+        await vendorApi.updateCategory(vendorId, editingCategory.id, categoryData as any)
       } else {
-        const errorData = await response.json()
-        throw new Error(errorData.message || errorData.error || 'Failed to save category')
+        await vendorApi.createCategory(vendorId, categoryData as any)
       }
+
+      toast({
+        title: "Success",
+        description: `Category ${editingCategory ? 'updated' : 'added'} successfully`,
+      })
+      setIsCategoryDialogOpen(false)
+      setEditingCategory(null)
+      setNewCategory({
+        name: "",
+        description: "",
+        displayOrder: 0,
+        isActive: true,
+        color: "#000000"
+      })
+      fetchMenuData()
     } catch (error) {
       console.error("Error saving category:", error)
       toast({
@@ -474,23 +407,16 @@ export default function VendorMenuPage({ params }: { params: Promise<{ courtId: 
 
   const handleDeleteCategory = async (categoryId: string) => {
     try {
-      const response = await fetch(`/api/vendors/${user?.vendorProfile?.id}/categories/${categoryId}`, {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
+      const vendorId = user?.vendorProfile?.id
+      if (!vendorId) return
+      
+      await vendorApi.deleteCategory(vendorId, categoryId)
 
-      if (response.ok) {
-        toast({
-          title: "Success",
-          description: "Category deleted successfully",
-        })
-        fetchMenuData()
-      } else {
-        const errorData = await response.json()
-        throw new Error(errorData.message || errorData.error || 'Failed to delete category')
-      }
+      toast({
+        title: "Success",
+        description: "Category deleted successfully",
+      })
+      fetchMenuData()
     } catch (error) {
       console.error("Error deleting category:", error)
       toast({
@@ -504,7 +430,7 @@ export default function VendorMenuPage({ params }: { params: Promise<{ courtId: 
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-foreground"></div>
       </div>
     )
   }
@@ -514,8 +440,8 @@ export default function VendorMenuPage({ params }: { params: Promise<{ courtId: 
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold text-neutral-100">Menu Management</h1>
-          <p className="text-neutral-400">Manage your menu items and categories</p>
+          <h1 className="text-3xl font-bold">Menu Management</h1>
+          <p className="text-muted-foreground">Manage your menu items and categories</p>
         </div>
         <div className="flex gap-2">
           {/* Inventory Management Button */}
@@ -542,19 +468,19 @@ export default function VendorMenuPage({ params }: { params: Promise<{ courtId: 
                   Add, edit, or manage your menu categories
                 </DrawerDescription>
               </DrawerHeader>
-              <div className="px-4 pb-4 max-h-[60vh] overflow-y-auto">
+              <div className="px-4 pb-4 max-h-[60vh] overflow-y-auto custom-scrollbar">
                 
                 {/* Categories List */}
                 <div className="space-y-3">
                   {categories.length === 0 ? (
-                    <div className="text-center py-8 text-neutral-500">
-                      <Tag className="h-12 w-12 mx-auto mb-3 text-neutral-300" />
+                    <div className="text-center py-8 text-muted-foreground">
+                      <Tag className="h-12 w-12 mx-auto mb-3 text-muted-foreground" />
                       <p className="text-sm">No categories yet</p>
-                      <p className="text-xs text-neutral-400 mt-1">Create your first category to organize your menu</p>
+                      <p className="text-xs text-muted-foreground mt-1">Create your first category to organize your menu</p>
                     </div>
                   ) : (
                     categories.map((category, index) => (
-                      <div key={category.id} className="flex items-center gap-3 p-3 border rounded-lg bg-neutral-50 dark:bg-neutral-900">
+                      <div key={category.id} className="flex items-center gap-3 p-3 border border-border rounded-lg bg-muted/50">
                         <div className="flex items-center gap-2 flex-1 min-w-0">
                           {category.color && (
                             <div 
@@ -565,7 +491,7 @@ export default function VendorMenuPage({ params }: { params: Promise<{ courtId: 
                           <div className="flex-1 min-w-0">
                             <h4 className="font-medium truncate">{category.name}</h4>
                             {category.description && (
-                              <p className="text-sm text-neutral-500 truncate">{category.description}</p>
+                              <p className="text-sm text-muted-foreground truncate">{category.description}</p>
                             )}
                           </div>
                         </div>
@@ -576,7 +502,7 @@ export default function VendorMenuPage({ params }: { params: Promise<{ courtId: 
                           <Button
                             size="sm"
                             variant="ghost"
-                            className="h-8 w-8 p-0 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                            className="h-8 w-8 p-0 hover:bg-muted"
                             onClick={() => {
                               setEditingCategory(category)
                               setIsCategoryDialogOpen(true)
@@ -587,7 +513,7 @@ export default function VendorMenuPage({ params }: { params: Promise<{ courtId: 
                           <Button
                             size="sm"
                             variant="ghost"
-                            className="h-8 w-8 p-0 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                            className="h-8 w-8 p-0 hover:bg-muted"
                             onClick={() => handleDeleteCategory(category.id)}
                           >
                             <Trash2 className="h-3 w-3" />
@@ -604,7 +530,7 @@ export default function VendorMenuPage({ params }: { params: Promise<{ courtId: 
                     setEditingCategory(null)
                     setIsCategoryDialogOpen(true)
                   }}
-                  className="bg-neutral-50 text-neutral-950 hover:bg-neutral-200"
+                  className="bg-muted text-foreground hover:bg-muted/80"
                 >
                   <Plus className="h-4 w-4 mr-2" />
                   Add New Category
@@ -628,7 +554,7 @@ export default function VendorMenuPage({ params }: { params: Promise<{ courtId: 
                   {editingItem ? "Update the details of your menu item" : "Add a new item to your menu"}
                 </DrawerDescription>
               </DrawerHeader>
-              <div className="px-4 pb-4 max-h-[75vh] overflow-y-auto">
+              <div className="px-4 pb-4 max-h-[75vh] overflow-y-auto custom-scrollbar">
                 <MenuItemForm 
                   item={editingItem || newItem}
                   onSave={async (formData: Partial<MenuItem>) => await handleSaveItem(formData)}
@@ -655,7 +581,7 @@ export default function VendorMenuPage({ params }: { params: Promise<{ courtId: 
               {editingCategory ? "Update the details of your category" : "Add a new category to organize your menu"}
             </DrawerDescription>
           </DrawerHeader>
-          <div className="px-4 pb-4 max-h-[70vh] overflow-y-auto">
+          <div className="px-4 pb-4 max-h-[70vh] overflow-y-auto custom-scrollbar">
             <CategoryForm 
               category={editingCategory || newCategory}
               onSave={async (formData: Partial<MenuCategory>) => await handleSaveCategory(formData)}
@@ -673,7 +599,7 @@ export default function VendorMenuPage({ params }: { params: Promise<{ courtId: 
       <Card>
         <CardContent className="pt-6">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-neutral-400 h-4 w-4" />
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
             <Input
               type="text"
               placeholder="Search menu items by name, description, category, ingredients, or allergens..."
@@ -686,14 +612,14 @@ export default function VendorMenuPage({ params }: { params: Promise<{ courtId: 
                 variant="ghost"
                 size="sm"
                 onClick={() => setSearchQuery("")}
-                className="absolute right-2 top-1/2 transform -translate-y-1/2 h-6 w-6 p-0 hover:bg-neutral-100"
+                className="absolute right-2 top-1/2 transform -translate-y-1/2 h-6 w-6 p-0 hover:bg-muted"
               >
                 <X className="h-3 w-3" />
               </Button>
             )}
           </div>
           {searchQuery && (
-            <div className="mt-2 text-sm text-neutral-600">
+            <div className="mt-2 text-sm text-muted-foreground">
               Found {filteredMenuItems.length} item{filteredMenuItems.length !== 1 ? 's' : ''} matching "{searchQuery}"
             </div>
           )}
@@ -701,119 +627,116 @@ export default function VendorMenuPage({ params }: { params: Promise<{ courtId: 
       </Card>
 
       {/* Menu Items Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {filteredMenuItems.map((item) => (
-          <Card key={item.id} className={`overflow-hidden relative ${updatingItems[item.id] ? 'opacity-75' : ''}`}>
+          <Card key={item.id} className={`overflow-hidden relative flex flex-col ${updatingItems[item.id] ? 'opacity-75' : ''}`}>
             {updatingItems[item.id] && (
-              <div className="absolute inset-0 bg-white/10 backdrop-blur-[1px] z-10 pointer-events-none rounded-lg" />
+              <div className="absolute inset-0 bg-background/10 backdrop-blur-[1px] z-10 pointer-events-none rounded-lg" />
             )}
-            <div className="flex flex-col aspect-[3/4]">
-              {/* Image Section - Top */}
-              <div className="w-full h-1/2 relative bg-neutral-200">
-                {item.imageUrl ? (
-                  <img
-                    src={item.imageUrl}
-                    alt={item.name}
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center bg-neutral-100">
-                    <span className="text-neutral-400 text-sm">No Image</span>
-                  </div>
+
+            {/* Image */}
+            <div className="relative w-full aspect-video bg-muted flex-shrink-0">
+              {item.imageUrl ? (
+                <img
+                  src={item.imageUrl}
+                  alt={item.name}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center">
+                  <span className="text-muted-foreground text-sm">No Image</span>
+                </div>
+              )}
+              {/* Status badges — top left */}
+              <div className="absolute top-2 left-2 flex flex-col gap-1">
+                <Badge variant={item.isVeg ? "default" : "destructive"} className="text-xs">
+                  {item.isVeg ? "Veg" : "Non-Veg"}
+                </Badge>
+                {!item.isAvailable && (
+                  <Badge variant="secondary" className="text-xs">Unavailable</Badge>
                 )}
-                <div className="absolute top-2 left-2 flex flex-col gap-1">
-                  <Badge variant={item.isVeg ? "default" : "destructive"} className="text-xs">
-                    {item.isVeg ? "Veg" : "Non-Veg"}
+                {item.hasStock && (
+                  <Badge
+                    variant={
+                      !item.isAvailable || item.status === "out_of_stock" ? "destructive" :
+                      (item.stockQuantity || 0) <= (item.minStockLevel || 0) ? "secondary" :
+                      "default"
+                    }
+                    className="text-xs"
+                  >
+                    {!item.isAvailable || item.status === "out_of_stock"
+                      ? "Out of Stock"
+                      : `Stock: ${item.stockQuantity || 0} ${item.stockUnit || 'pcs'}`}
                   </Badge>
-                  <Badge variant={item.isAvailable ? "default" : "secondary"} className="text-xs">
-                    {item.isAvailable ? "Available" : "Unavailable"}
-                  </Badge>
-                  {item.hasStock && (
-                    <Badge 
-                      variant={
-                        !item.isAvailable || item.status === "out_of_stock" ? "destructive" :
-                        (item.stockQuantity || 0) <= (item.minStockLevel || 0) ? "secondary" : 
-                        "default"
-                      } 
-                      className="text-xs"
-                    >
-                      {!item.isAvailable || item.status === "out_of_stock" ? "Out of Stock" : 
-                       `Stock: ${item.stockQuantity || 0} ${item.stockUnit || 'pcs'}`}
-                    </Badge>
+                )}
+              </div>
+              {/* Edit / Delete — top right */}
+              <div className="absolute top-2 right-2 flex gap-1">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  className="h-7 w-7 p-0 bg-background/80 hover:bg-background"
+                  onClick={() => {
+                    setEditingItem(item)
+                    setIsAddDialogOpen(true)
+                  }}
+                  disabled={updatingItems[item.id]}
+                >
+                  <Edit className="h-3 w-3" />
+                </Button>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  className="h-7 w-7 p-0 bg-background/80 hover:bg-background"
+                  onClick={() => handleDeleteItem(item.id)}
+                  disabled={updatingItems[item.id]}
+                >
+                  <Trash2 className="h-3 w-3" />
+                </Button>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="flex flex-col flex-1 p-4 gap-3">
+              {/* Name + category */}
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-base leading-tight truncate">{item.name}</p>
+                  {item.description && (
+                    <p className="text-sm text-muted-foreground line-clamp-2 mt-0.5">{item.description}</p>
                   )}
                 </div>
-                <div className="absolute bottom-2 leftd-2 flex gap-1">
-                  <Button
-                    size="sm"
-                    variant="default"
-                    className="h-8 w-8 p-0 bg-white/80 hover:bg-white"
-                    onClick={() => {
-                      setEditingItem(item)
-                      setIsAddDialogOpen(true)
-                    }}
-                    disabled={updatingItems[item.id]}
-                  >
-                    <Edit className="h-3 w-3" />
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="default"
-                    className="h-8 w-8 p-0 bg-white/80 hover:bg-white"
-                    onClick={() => handleDeleteItem(item.id)}
-                    disabled={updatingItems[item.id]}
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </Button>
-                </div>
+                <Badge variant="outline" className="text-xs flex-shrink-0 mt-0.5">{item.category}</Badge>
               </div>
-              
-              {/* Content Section - Bottom */}
-              <div className="flex-1 flex flex-col h-2/3">
-                <CardHeader className="flex-none pb-2">
-                  <div className="flex justify-between items-start">
-                    <div className="flex-1 min-w-0">
-                      <CardTitle className="text-lg truncate">{item.name}</CardTitle>
-                      <CardDescription className="text-sm line-clamp-2">{item.description}</CardDescription>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent className="flex-1 flex flex-col justify-between pt-0">
-                  <div className="space-y-2">
-                    <div className="flex justify-between items-center">
-                      <div className="flex flex-col">
-                        <div className="flex items-center gap-2">
-                          <span className="text-lg font-semibold text-green-600">₹{item.price}</span>
-                          {item.mrp && Number(item.mrp) !== Number(item.price) && (
-                            <span className="text-sm text-neutral-500 line-through">₹{item.mrp}</span>
-                          )}
-                        </div>
-                        <div className="text-xs text-neutral-500">Incl. GST</div>
-                        {item.mrp && Number(item.mrp) > Number(item.price) && (
-                          <span className="text-xs text-green-600">
-                            {Math.round(((Number(item.mrp) - Number(item.price)) / Number(item.mrp)) * 100)}% off
-                          </span>
-                        )}
-                      </div>
-                      <Badge variant="outline" className="text-xs">{item.category}</Badge>
-                    </div>
-                    <div className="text-sm text-neutral-600">
-                      Prep time: {item.preparationTime} mins
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between mt-2">
-                    <span className="text-sm">Available</span>
-                    <div className="flex items-center gap-2">
-                      {updatingItems[item.id] && (
-                        <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
-                      )}
-                      <Switch
-                        checked={item.isAvailable}
-                        onCheckedChange={(checked) => handleToggleAvailability(item.id, checked)}
-                        disabled={updatingItems[item.id]}
-                      />
-                    </div>
-                  </div>
-                </CardContent>
+
+              {/* Price row */}
+              <div className="flex items-center gap-2">
+                <span className="text-base font-semibold">₹{item.price}</span>
+                {item.mrp && Number(item.mrp) !== Number(item.price) && (
+                  <span className="text-sm text-muted-foreground line-through">₹{item.mrp}</span>
+                )}
+                {item.mrp && Number(item.mrp) > Number(item.price) && (
+                  <span className="text-xs text-foreground font-medium">
+                    {Math.round(((Number(item.mrp) - Number(item.price)) / Number(item.mrp)) * 100)}% off
+                  </span>
+                )}
+                <span className="text-xs text-muted-foreground ml-auto">Incl. GST</span>
+              </div>
+
+              {/* Footer row */}
+              <div className="flex items-center justify-between pt-1 border-t">
+                <span className="text-xs text-muted-foreground">Prep: {item.preparationTime} mins</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm">Available</span>
+                  {updatingItems[item.id] && (
+                    <Loader2 className="h-4 w-4 animate-spin text-foreground" />
+                  )}
+                  <Switch
+                    checked={item.isAvailable}
+                    onCheckedChange={(checked) => handleToggleAvailability(item.id, checked)}
+                    disabled={updatingItems[item.id]}
+                  />
+                </div>
               </div>
             </div>
           </Card>
@@ -825,9 +748,9 @@ export default function VendorMenuPage({ params }: { params: Promise<{ courtId: 
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
             <div className="text-center">
-              <Search className="h-12 w-12 text-neutral-400 mx-auto mb-4" />
+              <Search className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
               <h3 className="text-lg font-semibold mb-2">No items found</h3>
-              <p className="text-neutral-600 mb-4">
+              <p className="text-muted-foreground mb-4">
                 No menu items match your search for "{searchQuery}"
               </p>
               <Button 
@@ -846,7 +769,7 @@ export default function VendorMenuPage({ params }: { params: Promise<{ courtId: 
           <CardContent className="flex flex-col items-center justify-center py-12">
             <div className="text-center">
               <h3 className="text-lg font-semibold mb-2">No menu items yet</h3>
-              <p className="text-neutral-600 mb-4">Get started by adding your first menu item</p>
+              <p className="text-muted-foreground mb-4">Get started by adding your first menu item</p>
               <Button onClick={() => setIsAddDialogOpen(true)}>
                 <Plus className="h-4 w-4 mr-2" />
                 Add Menu Item
@@ -989,12 +912,12 @@ function CategoryForm({
         {/* Category Image Upload */}
         <div>
           <Label>Category Image (Recommended)</Label>
-          <p className="text-sm text-neutral-500 mb-2">
+          <p className="text-sm text-muted-foreground mb-2">
             Adding an image helps customers identify your category easily
           </p>
           <div
             className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
-              isDragOver ? 'border-blue-400 bg-blue-50' : 'border-neutral-300'
+              isDragOver ? 'border-border bg-muted' : 'border-border'
             }`}
             onDrop={handleDrop}
             onDragOver={(e) => {
@@ -1017,17 +940,17 @@ function CategoryForm({
                     setUploadedImage(null)
                     setFormData(prev => ({ ...prev, imageUrl: undefined }))
                   }}
-                  className="absolute top-0 right-0 bg-red-500 text-white rounded-full p-1 transform translate-x-2 -translate-y-2"
+                  className="absolute top-0 right-0 bg-destructive text-destructive-foreground rounded-full p-1 transform translate-x-2 -translate-y-2"
                 >
                   <X className="h-3 w-3" />
                 </button>
               </div>
             ) : (
               <div>
-                <Upload className="h-6 w-6 mx-auto text-neutral-400 mb-2" />
-                <p className="text-sm text-neutral-600">
+                <Upload className="h-6 w-6 mx-auto text-muted-foreground mb-2" />
+                <p className="text-sm text-muted-foreground">
                   Drag and drop an image here, or{' '}
-                  <label className="text-blue-600 cursor-pointer hover:underline">
+                  <label className="text-foreground cursor-pointer hover:underline">
                     browse
                     <input
                       type="file"
@@ -1040,7 +963,7 @@ function CategoryForm({
                     />
                   </label>
                 </p>
-                <p className="text-xs text-neutral-400 mt-1">
+                <p className="text-xs text-muted-foreground mt-1">
                   Recommended: 400x200px, JPG or PNG
                 </p>
               </div>
@@ -1293,7 +1216,7 @@ function MenuItemForm({
           <Label>Item Image</Label>
           <div
             className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
-              isDragOver ? 'border-blue-400 bg-blue-50' : 'border-neutral-300'
+              isDragOver ? 'border-border bg-muted' : 'border-border'
             }`}
             onDrop={handleDrop}
             onDragOver={(e) => {
@@ -1316,17 +1239,17 @@ function MenuItemForm({
                     setUploadedImage(null)
                     setFormData(prev => ({ ...prev, imageUrl: undefined }))
                   }}
-                  className="absolute top-0 right-0 bg-red-500 text-white rounded-full p-1 transform translate-x-2 -translate-y-2"
+                  className="absolute top-0 right-0 bg-destructive text-destructive-foreground rounded-full p-1 transform translate-x-2 -translate-y-2"
                 >
                   <X className="h-3 w-3" />
                 </button>
               </div>
             ) : (
               <div>
-                <Upload className="h-8 w-8 mx-auto text-neutral-400 mb-2" />
-                <p className="text-sm text-neutral-600">
+                <Upload className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
+                <p className="text-sm text-muted-foreground">
                   Drag and drop an image here, or{' '}
-                  <label className="text-blue-600 cursor-pointer hover:underline">
+                  <label className="text-foreground cursor-pointer hover:underline">
                     browse
                     <input
                       type="file"

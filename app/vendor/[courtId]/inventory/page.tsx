@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, use } from "react"
-import { useVendorAuth } from "@/contexts/vendor-auth-context"
+import { useUnifiedAuth } from "@/contexts/unified-auth-context"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -13,6 +13,7 @@ import { useToast } from "@/hooks/use-toast"
 import { useRouter } from "next/navigation"
 import { Package, Plus, Minus, AlertTriangle, CheckCircle, XCircle, TrendingUp, Search, Filter, ArrowLeft, Loader2 } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { vendorApi } from "@/lib/api"
 
 interface MenuItem {
   id: string
@@ -44,7 +45,7 @@ interface InventoryStats {
 }
 
 export default function VendorInventory({ params }: { params: Promise<{ courtId: string }> }) {
-  const { user, token } = useVendorAuth()
+  const { user } = useUnifiedAuth()
   const router = useRouter()
   const { toast } = useToast()
   const { courtId } = use(params)
@@ -102,24 +103,20 @@ export default function VendorInventory({ params }: { params: Promise<{ courtId:
     try {
       setLoading(true)
       
-      const response = await fetch(`/api/vendors/${user?.vendorProfile?.id}/menu?include=categories`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        const menuItems = data.data?.menuItems || []
-        const mappedItems = menuItems.map((item: any) => ({
-          ...item,
-          isVeg: item.isVegetarian,
-          category: item.menuCategory?.name || item.category || 'Other'
-        }))
-        
-        setMenuItems(mappedItems)
-        calculateStats(mappedItems)
-      }
+      const vendorId = user?.vendorProfile?.id
+      if (!vendorId) return
+      
+      const data = await vendorApi.getMenu(vendorId)
+      
+      const menuItemsData = data.menuItems || []
+      const mappedItems = menuItemsData.map((item: any) => ({
+        ...item,
+        isVeg: item.isVegetarian,
+        category: item.menuCategory?.name || item.category || 'Other'
+      }))
+      
+      setMenuItems(mappedItems)
+      calculateStats(mappedItems)
     } catch (error) {
       console.error("Error fetching inventory data:", error)
       toast({
@@ -166,66 +163,48 @@ export default function VendorInventory({ params }: { params: Promise<{ courtId:
     try {
       setUpdatingItems(prev => ({ ...prev, [itemId]: true }))
       
-      const response = await fetch(`/api/vendors/${user?.vendorProfile?.id}/menu/${itemId}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ 
-          stockQuantity: Math.max(0, newQuantity),
-          status: newQuantity === 0 ? "out_of_stock" : "active"
-        }),
-      })
+      const vendorId = user?.vendorProfile?.id
+      if (!vendorId) return
+      
+      await vendorApi.updateMenuItem(vendorId, itemId, { 
+        stockQuantity: Math.max(0, newQuantity),
+        status: newQuantity === 0 ? "out_of_stock" : "active"
+      } as any)
 
-      if (response.ok) {
-        // Update the local menu items state without full refetch
-        setMenuItems(prev => prev.map(item => 
-          item.id === itemId 
-            ? { 
-                ...item, 
-                stockQuantity: newQuantity,
-                status: (newQuantity === 0 ? "out_of_stock" : "active") as "active" | "inactive" | "out_of_stock"
-              }
-            : item
-        ))
-        
-        // Recalculate stats
-        const updatedItems = menuItems.map(item => 
-          item.id === itemId 
-            ? { 
-                ...item, 
-                stockQuantity: newQuantity, 
-                status: (newQuantity === 0 ? "out_of_stock" : "active") as "active" | "inactive" | "out_of_stock"
-              }
-            : item
-        )
-        calculateStats(updatedItems)
-        
-        // Clear pending update for this item
-        setPendingUpdates(prev => {
-          const newPending = { ...prev }
-          delete newPending[itemId]
-          return newPending
-        })
-        
-        toast({
-          title: "Success",
-          description: "Stock updated successfully",
-        })
-      } else {
-        // Revert local state on error
-        setLocalStockQuantities(prev => ({
-          ...prev,
-          [itemId]: menuItems.find(item => item.id === itemId)?.stockQuantity || 0
-        }))
-        
-        toast({
-          title: "Error",
-          description: "Failed to update stock",
-          variant: "destructive",
-        })
-      }
+      // Update the local menu items state without full refetch
+      setMenuItems(prev => prev.map(item => 
+        item.id === itemId 
+          ? { 
+              ...item, 
+              stockQuantity: newQuantity,
+              status: (newQuantity === 0 ? "out_of_stock" : "active") as "active" | "inactive" | "out_of_stock"
+            }
+          : item
+      ))
+      
+      // Recalculate stats
+      const updatedItems = menuItems.map(item => 
+        item.id === itemId 
+          ? { 
+              ...item, 
+              stockQuantity: newQuantity, 
+              status: (newQuantity === 0 ? "out_of_stock" : "active") as "active" | "inactive" | "out_of_stock"
+            }
+          : item
+      )
+      calculateStats(updatedItems)
+      
+      // Clear pending update for this item
+      setPendingUpdates(prev => {
+        const newPending = { ...prev }
+        delete newPending[itemId]
+        return newPending
+      })
+      
+      toast({
+        title: "Success",
+        description: "Stock updated successfully",
+      })
     } catch (error) {
       console.error("Error updating stock:", error)
       
@@ -297,42 +276,30 @@ export default function VendorInventory({ params }: { params: Promise<{ courtId:
     try {
       setUpdatingItems(prev => ({ ...prev, [itemId]: true }))
       
-      const response = await fetch(`/api/vendors/${user?.vendorProfile?.id}/menu/${itemId}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ isAvailable }),
-      })
+      const vendorId = user?.vendorProfile?.id
+      if (!vendorId) return
+      
+      await vendorApi.toggleItemAvailability(vendorId, itemId, isAvailable)
 
-      if (response.ok) {
-        // Update the local menu items state without full refetch
-        setMenuItems(prev => prev.map(item => 
-          item.id === itemId 
-            ? { ...item, isAvailable }
-            : item
-        ))
-        
-        // Recalculate stats
-        const updatedItems = menuItems.map(item => 
-          item.id === itemId 
-            ? { ...item, isAvailable }
-            : item
-        )
-        calculateStats(updatedItems)
-        
-        toast({
-          title: "Success",
-          description: `Item ${isAvailable ? 'enabled' : 'disabled'} successfully`,
-        })
-      } else {
-        toast({
-          title: "Error",
-          description: "Failed to update item availability",
-          variant: "destructive",
-        })
-      }
+      // Update the local menu items state without full refetch
+      setMenuItems(prev => prev.map(item => 
+        item.id === itemId 
+          ? { ...item, isAvailable }
+          : item
+      ))
+      
+      // Recalculate stats
+      const updatedItems = menuItems.map(item => 
+        item.id === itemId 
+          ? { ...item, isAvailable }
+          : item
+      )
+      calculateStats(updatedItems)
+      
+      toast({
+        title: "Success",
+        description: `Item ${isAvailable ? 'enabled' : 'disabled'} successfully`,
+      })
     } catch (error) {
       console.error("Error updating availability:", error)
       toast({
@@ -357,61 +324,49 @@ export default function VendorInventory({ params }: { params: Promise<{ courtId:
     try {
       setUpdatingItems(prev => ({ ...prev, [editingItem.id]: true }))
       
-      const response = await fetch(`/api/vendors/${user?.vendorProfile?.id}/menu/${editingItem.id}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          ...stockData,
-          status: !stockData.hasStock ? "active" : (stockData.stockQuantity === 0 ? "out_of_stock" : "active")
-        }),
-      })
+      const vendorId = user?.vendorProfile?.id
+      if (!vendorId) return
+      
+      await vendorApi.updateMenuItem(vendorId, editingItem.id, {
+        ...stockData,
+        status: !stockData.hasStock ? "active" : (stockData.stockQuantity === 0 ? "out_of_stock" : "active")
+      } as any)
 
-      if (response.ok) {
-        // Update the local menu items state
-        setMenuItems(prev => prev.map(item => 
-          item.id === editingItem.id 
-            ? { 
-                ...item, 
-                ...stockData,
-                status: !stockData.hasStock ? "active" : (stockData.stockQuantity === 0 ? "out_of_stock" : "active")
-              }
-            : item
-        ))
-        
-        // Update local stock quantities
-        setLocalStockQuantities(prev => ({
-          ...prev,
-          [editingItem.id]: stockData.hasStock ? stockData.stockQuantity : 0
-        }))
-        
-        // Recalculate stats
-        const updatedItems = menuItems.map(item => 
-          item.id === editingItem.id 
-            ? { 
-                ...item, 
-                ...stockData, 
-                status: (!stockData.hasStock ? "active" : (stockData.stockQuantity === 0 ? "out_of_stock" : "active")) as "active" | "inactive" | "out_of_stock"
-              }
-            : item
-        )
-        calculateStats(updatedItems)
-        
-        setIsEditDialogOpen(false)
-        setEditingItem(null)
-        toast({
-          title: "Success",
-          description: stockData.hasStock ? "Stock tracking enabled and settings updated successfully" : "Stock tracking disabled successfully",
-        })
-      } else {
-        toast({
-          title: "Error",
-          description: "Failed to update stock settings",
-          variant: "destructive",
-        })
-      }
+      // Update the local menu items state
+      setMenuItems(prev => prev.map(item => 
+        item.id === editingItem.id 
+          ? { 
+              ...item, 
+              ...stockData,
+              status: !stockData.hasStock ? "active" : (stockData.stockQuantity === 0 ? "out_of_stock" : "active")
+            }
+          : item
+      ))
+      
+      // Update local stock quantities
+      setLocalStockQuantities(prev => ({
+        ...prev,
+        [editingItem.id]: stockData.hasStock ? stockData.stockQuantity : 0
+      }))
+      
+      // Recalculate stats
+      const updatedItems = menuItems.map(item => 
+        item.id === editingItem.id 
+          ? { 
+              ...item, 
+              ...stockData, 
+              status: (!stockData.hasStock ? "active" : (stockData.stockQuantity === 0 ? "out_of_stock" : "active")) as "active" | "inactive" | "out_of_stock"
+            }
+          : item
+      )
+      calculateStats(updatedItems)
+      
+      setIsEditDialogOpen(false)
+      setEditingItem(null)
+      toast({
+        title: "Success",
+        description: stockData.hasStock ? "Stock tracking enabled and settings updated successfully" : "Stock tracking disabled successfully",
+      })
     } catch (error) {
       console.error("Error updating stock settings:", error)
       toast({
@@ -443,13 +398,13 @@ export default function VendorInventory({ params }: { params: Promise<{ courtId:
     
     switch (status) {
       case "out-of-stock":
-        return <Badge variant="destructive" className="text-xs bg-red-900/80 text-red-200 border-red-800/50">Out of Stock</Badge>
+        return <Badge variant="destructive" className="text-xs">Out of Stock</Badge>
       case "low-stock":
-        return <Badge variant="secondary" className="text-xs bg-yellow-900/80 text-yellow-200 border-yellow-800/50">Low Stock</Badge>
+        return <Badge variant="secondary" className="text-xs">Low Stock</Badge>
       case "in-stock":
-        return <Badge variant="default" className="text-xs bg-green-900/80 text-green-200 border-green-800/50">In Stock</Badge>
+        return <Badge variant="default" className="text-xs bg-foreground text-background">In Stock</Badge>
       default:
-        return <Badge variant="outline" className="text-xs bg-neutral-800/80 text-neutral-300 border-neutral-600/50">No Tracking</Badge>
+        return <Badge variant="outline" className="text-xs">No Tracking</Badge>
     }
   }
 
@@ -488,8 +443,8 @@ export default function VendorInventory({ params }: { params: Promise<{ courtId:
       <div className="flex justify-between items-center">
         <div className="flex items-center gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-neutral-100">Inventory Management</h1>
-            <p className="text-neutral-400">Monitor and manage your stock levels</p>
+            <h1 className="text-3xl font-bold">Inventory Management</h1>
+            <p className="text-muted-foreground">Monitor and manage your stock levels</p>
           </div>
         </div>
       </div>
@@ -509,40 +464,40 @@ export default function VendorInventory({ params }: { params: Promise<{ courtId:
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Active Items</CardTitle>
-            <CheckCircle className="h-4 w-4 text-green-600" />
+            <CheckCircle className="h-4 w-4 text-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600">{stats.activeItems}</div>
+            <div className="text-2xl font-bold text-foreground">{stats.activeItems}</div>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Out of Stock</CardTitle>
-            <XCircle className="h-4 w-4 text-red-600" />
+            <XCircle className="h-4 w-4 text-destructive" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-red-600">{stats.outOfStock}</div>
+            <div className="text-2xl font-bold text-destructive">{stats.outOfStock}</div>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Low Stock</CardTitle>
-            <AlertTriangle className="h-4 w-4 text-yellow-600" />
+            <AlertTriangle className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-yellow-600">{stats.lowStock}</div>
+            <div className="text-2xl font-bold">{stats.lowStock}</div>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Stock Value</CardTitle>
-            <TrendingUp className="h-4 w-4 text-blue-600" />
+            <TrendingUp className="h-4 w-4 text-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-blue-600">₹{Number(stats.totalStockValue || 0).toFixed(2)}</div>
+            <div className="text-2xl font-bold text-foreground">₹{Number(stats.totalStockValue || 0).toFixed(2)}</div>
           </CardContent>
         </Card>
       </div>
@@ -552,7 +507,7 @@ export default function VendorInventory({ params }: { params: Promise<{ courtId:
         <CardContent className="pt-6">
           <div className="flex flex-col md:flex-row gap-4">
             <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-neutral-400 h-4 w-4" />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
               <Input
                 type="text"
                 placeholder="Search items by name or category..."
@@ -578,7 +533,7 @@ export default function VendorInventory({ params }: { params: Promise<{ courtId:
             </div>
           </div>
           {(searchQuery || filterStatus !== "all") && (
-            <div className="mt-4 text-sm text-neutral-600">
+            <div className="mt-4 text-sm text-muted-foreground">
               Found {filteredItems.length} item{filteredItems.length !== 1 ? 's' : ''}
               {searchQuery && ` matching "${searchQuery}"`}
               {filterStatus !== "all" && ` with status "${filterStatus.replace('-', ' ')}"`}
@@ -588,139 +543,120 @@ export default function VendorInventory({ params }: { params: Promise<{ courtId:
       </Card>
 
       {/* Inventory Items */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {filteredItems.map((item) => (
-          <Card key={item.id} className="overflow-hidden">
-            <div className="aspect-[3/2] relative bg-neutral-800">
+          <Card key={item.id} className="overflow-hidden flex flex-col">
+            {/* Image */}
+            <div className="relative aspect-video bg-muted flex-shrink-0">
               {item.imageUrl ? (
-                <img
-                  src={item.imageUrl}
-                  alt={item.name}
-                  className="w-full h-full object-cover"
-                />
+                <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover" />
               ) : (
-                <div className="w-full h-full flex items-center justify-center bg-neutral-700">
-                  <Package className="h-8 w-8 text-neutral-400" />
+                <div className="w-full h-full flex items-center justify-center">
+                  <Package className="h-8 w-8 text-muted-foreground" />
                 </div>
               )}
-              <div className="absolute top-2 left-2">
-                {getStockStatusBadge(item)}
-              </div>
+              <div className="absolute top-2 left-2">{getStockStatusBadge(item)}</div>
               <div className="absolute top-2 right-2">
-                <Badge variant="secondary" className="text-xs bg-neutral-900/80 text-neutral-200 border-neutral-700">
-                  {item.category}
-                </Badge>
+                <Badge variant="secondary" className="text-xs">{item.category}</Badge>
               </div>
             </div>
-            
-            <CardHeader className="pb-2 px-4 pt-3">
-              <CardTitle className="text-base leading-tight">{item.name}</CardTitle>
-              <CardDescription className="text-xs line-clamp-1">{item.description}</CardDescription>
-            </CardHeader>
-            
-            <CardContent className="space-y-3 px-4 pb-4">
-              <div className="flex justify-between items-center">
-                <span className="text-base font-semibold text-green-400">₹{item.price}</span>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-neutral-400">Available</span>
-                  {updatingItems[item.id] ? (
-                    <Loader2 className="h-3 w-3 animate-spin text-neutral-400" />
-                  ) : (
-                    <Switch
-                      checked={item.isAvailable}
-                      onCheckedChange={(checked) => handleToggleAvailability(item.id, checked)}
-                    />
+
+            <div className="flex flex-col flex-1 p-4 gap-3">
+              {/* Name + price row */}
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-sm leading-tight truncate">{item.name}</p>
+                  {item.description && (
+                    <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">{item.description}</p>
                   )}
                 </div>
+                <span className="text-sm font-semibold flex-shrink-0">₹{item.price}</span>
               </div>
 
+              {/* Stock section */}
               {item.hasStock ? (
-                <div className="space-y-3">
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs font-medium">Current Stock</span>
-                    <div className="flex items-center gap-1">
-                      <span className="text-xs">
-                        {getDisplayStockQuantity(item)} {item.stockUnit || 'pcs'}
-                      </span>
-                      {(updatingItems[item.id] || pendingUpdates[item.id] !== undefined) && (
-                        <div className="flex items-center gap-1">
-                          {updatingItems[item.id] ? (
-                            <Loader2 className="h-3 w-3 animate-spin text-blue-400" />
-                          ) : (
-                            <div className="h-1.5 w-1.5 bg-yellow-400 rounded-full animate-pulse" title="Pending update" />
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  
+                <div className="space-y-2">
+                  {/* Quantity stepper */}
                   <div className="flex items-center gap-2">
                     <Button
                       size="sm"
                       variant="outline"
+                      className="h-8 w-8 p-0 flex-shrink-0"
                       onClick={() => handleStockDecrement(item.id)}
                       disabled={!item.isAvailable || getDisplayStockQuantity(item) <= 0 || updatingItems[item.id]}
                     >
                       <Minus className="h-3 w-3" />
                     </Button>
-                    <Input
-                      type="number"
-                      value={getDisplayStockQuantity(item)}
-                      onChange={(e) => handleStockInputChange(item.id, e.target.value)}
-                      className="text-center"
-                      min="0"
-                      disabled={!item.isAvailable || updatingItems[item.id]}
-                    />
+                    <div className="relative flex-1">
+                      <Input
+                        type="number"
+                        value={getDisplayStockQuantity(item)}
+                        onChange={(e) => handleStockInputChange(item.id, e.target.value)}
+                        className="text-center h-8 pr-8"
+                        min="0"
+                        disabled={!item.isAvailable || updatingItems[item.id]}
+                      />
+                      {/* Saving indicator inside input */}
+                      <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                        {updatingItems[item.id] ? (
+                          <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+                        ) : pendingUpdates[item.id] !== undefined ? (
+                          <div className="h-1.5 w-1.5 bg-amber-400 rounded-full animate-pulse" />
+                        ) : null}
+                      </div>
+                    </div>
                     <Button
                       size="sm"
                       variant="outline"
+                      className="h-8 w-8 p-0 flex-shrink-0"
                       onClick={() => handleStockIncrement(item.id)}
                       disabled={!item.isAvailable || updatingItems[item.id]}
                     >
                       <Plus className="h-3 w-3" />
                     </Button>
+                    <span className="text-xs text-muted-foreground flex-shrink-0">{item.stockUnit || 'pcs'}</span>
                   </div>
+
+                  {/* Min/max hint */}
+                  <p className="text-xs text-muted-foreground">
+                    Min {item.minStockLevel || 0} · Max {item.maxStockLevel || 0} {item.stockUnit || 'pcs'}
+                  </p>
 
                   {!item.isAvailable && (
-                    <div className="text-xs text-amber-400 bg-amber-900/30 border border-amber-800/50 p-1.5 rounded">
-                      Stock controls disabled - Item is unavailable
-                    </div>
+                    <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 px-2 py-1 rounded">
+                      Stock controls disabled — item is unavailable
+                    </p>
                   )}
-
-                  <div className="text-xs text-neutral-400">
-                    Min: {item.minStockLevel || 0} | Max: {item.maxStockLevel || 0}
-                  </div>
-
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-full text-xs h-7"
-                    onClick={() => {
-                      setEditingItem(item)
-                      setIsEditDialogOpen(true)
-                    }}
-                    disabled={updatingItems[item.id]}
-                  >
-                    Edit Stock Settings
-                  </Button>
                 </div>
               ) : (
-                <div className="text-center py-3">
-                  <div className="text-xs text-neutral-400 mb-2">Stock tracking not enabled</div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="text-xs h-7"
-                    onClick={() => {
-                      setEditingItem(item)
-                      setIsEditDialogOpen(true)
-                    }}
-                  >
-                    Enable Stock Tracking
-                  </Button>
-                </div>
+                <p className="text-xs text-muted-foreground">No stock tracking</p>
               )}
-            </CardContent>
+
+              {/* Footer: availability toggle + settings */}
+              <div className="flex items-center justify-between pt-1 border-t mt-auto">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-muted-foreground">Available</span>
+                  {updatingItems[item.id] && !item.hasStock ? (
+                    <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+                  ) : (
+                    <Switch
+                      checked={item.isAvailable}
+                      onCheckedChange={(checked) => handleToggleAvailability(item.id, checked)}
+                      disabled={updatingItems[item.id]}
+                    />
+                  )}
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-xs px-2"
+                  onClick={() => { setEditingItem(item); setIsEditDialogOpen(true) }}
+                  disabled={updatingItems[item.id]}
+                >
+                  {item.hasStock ? "Settings" : "Enable tracking"}
+                </Button>
+              </div>
+            </div>
           </Card>
         ))}
       </div>
@@ -729,9 +665,9 @@ export default function VendorInventory({ params }: { params: Promise<{ courtId:
       {filteredItems.length === 0 && (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
-            <Package className="h-12 w-12 text-neutral-400 mb-4" />
+            <Package className="h-12 w-12 text-muted-foreground mb-4" />
             <h3 className="text-lg font-semibold mb-2">No items found</h3>
-            <p className="text-neutral-600 text-center">
+            <p className="text-muted-foreground text-center">
               {searchQuery || filterStatus !== "all" 
                 ? "No items match your current filters"
                 : "You haven't added any menu items yet"
@@ -856,7 +792,7 @@ function StockEditForm({
             Track Stock for this item
           </Label>
         </div>
-        <p className="text-sm text-neutral-500">
+        <p className="text-sm text-muted-foreground">
           {hasStock 
             ? "Stock tracking is enabled. You can manage quantity and set alerts." 
             : "Enable this to track inventory levels for this item."
@@ -914,7 +850,7 @@ function StockEditForm({
               onChange={(e) => setMinStockLevel(parseInt(e.target.value) || 0)}
               placeholder="5"
             />
-            <p className="text-xs text-neutral-500 mt-1">
+            <p className="text-xs text-muted-foreground mt-1">
               You'll get alerts when stock falls below this level
             </p>
           </div>
@@ -929,7 +865,7 @@ function StockEditForm({
               onChange={(e) => setMaxStockLevel(parseInt(e.target.value) || 0)}
               placeholder="100"
             />
-            <p className="text-xs text-neutral-500 mt-1">
+            <p className="text-xs text-muted-foreground mt-1">
               Maximum quantity you can store for this item
             </p>
           </div>

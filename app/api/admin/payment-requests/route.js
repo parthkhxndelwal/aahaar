@@ -1,10 +1,23 @@
 import { NextResponse } from "next/server"
 import { Op } from "sequelize"
 import db from "@/models"
+import { authenticateToken } from "@/middleware/auth"
 
 // POST - Create a new payment request
 export async function POST(request) {
   try {
+    const authResult = await authenticateToken(request)
+    if (authResult instanceof NextResponse) return authResult
+
+    const { user } = authResult
+
+    if (user.role !== "admin") {
+      return NextResponse.json(
+        { success: false, message: "Admin access required" },
+        { status: 403 }
+      )
+    }
+
     const body = await request.json()
     const {
       vendorId,
@@ -57,15 +70,37 @@ export async function POST(request) {
       )
     }
 
+    // Resolve bank details from request body or vendor record
+    const resolvedBeneficiaryName = bankAccountHolderName || vendor.bankAccountHolderName
+    const resolvedAccountNumber = bankAccountNumber || vendor.bankAccountNumber
+    const resolvedIfscCode = bankIfscCode || vendor.bankIfscCode
+    const resolvedBankName = bankName || vendor.bankName
+
+    // Validate required bank details
+    if (!resolvedBeneficiaryName || !resolvedAccountNumber || !resolvedIfscCode) {
+      const missingFields = []
+      if (!resolvedBeneficiaryName) missingFields.push("Account Holder Name")
+      if (!resolvedAccountNumber) missingFields.push("Account Number")
+      if (!resolvedIfscCode) missingFields.push("IFSC Code")
+      
+      return NextResponse.json(
+        { 
+          success: false, 
+          message: `Missing required bank details: ${missingFields.join(", ")}. Please update vendor bank information first.` 
+        },
+        { status: 400 }
+      )
+    }
+
     // Create payment request
     const paymentRequest = await db.PaymentRequest.create({
       vendorId,
       courtId,
       businessName: vendor.vendorName || vendor.stallName,
-      beneficiaryName: bankAccountHolderName || vendor.bankAccountHolderName,
-      accountNumber: bankAccountNumber || vendor.bankAccountNumber,
-      ifscCode: bankIfscCode || vendor.bankIfscCode,
-      bankName: bankName || vendor.bankName,
+      beneficiaryName: resolvedBeneficiaryName,
+      accountNumber: resolvedAccountNumber,
+      ifscCode: resolvedIfscCode,
+      bankName: resolvedBankName,
       businessType: businessType || vendor.metadata?.businessType || "individual",
       businessCategory: "food_and_beverages",
       businessSubcategory: "restaurant",
@@ -98,6 +133,18 @@ export async function POST(request) {
 // GET - List payment requests (for super admin)
 export async function GET(request) {
   try {
+    const authResult = await authenticateToken(request)
+    if (authResult instanceof NextResponse) return authResult
+
+    const { user } = authResult
+
+    if (user.role !== "admin") {
+      return NextResponse.json(
+        { success: false, message: "Admin access required" },
+        { status: 403 }
+      )
+    }
+
     const { searchParams } = new URL(request.url)
     const courtId = searchParams.get("courtId")
     const status = searchParams.get("status")
@@ -155,11 +202,30 @@ export async function GET(request) {
 // PUT - Approve or reject payment request (super admin only)
 export async function PUT(request) {
   try {
+    const authResult = await authenticateToken(request)
+    if (authResult instanceof NextResponse) return authResult
+
+    const { user } = authResult
+
+    if (user.role !== "admin") {
+      return NextResponse.json(
+        { success: false, message: "Admin access required" },
+        { status: 403 }
+      )
+    }
+
     const body = await request.json()
     const { id, action, razorpayAccountId, rejectionReason, pin } = body
 
     // Validate PIN
-    if (pin !== "1199") {
+    const expectedPin = process.env.ADMIN_PAYMENT_PIN
+    if (!expectedPin) {
+      return NextResponse.json(
+        { success: false, message: "Server configuration error: payment PIN not configured" },
+        { status: 500 }
+      )
+    }
+    if (pin !== expectedPin) {
       return NextResponse.json(
         { success: false, message: "Invalid PIN" },
         { status: 403 }

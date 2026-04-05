@@ -1,10 +1,20 @@
-import { NextResponse } from "next/server"
 import { CourtSettings, Court } from "@/models"
 import { authenticateToken } from "@/middleware/auth"
+import { successResponse, errorResponse, handleServiceError } from "@/lib/api-response"
+import { NextResponse } from "next/server"
 
 export async function GET(request, { params }) {
   try {
+    const authResult = await authenticateToken(request)
+    if (authResult instanceof NextResponse) return authResult
+
+    const { user } = authResult
     const { courtId } = await params
+
+    // Verify user belongs to requested court (super admins can access any court)
+    if (user.role !== "superadmin" && user.courtId !== courtId) {
+      return errorResponse("Access denied", 403)
+    }
 
     // Get both court and settings data
     const court = await Court.findOne({
@@ -18,7 +28,7 @@ export async function GET(request, { params }) {
     })
 
     if (!court) {
-      return NextResponse.json({ success: false, message: "Court not found" }, { status: 404 })
+      return errorResponse("Court not found", 404)
     }
 
     // Transform the data to match frontend expectations
@@ -75,13 +85,10 @@ export async function GET(request, { params }) {
       orderCancellationWindow: court.settings?.orderCancellationWindow || 5,
     }
 
-    return NextResponse.json({
-      success: true,
-      data: { settings },
-    })
+    return successResponse({ settings })
   } catch (error) {
     console.error("Get court settings error:", error)
-    return NextResponse.json({ success: false, message: "Internal server error" }, { status: 500 })
+    return handleServiceError(error)
   }
 }
 
@@ -93,8 +100,8 @@ export async function PUT(request, { params }) {
     
     const updateData = await request.json()
 
-    if (user.role !== "admin") {
-      return NextResponse.json({ success: false, message: "Admin access required" }, { status: 403 })
+    if (user.role !== "superadmin" && user.courtId !== courtId) {
+      return errorResponse("Access denied", 403)
     }
 
     // Update Court basic information
@@ -150,13 +157,9 @@ export async function PUT(request, { params }) {
 
     const [settings] = await CourtSettings.upsert(settingsUpdateData)
 
-    return NextResponse.json({
-      success: true,
-      message: "Settings updated successfully",
-      data: { settings },
-    })
+    return successResponse({ settings }, "Settings updated successfully")
   } catch (error) {
     console.error("Update court settings error:", error)
-    return NextResponse.json({ success: false, message: "Internal server error" }, { status: 500 })
+    return handleServiceError(error)
   }
 }

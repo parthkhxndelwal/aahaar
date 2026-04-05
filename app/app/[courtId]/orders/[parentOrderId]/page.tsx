@@ -1,6 +1,5 @@
 "use client"
 import { use, useEffect, useState } from "react"
-import { motion, AnimatePresence } from "framer-motion"
 import { 
   ArrowLeft, 
   Clock, 
@@ -17,10 +16,11 @@ import {
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { useAppAuth } from "@/contexts/app-auth-context"
+import { useUnifiedAuth } from "@/contexts/unified-auth-context"
 import { useRouter } from "next/navigation"
 import Image from "next/image"
 import { useOrderDetails } from "@/hooks/use-order-details"
+import { orderApi } from "@/lib/api"
 
 interface OrderItem {
   id: string
@@ -77,7 +77,7 @@ export default function OrderDetailsPage({
   params: Promise<{ courtId: string; parentOrderId: string }>
 }) {
   const { courtId, parentOrderId } = use(params)
-  const { user, token, loading: authLoading } = useAppAuth()
+  const { user, token, loading: authLoading } = useUnifiedAuth()
   const router = useRouter()
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -93,18 +93,6 @@ export default function OrderDetailsPage({
     error: orderDetailsError,
     refetch
   } = useOrderDetails(user?.id || null, parentOrderId, courtId)
-
-  const pageVariants = {
-    initial: { opacity: 0, x: 20 },
-    in: { opacity: 1, x: 0 },
-    out: { opacity: 0, x: -20 }
-  }
-
-  const pageTransition = {
-    type: "tween" as const,
-    ease: "anticipate" as const,
-    duration: 0.4
-  }
 
   useEffect(() => {
     // Wait for auth context to finish loading
@@ -139,25 +127,14 @@ export default function OrderDetailsPage({
     }
 
     try {
-      const response = await fetch(`/api/app/${courtId}/orders/status`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ parentOrderId }),
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        if (data.success && updateOrderDetails) {
-          // Update polling hook state with fetched data
-          updateOrderDetails(data.data)
-          console.log('📊 [OrderDetails] Initial order details fetched and updated in polling hook:', {
-            parentOrderId: data.data.parentOrderId,
-            vendorsCount: data.data.summary.totalVendors
-          })
-        }
+      const data = await orderApi.getOrderDetails(courtId, parentOrderId)
+      if (data && updateOrderDetails) {
+        // Update polling hook state with fetched data
+        updateOrderDetails(data as any)
+        console.log('📊 [OrderDetails] Initial order details fetched and updated in polling hook:', {
+          parentOrderId: data.parentOrderId,
+          vendorsCount: data.summary.totalVendors
+        })
       }
     } catch (error) {
       console.error("Error fetching order details:", error)
@@ -177,13 +154,9 @@ export default function OrderDetailsPage({
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case "pending": return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400"
-      case "accepted": return "bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400"
-      case "preparing": return "bg-orange-100 text-orange-800 dark:bg-orange-900/20 dark:text-orange-400"
-      case "ready": return "bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400"
-      case "completed": return "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-400"
-      case "rejected": return "bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400"
-      default: return "bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-400"
+      case "ready": return "bg-foreground text-background"
+      case "rejected": return "bg-destructive text-destructive-foreground"
+      default: return "bg-muted text-foreground"
     }
   }
 
@@ -231,115 +204,62 @@ export default function OrderDetailsPage({
 
   if (authLoading || loading) {
     return (
-      <motion.div 
-        className="min-h-screen bg-neutral-50 dark:bg-neutral-950 flex items-center justify-center"
-        variants={pageVariants}
-        initial="initial"
-        animate="in"
-        exit="out"
-        transition={pageTransition}
-      >
+      <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
           <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-4" />
           <div>
             {authLoading ? "Checking authentication..." : "Loading order details..."}
           </div>
-          {user?.id && parentOrderId && (
-            <p className="text-xs text-neutral-500 mt-2">
-              Polling: {!orderDetailsError ? '🟢 Active' : '🔴 Error'} | User: {user.id} | Order: {parentOrderId}
-            </p>
-          )}
-          {orderDetailsError && (
-            <p className="text-xs text-red-500 mt-1">
-              Polling Error: {orderDetailsError}
-            </p>
-          )}
         </div>
-      </motion.div>
+      </div>
     )
   }
 
   if (!orderDetails) {
     return (
-      <motion.div 
-        className="min-h-screen bg-neutral-50 dark:bg-neutral-950 flex items-center justify-center"
-        variants={pageVariants}
-        initial="initial"
-        animate="in"
-        exit="out"
-        transition={pageTransition}
-      >
+      <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
-          <AlertTriangle className="h-12 w-12 mx-auto mb-4 text-neutral-400" />
+          <AlertTriangle className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
           <div className="text-lg font-medium">Order not found</div>
-          <div className="text-neutral-500">The order you're looking for doesn't exist</div>
+          <div className="text-muted-foreground">The order you're looking for doesn't exist</div>
         </div>
-      </motion.div>
+      </div>
     )
   }
 
   return (
-    <motion.div 
-      className="min-h-screen bg-neutral-50 dark:bg-neutral-950"
-      variants={pageVariants}
-      initial="initial"
-      animate="in"
-      exit="out"
-      transition={pageTransition}
-    >
+    <div className="min-h-screen bg-background">
       {/* Header */}
-      <motion.div 
-        className="bg-white dark:bg-neutral-950 shadow-sm border-b border-neutral-200 dark:border-neutral-800 px-4 py-4"
-        initial={{ y: -50, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        transition={{ delay: 0.1 }}
-      >
+      <div className="bg-background shadow-sm border-b border-border px-4 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <motion.button
+            <button
               onClick={() => router.push(`/app/${courtId}/orders`)}
-              className="p-2 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
+              className="p-2 rounded-lg hover:bg-muted transition-colors"
             >
-              <ArrowLeft className="h-5 w-5 text-neutral-700 dark:text-neutral-300" />
-            </motion.button>
+              <ArrowLeft className="h-5 w-5 text-foreground" />
+            </button>
             <div>
-              <h1 className="text-xl font-semibold text-neutral-900 dark:text-white">Order Details</h1>
-              <p className="text-sm text-neutral-600 dark:text-neutral-400">
+              <h1 className="text-xl font-semibold text-foreground">Order Details</h1>
+              <p className="text-sm text-muted-foreground">
                 {getOverallStatus(orderDetails?.orders || [])}
               </p>
-              {/* Polling Debug Info */}
-              <div className="text-xs text-neutral-500 mt-1 flex items-center gap-4">
-                <span>Polling: {!orderDetailsError ? '🟢 Active' : '🔴 Error'}</span>
-                {user?.id && <span>User: {user.id}</span>}
-                {parentOrderId && <span>Order: {parentOrderId}</span>}
-                {lastUpdate && <span>Last Update: {lastUpdate.toLocaleTimeString()}</span>}
-                {statusUpdates.length > 0 && <span>Updates: {statusUpdates.length}</span>}
-                {orderDetailsError && <span className="text-red-500">Error: {orderDetailsError}</span>}
-              </div>
             </div>
           </div>
-          <motion.button
+          <button
             onClick={() => fetchOrderDetails(true)}
             disabled={refreshing}
-            className="p-2 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
+            className="p-2 rounded-lg hover:bg-muted transition-colors"
           >
-            <RefreshCw className={`h-5 w-5 text-neutral-700 dark:text-neutral-300 ${refreshing ? 'animate-spin' : ''}`} />
-          </motion.button>
+            <RefreshCw className={`h-5 w-5 text-foreground ${refreshing ? 'animate-spin' : ''}`} />
+          </button>
         </div>
-      </motion.div>
+      </div>
 
       <div className="px-4 py-6 space-y-6">
         {/* Order Summary Card */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-        >
-          <Card className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800">
+        <div>
+          <Card className="border border-border">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Hash className="h-5 w-5" />
@@ -349,11 +269,11 @@ export default function OrderDetailsPage({
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <div className="text-sm text-neutral-500">Order ID</div>
+                  <div className="text-sm text-muted-foreground">Order ID</div>
                   <div className="font-mono text-sm">{orderDetails?.parentOrderId || 'Loading...'}</div>
                 </div>
                 <div>
-                  <div className="text-sm text-neutral-500">Total Amount</div>
+                  <div className="text-sm text-muted-foreground">Total Amount</div>
                   <div className="font-bold text-lg">₹{Number(orderDetails?.totalAmount || 0).toFixed(2)}</div>
                 </div>
               </div>
@@ -364,35 +284,33 @@ export default function OrderDetailsPage({
                   <span>Progress</span>
                   <span>{getProgressPercentage(orderDetails?.orders)}% Complete</span>
                 </div>
-                <div className="w-full bg-neutral-200 dark:bg-neutral-700 rounded-full h-2">
-                  <motion.div
-                    className="bg-green-600 h-2 rounded-full"
-                    initial={{ width: 0 }}
-                    animate={{ width: `${getProgressPercentage(orderDetails?.orders)}%` }}
-                    transition={{ duration: 1, delay: 0.5 }}
+                <div className="w-full bg-muted rounded-full h-2">
+                  <div
+                    className="bg-foreground h-2 rounded-full transition-all duration-500"
+                    style={{ width: `${getProgressPercentage(orderDetails?.orders)}%` }}
                   />
                 </div>
               </div>
 
               {/* Order Statistics */}
               <div className="grid grid-cols-2 gap-4 pt-2">
-                <div className="text-center p-3 bg-neutral-50 dark:bg-neutral-800 rounded-lg">
-                  <div className="text-2xl font-bold text-blue-600">{orderDetails?.summary?.totalVendors || 0}</div>
-                  <div className="text-sm text-neutral-500">Vendors</div>
+                <div className="text-center p-3 bg-muted rounded-lg">
+                  <div className="text-2xl font-bold text-foreground">{orderDetails?.summary?.totalVendors || 0}</div>
+                  <div className="text-sm text-muted-foreground">Vendors</div>
                 </div>
-                <div className="text-center p-3 bg-neutral-50 dark:bg-neutral-800 rounded-lg">
-                  <div className="text-2xl font-bold text-green-600">{orderDetails?.summary?.completedVendors || 0}</div>
-                  <div className="text-sm text-neutral-500">Completed</div>
+                <div className="text-center p-3 bg-muted rounded-lg">
+                  <div className="text-2xl font-bold text-foreground">{orderDetails?.summary?.completedVendors || 0}</div>
+                  <div className="text-sm text-muted-foreground">Completed</div>
                 </div>
               </div>
 
               {/* OTP Display */}
               {orderDetails?.orderOtp && (
-                <div className="p-4 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg">
+                <div className="p-4 bg-muted rounded-lg">
                   <div className="flex items-center justify-between">
                     <div>
-                      <div className="text-sm font-medium text-emerald-800 dark:text-emerald-400">Pickup OTP</div>
-                      <div className="text-2xl font-bold text-emerald-700 dark:text-emerald-300 tracking-wider">
+                      <div className="text-sm font-medium text-foreground">Pickup OTP</div>
+                      <div className="text-2xl font-bold text-foreground tracking-wider">
                         {orderDetails.orderOtp}
                       </div>
                     </div>
@@ -400,39 +318,32 @@ export default function OrderDetailsPage({
                       onClick={copyOtp}
                       variant="outline"
                       size="sm"
-                      className="border-emerald-200 hover:bg-emerald-100"
                     >
                       {otpCopied ? <CheckCircle className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
                     </Button>
                   </div>
-                  <div className="text-xs text-emerald-600 dark:text-emerald-400 mt-2">
+                  <div className="text-xs text-muted-foreground mt-2">
                     Show this OTP to the vendor for order completion
                   </div>
                 </div>
               )}
             </CardContent>
           </Card>
-        </motion.div>
+        </div>
 
         {/* Vendor Orders */}
         <div className="space-y-4">
           <h2 className="text-lg font-semibold">Orders by Vendor</h2>
           
-          <AnimatePresence mode="popLayout">
+          <div className="space-y-4">
             {orderDetails?.orders && Array.isArray(orderDetails.orders) ? orderDetails.orders.map((order, index) => (
-              <motion.div
-                key={order.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
-                transition={{ delay: 0.3 + index * 0.1 }}
-              >
-                <Card className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800">
+              <div key={order.id}>
+                <Card className="border border-border">
                   <CardHeader>
                     <div className="flex items-center justify-between">
                       <div className="space-y-1">
                         <CardTitle className="text-lg">{order.vendor.stallName}</CardTitle>
-                        <div className="text-sm text-neutral-500">Order #{order.orderNumber}</div>
+                        <div className="text-sm text-muted-foreground">Order #{order.orderNumber}</div>
                       </div>
                       <Badge className={getStatusColor(order.status)}>
                         {getStatusText(order.status)}
@@ -443,7 +354,7 @@ export default function OrderDetailsPage({
                     {/* Order Items */}
                     <div className="space-y-2">
                       {order.items.map((item, itemIndex) => (
-                        <div key={itemIndex} className="flex items-center justify-between p-3 bg-neutral-50 dark:bg-neutral-800 rounded-lg">
+                        <div key={itemIndex} className="flex items-center justify-between p-3 bg-muted rounded-lg">
                           <div className="flex items-center gap-3">
                             {item.imageUrl && (
                               <Image
@@ -456,7 +367,7 @@ export default function OrderDetailsPage({
                             )}
                             <div>
                               <div className="font-medium">{item.name}</div>
-                              <div className="text-sm text-neutral-500">Qty: {item.quantity}</div>
+                              <div className="text-sm text-muted-foreground">Qty: {item.quantity}</div>
                             </div>
                           </div>
                           <div className="text-right">
@@ -471,36 +382,36 @@ export default function OrderDetailsPage({
                       <div className="text-sm font-medium">Order Timeline</div>
                       <div className="space-y-2">
                         <div className="flex items-center gap-2 text-sm">
-                          <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                          <div className="w-2 h-2 bg-foreground rounded-full"></div>
                           <span>Order placed - {new Date(order.createdAt).toLocaleString()}</span>
                         </div>
                         {order.acceptedAt && (
                           <div className="flex items-center gap-2 text-sm">
-                            <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                            <div className="w-2 h-2 bg-foreground rounded-full"></div>
                             <span>Accepted by vendor - {new Date(order.acceptedAt).toLocaleString()}</span>
                           </div>
                         )}
                         {order.preparingAt && (
                           <div className="flex items-center gap-2 text-sm">
-                            <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                            <div className="w-2 h-2 bg-foreground rounded-full"></div>
                             <span>Preparation started - {new Date(order.preparingAt).toLocaleString()}</span>
                           </div>
                         )}
                         {order.readyAt && (
                           <div className="flex items-center gap-2 text-sm">
-                            <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                            <div className="w-2 h-2 bg-foreground rounded-full"></div>
                             <span>Ready for pickup - {new Date(order.readyAt).toLocaleString()}</span>
                           </div>
                         )}
                         {order.completedAt && (
                           <div className="flex items-center gap-2 text-sm">
-                            <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                            <div className="w-2 h-2 bg-foreground rounded-full"></div>
                             <span>Completed - {new Date(order.completedAt).toLocaleString()}</span>
                           </div>
                         )}
                         {order.rejectedAt && (
                           <div className="flex items-center gap-2 text-sm">
-                            <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                            <div className="w-2 h-2 bg-muted-foreground rounded-full"></div>
                             <span>Rejected - {new Date(order.rejectedAt).toLocaleString()}</span>
                           </div>
                         )}
@@ -509,21 +420,21 @@ export default function OrderDetailsPage({
 
                     {/* Queue Position */}
                     {order.queuePosition && order.status === "accepted" && (
-                      <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                      <div className="p-3 bg-muted rounded-lg">
                         <div className="flex items-center justify-between">
-                          <div className="text-sm font-medium text-blue-800 dark:text-blue-400">Queue Position</div>
-                          <div className="text-2xl font-bold text-blue-700 dark:text-blue-300">#{order.queuePosition}</div>
+                          <div className="text-sm font-medium text-foreground">Queue Position</div>
+                          <div className="text-2xl font-bold text-foreground">#{order.queuePosition}</div>
                         </div>
                       </div>
                     )}
 
                     {/* Rejection Info */}
                     {order.status === "rejected" && order.rejectionReason && (
-                      <div className="p-3 bg-red-50 dark:bg-red-900/20 rounded-lg">
-                        <div className="text-sm font-medium text-red-800 dark:text-red-400 mb-1">Rejection Reason</div>
-                        <div className="text-sm text-red-700 dark:text-red-300">{order.rejectionReason}</div>
+                      <div className="p-3 bg-muted border border-border rounded-lg">
+                        <div className="text-sm font-medium text-foreground mb-1">Rejection Reason</div>
+                        <div className="text-sm text-muted-foreground">{order.rejectionReason}</div>
                         {order.refundAmount && (
-                          <div className="text-sm text-red-700 dark:text-red-300 mt-2">
+                          <div className="text-sm text-muted-foreground mt-2">
                             Refund: ₹{order.refundAmount} ({order.refundStatus})
                           </div>
                         )}
@@ -531,23 +442,23 @@ export default function OrderDetailsPage({
                     )}
 
                     {/* Order Total */}
-                    <div className="flex items-center justify-between pt-2 border-t border-neutral-200 dark:border-neutral-700">
+                    <div className="flex items-center justify-between pt-2 border-t border-border">
                       <div className="text-lg font-bold">Total: ₹{Number(order.totalAmount || 0).toFixed(2)}</div>
-                      <div className="text-sm text-neutral-500">
+                      <div className="text-sm text-muted-foreground">
                         Est. {order.estimatedPreparationTime} mins
                       </div>
                     </div>
                   </CardContent>
                 </Card>
-              </motion.div>
+              </div>
             )) : (
               <div className="text-center py-8">
-                <p className="text-neutral-600 dark:text-neutral-400">No order details available</p>
+                <p className="text-muted-foreground">No order details available</p>
               </div>
             )}
-          </AnimatePresence>
+          </div>
         </div>
       </div>
-    </motion.div>
+    </div>
   )
 }

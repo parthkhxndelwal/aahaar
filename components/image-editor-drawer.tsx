@@ -260,14 +260,14 @@ export function ImageEditorDrawer({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {/* File Upload */}
                   <div
-                    className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-4 text-center cursor-pointer hover:border-gray-400 dark:hover:border-gray-500 transition-colors"
+                    className="border-2 border-dashed border-border rounded-lg p-4 text-center cursor-pointer hover:border-foreground/40 transition-colors"
                     onClick={() => fileInputRef.current?.click()}
                   >
-                    <ImageIcon className="mx-auto h-8 w-8 text-gray-400 dark:text-gray-500" />
-                    <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                    <ImageIcon className="mx-auto h-8 w-8 text-muted-foreground" />
+                    <p className="mt-2 text-sm text-muted-foreground">
                       Click to upload
                     </p>
-                    <p className="text-xs text-gray-500 dark:text-gray-500">
+                    <p className="text-xs text-muted-foreground">
                       PNG, JPG, JPEG
                     </p>
                   </div>
@@ -276,8 +276,8 @@ export function ImageEditorDrawer({
                   <div
                     className={`border-2 border-dashed rounded-lg p-4 text-center cursor-pointer transition-colors ${
                       isWaitingForPaste
-                        ? 'border-blue-400 bg-blue-50 dark:bg-blue-950 dark:border-blue-600'
-                        : 'border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500'
+                        ? 'border-border bg-muted'
+                        : 'border-border hover:border-foreground/40'
                     }`}
                     onClick={() => {
                       setIsWaitingForPaste(!isWaitingForPaste)
@@ -286,17 +286,17 @@ export function ImageEditorDrawer({
                   >
                     <Clipboard className={`mx-auto h-8 w-8 ${
                       isWaitingForPaste
-                        ? 'text-blue-500'
-                        : 'text-gray-400 dark:text-gray-500'
+                        ? 'text-foreground'
+                        : 'text-muted-foreground'
                     }`} />
                     <p className={`mt-2 text-sm ${
                       isWaitingForPaste
-                        ? 'text-blue-600 dark:text-blue-400'
-                        : 'text-gray-600 dark:text-gray-400'
+                        ? 'text-foreground'
+                        : 'text-muted-foreground'
                     }`}>
                       {isWaitingForPaste ? 'Ready to paste' : 'Paste from clipboard'}
                     </p>
-                    <p className="text-xs text-gray-500 dark:text-gray-500">
+                    <p className="text-xs text-muted-foreground">
                       Ctrl+V or Cmd+V
                     </p>
                   </div>
@@ -304,9 +304,9 @@ export function ImageEditorDrawer({
 
                 {/* Paste Instructions */}
                 {isWaitingForPaste && (
-                  <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
-                    <p className="text-sm text-blue-700 dark:text-blue-300">
-                      📋 Ready to paste! Press <kbd className="px-1 py-0.5 bg-blue-100 dark:bg-blue-900 rounded text-xs">Ctrl+V</kbd> (or <kbd className="px-1 py-0.5 bg-blue-100 dark:bg-blue-900 rounded text-xs">Cmd+V</kbd> on Mac) to paste an image from your clipboard.
+                  <div className="bg-muted border rounded-lg p-3">
+                    <p className="text-sm text-foreground">
+                      📋 Ready to paste! Press <kbd className="px-1 py-0.5 bg-background border rounded text-xs">Ctrl+V</kbd> (or <kbd className="px-1 py-0.5 bg-background border rounded text-xs">Cmd+V</kbd> on Mac) to paste an image from your clipboard.
                     </p>
                   </div>
                 )}
@@ -314,8 +314,8 @@ export function ImageEditorDrawer({
                 <div
                   className={`border-2 border-dashed rounded-lg p-4 text-center transition-colors ${
                     isDragOver
-                      ? 'border-blue-400 bg-blue-50 dark:bg-blue-950 dark:border-blue-600'
-                      : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
+                        ? 'border-border bg-muted'
+                        : 'border-border hover:border-foreground/40'
                   }`}
                   onDragOver={handleDragOver}
                   onDragLeave={handleDragLeave}
@@ -323,8 +323,8 @@ export function ImageEditorDrawer({
                 >
                   <p className={`text-sm ${
                     isDragOver
-                      ? 'text-blue-600 dark:text-blue-400'
-                      : 'text-gray-500 dark:text-gray-400'
+                      ? 'text-foreground'
+                      : 'text-muted-foreground'
                   }`}>
                     {isDragOver ? 'Drop image here' : 'Or drag and drop an image here'}
                   </p>
@@ -369,8 +369,8 @@ export function ImageEditorDrawer({
 
             {/* Error Message */}
             {error && (
-              <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
-                <p className="text-sm text-red-600">{error}</p>
+              <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
+                <p className="text-sm text-destructive">{error}</p>
               </div>
             )}
 

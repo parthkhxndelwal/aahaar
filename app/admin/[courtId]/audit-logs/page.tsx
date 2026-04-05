@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, use } from "react"
-import { useAdminAuth } from "@/contexts/admin-auth-context"
+import { useUnifiedAuth } from "@/contexts/unified-auth-context"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -9,6 +9,8 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ArrowLeft, Search, Filter, ChevronLeft, ChevronRight, Activity, User, ShoppingCart, Settings, Shield, AlertTriangle } from "lucide-react"
 import { useRouter } from "next/navigation"
+import { adminAuditApi, ApiError } from "@/lib/api"
+import type { AuditLog as AuditLogType } from "@/lib/api"
 
 interface AuditLog {
   id: string
@@ -43,7 +45,7 @@ interface PaginationData {
 }
 
 export default function AuditLogsPage({ params }: { params: Promise<{ courtId: string }> }) {
-  const { user, token } = useAdminAuth()
+  const { user, loading: authLoading } = useUnifiedAuth()
   const router = useRouter()
   const { courtId } = use(params)
   const [logs, setLogs] = useState<AuditLog[]>([])
@@ -55,55 +57,59 @@ export default function AuditLogsPage({ params }: { params: Promise<{ courtId: s
   const [entityFilter, setEntityFilter] = useState("all")
 
   useEffect(() => {
+    if (authLoading) return
+    
     if (!user || user.role !== "admin") {
-      router.push("/admin/auth")
+      router.push("/auth/login")
       return
     }
     fetchAuditLogs()
-  }, [user, currentPage, actionFilter, entityFilter])
+  }, [user, authLoading, currentPage, actionFilter, entityFilter])
 
   const fetchAuditLogs = async () => {
     try {
       setLoading(true)
-      const params = new URLSearchParams({
-        page: currentPage.toString(),
-        limit: "10"
+      const result = await adminAuditApi.list({
+        page: currentPage,
+        limit: 10,
       })
 
-      const response = await fetch(`/api/admin/audit-logs?${params}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        setLogs(data.data.logs)
-        setPagination(data.data.pagination)
+      if (result.auditLogs) {
+        setLogs(result.auditLogs as AuditLog[])
+        if (result.pagination) {
+          setPagination({
+            currentPage: result.pagination.page,
+            totalPages: result.pagination.totalPages,
+            totalItems: result.pagination.total,
+            itemsPerPage: result.pagination.limit,
+            hasNextPage: result.pagination.page < result.pagination.totalPages,
+            hasPrevPage: result.pagination.page > 1,
+          })
+        }
       }
-    } catch (error) {
-      console.error("Error fetching audit logs:", error)
+    } catch (e) {
+      console.error("Error fetching audit logs:", e)
     } finally {
       setLoading(false)
     }
   }
 
   const getActionIcon = (action: string) => {
-    if (action.includes("CREATE") || action.includes("ADD")) return <Activity className="h-4 w-4 text-green-500 dark:text-green-400" />
-    if (action.includes("UPDATE") || action.includes("EDIT")) return <Settings className="h-4 w-4 text-blue-500 dark:text-blue-400" />
-    if (action.includes("DELETE") || action.includes("REMOVE")) return <AlertTriangle className="h-4 w-4 text-red-500 dark:text-red-400" />
-    if (action.includes("LOGIN") || action.includes("AUTH")) return <Shield className="h-4 w-4 text-purple-500 dark:text-purple-400" />
-    if (action.includes("ORDER")) return <ShoppingCart className="h-4 w-4 text-orange-500 dark:text-orange-400" />
-    return <User className="h-4 w-4 text-neutral-500 dark:text-neutral-400" />
+    if (action.includes("CREATE") || action.includes("ADD")) return <Activity className="h-4 w-4 text-foreground" />
+    if (action.includes("UPDATE") || action.includes("EDIT")) return <Settings className="h-4 w-4 text-foreground" />
+    if (action.includes("DELETE") || action.includes("REMOVE")) return <AlertTriangle className="h-4 w-4 text-destructive" />
+    if (action.includes("LOGIN") || action.includes("AUTH")) return <Shield className="h-4 w-4 text-foreground" />
+    if (action.includes("ORDER")) return <ShoppingCart className="h-4 w-4 text-foreground" />
+    return <User className="h-4 w-4 text-muted-foreground" />
   }
 
   const getActionColor = (action: string) => {
-    if (action.includes("CREATE") || action.includes("ADD")) return "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
-    if (action.includes("UPDATE") || action.includes("EDIT")) return "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
-    if (action.includes("DELETE") || action.includes("REMOVE")) return "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
-    if (action.includes("LOGIN") || action.includes("AUTH")) return "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200"
-    if (action.includes("ORDER")) return "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200"
-    return "bg-neutral-100 text-neutral-800 dark:bg-neutral-800 dark:text-neutral-200"
+    if (action.includes("CREATE") || action.includes("ADD")) return "bg-muted text-foreground"
+    if (action.includes("UPDATE") || action.includes("EDIT")) return "bg-muted text-foreground"
+    if (action.includes("DELETE") || action.includes("REMOVE")) return "bg-destructive/10 text-destructive"
+    if (action.includes("LOGIN") || action.includes("AUTH")) return "bg-muted text-foreground"
+    if (action.includes("ORDER")) return "bg-muted text-foreground"
+    return "bg-muted text-foreground"
   }
 
   const formatTimeAgo = (dateString: string) => {
@@ -149,7 +155,7 @@ export default function AuditLogsPage({ params }: { params: Promise<{ courtId: s
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600 dark:border-blue-400"></div>
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-foreground"></div>
       </div>
     )
   }
@@ -168,8 +174,8 @@ export default function AuditLogsPage({ params }: { params: Promise<{ courtId: s
             Back to Dashboard
           </Button>
           <div>
-            <h1 className="text-3xl font-bold text-white dark:text-neutral-100">Audit Logs</h1>
-            <p className="text-neutral-500 dark:text-neutral-400">Track all system activities and changes</p>
+            <h1 className="text-3xl font-bold">Audit Logs</h1>
+            <p className="text-muted-foreground">Track all system activities and changes</p>
           </div>
         </div>
       </div>
@@ -183,7 +189,7 @@ export default function AuditLogsPage({ params }: { params: Promise<{ courtId: s
           <div className="flex flex-col md:flex-row gap-4">
             <div className="flex-1">
               <div className="relative">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-neutral-400 dark:text-neutral-500" />
+                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                 <Input
                   placeholder="Search logs..."
                   value={searchTerm}
@@ -232,7 +238,7 @@ export default function AuditLogsPage({ params }: { params: Promise<{ courtId: s
         <CardContent>
           <div className="space-y-4">
             {filteredLogs.map((log) => (
-              <div key={log.id} className="flex items-start gap-4 p-4 border border-neutral-200 dark:border-neutral-800 rounded-lg hover:bg-neutral-50 dark:hover:bg-neutral-900 transition-colors">
+              <div key={log.id} className="flex items-start gap-4 p-4 border rounded-lg hover:bg-muted transition-colors">
                 <div className="flex-shrink-0 mt-1">
                   {getActionIcon(log.action)}
                 </div>
@@ -241,23 +247,23 @@ export default function AuditLogsPage({ params }: { params: Promise<{ courtId: s
                     <Badge className={getActionColor(log.action)}>
                       {log.action.replace(/_/g, ' ')}
                     </Badge>
-                    <span className="text-sm text-neutral-500 dark:text-neutral-400">
+                    <span className="text-sm text-muted-foreground">
                       {formatTimeAgo(log.createdAt)}
                     </span>
                   </div>
-                  <p className="text-sm font-medium text-neutral-900 dark:text-neutral-100 mb-1">
+                  <p className="text-sm font-medium mb-1">
                     {log.action.replace(/_/g, ' ')} on {log.entityType}
                     {log.entityId && (
-                      <span className="text-neutral-600 dark:text-neutral-300"> ({log.entityId})</span>
+                      <span className="text-muted-foreground"> ({log.entityId})</span>
                     )}
                   </p>
                   {log.user && (
-                    <p className="text-sm text-neutral-600 dark:text-neutral-300 mb-2">
+                    <p className="text-sm text-muted-foreground mb-2">
                       By: {log.user.fullName} ({log.user.email})
                     </p>
                   )}
                   {log.metadata && Object.keys(log.metadata).length > 0 && (
-                    <div className="text-xs text-neutral-500 dark:text-neutral-400 bg-neutral-100 dark:bg-neutral-800 p-2 rounded">
+                    <div className="text-xs text-muted-foreground bg-muted p-2 rounded">
                       <pre className="whitespace-pre-wrap">
                         {JSON.stringify(log.metadata, null, 2)}
                       </pre>
@@ -282,7 +288,7 @@ export default function AuditLogsPage({ params }: { params: Promise<{ courtId: s
           {/* Pagination */}
           {pagination && pagination.totalPages > 1 && (
             <div className="flex items-center justify-between mt-6">
-              <div className="text-sm text-neutral-600 dark:text-neutral-400">
+              <div className="text-sm text-muted-foreground">
                 Page {pagination.currentPage} of {pagination.totalPages}
               </div>
               <div className="flex gap-2">

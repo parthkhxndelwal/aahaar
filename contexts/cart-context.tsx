@@ -1,39 +1,24 @@
 "use client"
-import { createContext, useContext, useEffect, useState, ReactNode } from "react"
-import { useAppAuth } from "./app-auth-context"
+import { createContext, useContext, useEffect, useState, ReactNode, useCallback } from "react"
+import { useUnifiedAuth } from "./unified-auth-context"
 import { usePathname } from "next/navigation"
-
-interface CartItem {
-  menuItemId: string
-  name: string
-  price: number
-  quantity: number
-  subtotal: number
-  customizations?: Record<string, any>
-  vendorId: string
-  imageUrl?: string
-  vendorName?: string
-}
-
-interface Cart {
-  items: CartItem[]
-  total: number
-}
+import { cartApi, orderApi, apiClient } from "@/lib/api"
+import type { Cart, CartItem } from "@/lib/api"
 
 interface CartContextType {
   cart: Cart
   isLoading: boolean
   hasActiveOrder: boolean
   activeOrderError: string | null
-  addToCart: (menuItemId: string, quantity?: number, customizations?: Record<string, any>) => Promise<boolean>
+  addToCart: (menuItemId: string, quantity?: number, customizations?: Record<string, unknown>) => Promise<boolean>
   removeFromCart: (menuItemId: string) => Promise<boolean>
   updateQuantity: (menuItemId: string, quantity: number, isRetry?: boolean) => Promise<boolean>
   clearCart: () => Promise<boolean>
   refreshCart: () => Promise<void>
   checkActiveOrders: () => Promise<void>
   getTotalItems: () => number
-  // New optimistic update methods
-  addToCartOptimistic: (menuItemId: string, name: string, price: number, vendorId: string, vendorName?: string, imageUrl?: string, quantity?: number, customizations?: Record<string, any>) => Promise<boolean>
+  // Optimistic update methods
+  addToCartOptimistic: (menuItemId: string, name: string, price: number, vendorId: string, vendorName?: string, imageUrl?: string, quantity?: number, customizations?: Record<string, unknown>) => Promise<boolean>
   updateQuantityOptimistic: (menuItemId: string, quantity: number) => Promise<boolean>
   removeFromCartOptimistic: (menuItemId: string) => Promise<boolean>
 }
@@ -41,7 +26,7 @@ interface CartContextType {
 const CartContext = createContext<CartContextType | undefined>(undefined)
 
 export function CartProvider({ children }: { children: ReactNode }) {
-  const { user, token } = useAppAuth()
+  const { user, token } = useUnifiedAuth()
   const pathname = usePathname()
   const [cart, setCart] = useState<Cart>({ items: [], total: 0 })
   const [isLoading, setIsLoading] = useState(false)
@@ -51,7 +36,12 @@ export function CartProvider({ children }: { children: ReactNode }) {
   // Only enable cart functionality on customer app pages
   const isCustomerApp = pathname.startsWith('/app/') && !pathname.endsWith('/login')
 
-  const refreshCart = async () => {
+  // Set up token getter for API client when token changes
+  useEffect(() => {
+    apiClient.setTokenGetter(() => token)
+  }, [token])
+
+  const refreshCart = useCallback(async () => {
     if (!user || !token || !isCustomerApp) {
       setCart({ items: [], total: 0 })
       return
@@ -59,26 +49,18 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
     try {
       setIsLoading(true)
-      const response = await fetch("/api/cart", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        if (data.success) {
-          setCart(data.data.cart)
-        }
+      const data = await cartApi.getCart()
+      if (data.cart) {
+        setCart(data.cart)
       }
     } catch (error) {
       console.error("Error fetching cart:", error)
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [user, token, isCustomerApp])
 
-  const checkActiveOrders = async () => {
+  const checkActiveOrders = useCallback(async () => {
     if (!user || !token || !isCustomerApp) {
       setHasActiveOrder(false)
       setActiveOrderError(null)
@@ -89,56 +71,26 @@ export function CartProvider({ children }: { children: ReactNode }) {
       const courtId = pathname.split('/')[2] // Extract courtId from path like /app/democourt
       if (!courtId) return
 
-      const response = await fetch(`/api/app/${courtId}/orders/active`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        if (data.success) {
-          const hasActive = data.data.activeOrders.length > 0
-          setHasActiveOrder(hasActive)
-          setActiveOrderError(hasActive ? "You have an active order. Please wait for it to complete before placing a new order." : null)
-        }
-      } else {
-        setHasActiveOrder(false)
-        setActiveOrderError(null)
-      }
+      const data = await orderApi.getActiveOrders(courtId)
+      const hasActive = data.activeOrders.length > 0
+      setHasActiveOrder(hasActive)
+      setActiveOrderError(hasActive ? "You have an active order. Please wait for it to complete before placing a new order." : null)
     } catch (error) {
       console.error("Error checking active orders:", error)
       setHasActiveOrder(false)
       setActiveOrderError(null)
     }
-  }
+  }, [user, token, isCustomerApp, pathname])
 
-  const addToCart = async (menuItemId: string, quantity = 1, customizations = {}) => {
+  const addToCart = useCallback(async (menuItemId: string, quantity = 1, customizations = {}) => {
     if (!user || !token || !isCustomerApp) return false
 
     try {
       setIsLoading(true)
-      const response = await fetch("/api/cart", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          menuItemId,
-          quantity,
-          customizations,
-        }),
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        if (data.success) {
-          setCart(data.data.cart)
-          return true
-        }
-      } else {
-        console.error(`Failed to add item to cart: ${response.status}`)
+      const data = await cartApi.addItem({ menuItemId, quantity, customizations })
+      if (data.cart) {
+        setCart(data.cart)
+        return true
       }
       return false
     } catch (error) {
@@ -147,9 +99,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [user, token, isCustomerApp])
 
-  const removeFromCart = async (menuItemId: string) => {
+  const removeFromCart = useCallback(async (menuItemId: string) => {
     if (!user || !token || !isCustomerApp) return false
 
     // Check if item exists in cart first
@@ -161,21 +113,10 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
     try {
       setIsLoading(true)
-      const response = await fetch(`/api/cart/${menuItemId}`, {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        if (data.success) {
-          setCart(data.data.cart)
-          return true
-        }
-      } else {
-        console.error(`Failed to remove cart item ${menuItemId}: ${response.status}`)
+      const data = await cartApi.removeItem(menuItemId)
+      if (data.cart) {
+        setCart(data.cart)
+        return true
       }
       return false
     } catch (error) {
@@ -184,9 +125,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [user, token, isCustomerApp, cart.items])
 
-  const updateQuantity = async (menuItemId: string, quantity: number, isRetry = false): Promise<boolean> => {
+  const updateQuantity = useCallback(async (menuItemId: string, quantity: number, isRetry = false): Promise<boolean> => {
     if (!user || !token || !isCustomerApp) return false
 
     if (quantity <= 0) {
@@ -204,72 +145,49 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
     try {
       setIsLoading(true)
-      const response = await fetch(`/api/cart/${menuItemId}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ quantity }),
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        if (data.success) {
-          setCart(data.data.cart)
-          return true
-        }
-      } else if (response.status === 404 && !isRetry) {
+      const data = await cartApi.updateItem(menuItemId, { quantity })
+      if (data.cart) {
+        setCart(data.cart)
+        return true
+      }
+      return false
+    } catch (error: any) {
+      if (error.status === 404 && !isRetry) {
         // Item not found in backend cart, refresh cart state and try once more
         console.warn(`Item ${menuItemId} not found in backend cart (404), refreshing cart state`)
         await refreshCart()
-        
-        // Try once more with retry flag
         return updateQuantity(menuItemId, quantity, true)
-      } else if (response.status === 404 && isRetry) {
+      } else if (error.status === 404 && isRetry) {
         // Still 404 after retry, add item instead
         console.warn(`Item ${menuItemId} still not found after retry, adding it instead`)
         return addToCart(menuItemId, quantity)
-      } else {
-        console.error(`Failed to update cart item ${menuItemId}: ${response.status}`)
       }
-      return false
-    } catch (error) {
       console.error("Error updating cart quantity:", error)
       return false
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [user, token, isCustomerApp, cart.items, removeFromCart, addToCart, refreshCart])
 
-  const clearCart = async () => {
+  const clearCart = useCallback(async () => {
     if (!user || !token || !isCustomerApp) return false
 
     try {
-      const response = await fetch("/api/cart", {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
-
-      if (response.ok) {
-        setCart({ items: [], total: 0 })
-        return true
-      }
-      return false
+      await cartApi.clearCart()
+      setCart({ items: [], total: 0 })
+      return true
     } catch (error) {
       console.error("Error clearing cart:", error)
       return false
     }
-  }
+  }, [user, token, isCustomerApp])
 
-  const getTotalItems = () => {
+  const getTotalItems = useCallback(() => {
     return cart.items.reduce((total, item) => total + item.quantity, 0)
-  }
+  }, [cart.items])
 
   // Optimistic update methods
-  const addToCartOptimistic = async (
+  const addToCartOptimistic = useCallback(async (
     menuItemId: string, 
     name: string, 
     price: number, 
@@ -328,9 +246,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
       await refreshCart()
       return false
     }
-  }
+  }, [user, token, isCustomerApp, cart.items, addToCart, refreshCart])
 
-  const updateQuantityOptimistic = async (menuItemId: string, quantity: number) => {
+  const updateQuantityOptimistic = useCallback(async (menuItemId: string, quantity: number) => {
     if (!user || !token || !isCustomerApp) return false
 
     // Store original cart for potential rollback
@@ -375,9 +293,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
       await refreshCart()
       return false
     }
-  }
+  }, [user, token, isCustomerApp, cart, updateQuantity, refreshCart])
 
-  const removeFromCartOptimistic = async (menuItemId: string) => {
+  const removeFromCartOptimistic = useCallback(async (menuItemId: string) => {
     if (!user || !token || !isCustomerApp) return false
 
     // Store original cart for potential rollback
@@ -403,12 +321,12 @@ export function CartProvider({ children }: { children: ReactNode }) {
       await refreshCart()
       return false
     }
-  }
+  }, [user, token, isCustomerApp, cart, removeFromCart, refreshCart])
 
   useEffect(() => {
     refreshCart()
     checkActiveOrders()
-  }, [user, token, isCustomerApp])
+  }, [refreshCart, checkActiveOrders])
 
   return (
     <CartContext.Provider

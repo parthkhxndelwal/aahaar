@@ -1,14 +1,43 @@
 import { NextResponse } from "next/server"
 import Razorpay from "razorpay"
+import { authenticateToken } from "@/middleware/auth"
+import { Order, Payment } from "@/models"
 
 export async function POST(request) {
   try {
+    // Require authentication
+    const authResult = await authenticateToken(request)
+    if (authResult instanceof NextResponse) return authResult
+
+    const { user } = authResult
+
+    // Only admins can create transfers
+    if (user.role !== "admin") {
+      return NextResponse.json(
+        { success: false, message: "Admin access required" },
+        { status: 403 }
+      )
+    }
+
     const { razorpay_payment_id, razorpay_order_id, transfers } = await request.json()
 
     if (!razorpay_payment_id || !transfers || !Array.isArray(transfers)) {
       return NextResponse.json(
         { success: false, message: "Missing required parameters" },
         { status: 400 }
+      )
+    }
+
+    // Verify the payment belongs to an order in this user's court
+    const payment = await Payment.findOne({
+      where: { razorpayPaymentId: razorpay_payment_id },
+      include: [{ model: Order, as: "order", attributes: ["courtId"] }]
+    })
+
+    if (!payment || payment.order.courtId !== user.courtId) {
+      return NextResponse.json(
+        { success: false, message: "Payment not found or access denied" },
+        { status: 403 }
       )
     }
 
@@ -26,16 +55,13 @@ export async function POST(request) {
       key_secret: process.env.RAZORPAY_KEY_SECRET,
     })
 
-    console.log('Creating transfers for payment:', razorpay_payment_id)
-    console.log('Transfers data:', transfers)
+    console.log('Creating transfers for payment:', razorpay_payment_id, 'by admin:', user.id)
 
     // Create transfers using Razorpay SDK
     try {
       const transferResult = await razorpay.payments.transfer(razorpay_payment_id, {
         transfers: transfers
       })
-
-      console.log('Transfer result:', transferResult)
 
       return NextResponse.json({
         success: true,
@@ -45,7 +71,7 @@ export async function POST(request) {
     } catch (transferError) {
       console.error('Transfer creation failed:', transferError)
       return NextResponse.json(
-        { success: false, message: 'Failed to create transfers', error: transferError.message },
+        { success: false, message: 'Failed to create transfers' },
         { status: 500 }
       )
     }

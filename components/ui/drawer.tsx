@@ -60,11 +60,12 @@ const DrawerContent = React.forwardRef<
       <DrawerPrimitive.Content
         ref={ref}
         className={cn(
-          "fixed bottom-0 z-50 mt-24 flex h-auto flex-col rounded-t-[10px] border bg-background",
+          "fixed bottom-0 z-50 mt-24 flex h-auto flex-col rounded-t-[10px] border",
           "inset-x-0 sm:inset-x-0 sm:mx-auto sm:max-w-2xl",
           className
         )}
         {...props}
+        style={{ backgroundColor: '#ffffff', ...((props as any).style ?? {}) }}
       >
         <div className="mx-auto mt-4 h-2 w-[100px] rounded-full bg-muted" />
         <div ref={contentRef}>

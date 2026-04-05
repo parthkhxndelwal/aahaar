@@ -10,8 +10,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Spinner } from "@/components/ui/spinner"
 import { useToast } from "@/hooks/use-toast"
 import { Search, Download, RefreshCw, CreditCard, TrendingUp } from "lucide-react"
-import { useAdminAuth } from "@/contexts/admin-auth-context"
 import { motion, AnimatePresence } from "framer-motion"
+import { adminPaymentsApi, ApiError } from "@/lib/api"
+import type { AdminPayment, AdminPayout } from "@/lib/api"
 
 interface Payment {
   id: string
@@ -40,16 +41,16 @@ interface PayoutLog {
 }
 
 const paymentStatusColors = {
-  pending: "bg-yellow-100 text-yellow-800",
-  completed: "bg-green-100 text-green-800",
-  failed: "bg-red-100 text-red-800",
-  refunded: "bg-neutral-100 text-neutral-800"
+  pending: "bg-muted text-muted-foreground",
+  completed: "bg-muted text-foreground",
+  failed: "bg-destructive/10 text-destructive",
+  refunded: "bg-muted text-foreground"
 }
 
 const payoutStatusColors = {
-  pending: "bg-yellow-100 text-yellow-800",
-  processed: "bg-green-100 text-green-800",
-  reversed: "bg-red-100 text-red-800"
+  pending: "bg-muted text-muted-foreground",
+  processed: "bg-muted text-foreground",
+  reversed: "bg-destructive/10 text-destructive"
 }
 
 export default function AdminPaymentsPage({ params }: { params: Promise<{ courtId: string }> }) {
@@ -60,7 +61,6 @@ export default function AdminPaymentsPage({ params }: { params: Promise<{ courtI
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
   const { toast } = useToast()
-  const { token } = useAdminAuth()
   const { courtId } = use(params)
 
   useEffect(() => {
@@ -71,22 +71,12 @@ export default function AdminPaymentsPage({ params }: { params: Promise<{ courtI
   const fetchPayments = async () => {
     try {
       setLoading(true)
-      const response = await fetch(`/api/courts/${courtId}/payments`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
-      
-      const result = await response.json()
-      if (result.success) {
-        setPayments(result.data.payments)
-      } else {
-        throw new Error(result.message)
-      }
-    } catch (error: any) {
+      const result = await adminPaymentsApi.listPayments(courtId)
+      setPayments(result.payments as Payment[])
+    } catch (e) {
       toast({
         title: "Error",
-        description: error.message || "Failed to fetch payments",
+        description: e instanceof ApiError ? e.message : "Failed to fetch payments",
         variant: "destructive",
       })
     } finally {
@@ -96,16 +86,8 @@ export default function AdminPaymentsPage({ params }: { params: Promise<{ courtI
 
   const fetchPayouts = async () => {
     try {
-      const response = await fetch(`/api/courts/${courtId}/payouts`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
-      
-      const result = await response.json()
-      if (result.success) {
-        setPayouts(result.data.payouts)
-      }
+      const result = await adminPaymentsApi.listPayouts(courtId)
+      setPayouts(result.payouts as PayoutLog[])
     } catch (error: any) {
       console.error("Failed to fetch payouts:", error)
     }
@@ -148,8 +130,8 @@ export default function AdminPaymentsPage({ params }: { params: Promise<{ courtI
         transition={{ duration: 0.4, delay: 0.1 }}
       >
         <div>
-          <h1 className="text-3xl font-bold text-neutral-100">Payments & Payouts</h1>
-          <p className="text-neutral-400">Monitor payment flows and vendor payouts</p>
+          <h1 className="text-3xl font-bold">Payments & Payouts</h1>
+          <p className="text-muted-foreground">Monitor payment flows and vendor payouts</p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => {
@@ -179,7 +161,7 @@ export default function AdminPaymentsPage({ params }: { params: Promise<{ courtI
               <div className="flex justify-center mb-4">
                 <Spinner size={32} variant="white" />
               </div>
-              <p className="text-neutral-400">Loading payments data...</p>
+              <p className="text-muted-foreground">Loading payments data...</p>
             </div>
           </motion.div>
         ) : (
@@ -247,7 +229,7 @@ export default function AdminPaymentsPage({ params }: { params: Promise<{ courtI
 
             {/* Tab Navigation */}
             <motion.div 
-              className="flex space-x-1 bg-neutral-900 p-1 rounded-lg w-fit"
+              className="flex space-x-1 bg-muted p-1 rounded-lg w-fit"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.7 }}
@@ -256,8 +238,8 @@ export default function AdminPaymentsPage({ params }: { params: Promise<{ courtI
                 onClick={() => setActiveTab("payments")}
                 className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
                   activeTab === "payments"
-                    ? "bg-black text-neutral-100 shadow-sm"
-                    : "text-neutral-400 hover:text-neutral-100"
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
                 }`}
               >
                 Payments
@@ -266,8 +248,8 @@ export default function AdminPaymentsPage({ params }: { params: Promise<{ courtI
                 onClick={() => setActiveTab("payouts")}
                 className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
                   activeTab === "payouts"
-                    ? "bg-black text-neutral-100 shadow-sm"
-                    : "text-neutral-400 hover:text-neutral-100"
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
                 }`}
               >
                 Vendor Payouts
@@ -351,7 +333,7 @@ export default function AdminPaymentsPage({ params }: { params: Promise<{ courtI
                             initial={{ opacity: 0, y: 10 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ duration: 0.3, delay: index * 0.05 }}
-                            className="border-b border-neutral-800 hover:bg-neutral-900/50"
+                            className="border-b hover:bg-muted/50"
                             style={{ display: "table-row" }}
                           >
                             <TableCell className="font-medium">{payment.orderNumber}</TableCell>
@@ -364,7 +346,7 @@ export default function AdminPaymentsPage({ params }: { params: Promise<{ courtI
                                 {payment.status}
                               </Badge>
                             </TableCell>
-                            <TableCell className="text-sm text-neutral-500">
+                            <TableCell className="text-sm text-muted-foreground">
                               {payment.razorpayPaymentId || payment.razorpayOrderId || "-"}
                             </TableCell>
                             <TableCell>
@@ -401,7 +383,7 @@ export default function AdminPaymentsPage({ params }: { params: Promise<{ courtI
                             initial={{ opacity: 0, y: 10 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ duration: 0.3, delay: index * 0.05 }}
-                            className="border-b border-neutral-800 hover:bg-neutral-900/50"
+                            className="border-b hover:bg-muted/50"
                             style={{ display: "table-row" }}
                           >
                             <TableCell className="font-medium">{payout.vendorName}</TableCell>
@@ -412,7 +394,7 @@ export default function AdminPaymentsPage({ params }: { params: Promise<{ courtI
                                 {payout.status}
                               </Badge>
                             </TableCell>
-                            <TableCell className="text-sm text-neutral-500">
+                            <TableCell className="text-sm text-muted-foreground">
                               {payout.razorpayTransferId || "-"}
                             </TableCell>
                             <TableCell>

@@ -1,4 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
+import { vendorApi, apiClient } from '@/lib/api'
+import type { OrderWithDetails } from '@/lib/api'
 
 interface OrderItem {
   name: string
@@ -42,6 +44,11 @@ export const useVendorOrders = (vendorId: string | null) => {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // Set up token getter for API client
+  useEffect(() => {
+    apiClient.setTokenGetter(() => localStorage.getItem('vendor_auth_token'))
+  }, [])
+
   // Fetch orders from API
   const fetchOrders = useCallback(async () => {
     if (!vendorId) {
@@ -55,45 +62,44 @@ export const useVendorOrders = (vendorId: string | null) => {
       setIsLoading(true)
       setError(null)
       
-      const token = localStorage.getItem('vendor_auth_token')
-      console.log("🔑 Token exists:", !!token)
-      console.log("🔑 Token value:", token)
-
-      const response = await fetch(`/api/vendors/${vendorId}/orders`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        }
-      })
-
-      console.log("📥 Response status:", response.status)
-
-      if (!response.ok) {
-        const errorText = await response.text()
-        console.log("❌ Response error:", errorText)
-        throw new Error(`Failed to fetch orders: ${response.status} ${response.statusText}`)
-      }
-
-      const data = await response.json()
+      const data = await vendorApi.getOrders(vendorId)
       console.log("📦 Response data:", data)
       
-      if (data.success) {
-        // Group orders by status
-        const upcoming = data.data.orders.filter((order: Order) => order.status === 'pending')
-        const queue = data.data.orders.filter((order: Order) => 
-          order.status === 'accepted' || order.status === 'preparing'
-        )
-        const ready = data.data.orders.filter((order: Order) => order.status === 'ready')
+      // Transform orders to expected format
+      const transformedOrders: Order[] = data.orders.map((order: any) => ({
+        id: order.id,
+        orderNumber: order.orderNumber,
+        customerName: order.customerName || order.user?.fullName || "Unknown",
+        customerPhone: order.customerPhone || order.user?.phone || "",
+        items: order.orderItems?.map((item: any) => ({
+          name: item.itemName || item.menuItem?.name || "Unknown Item",
+          quantity: item.quantity,
+          price: item.itemPrice,
+          subtotal: item.subtotal,
+          imageUrl: item.menuItem?.imageUrl
+        })) || [],
+        totalAmount: order.totalAmount,
+        status: order.status,
+        estimatedPreparationTime: order.estimatedPreparationTime || 15,
+        orderOtp: order.orderOtp || "",
+        createdAt: order.createdAt,
+        acceptedAt: order.statusHistory?.find((h: any) => h.status === 'accepted')?.timestamp
+      }))
 
-        setOrders({ upcoming, queue, ready })
-        setSectionCounts({
-          upcoming: upcoming.length,
-          queue: queue.length,
-          ready: ready.length
-        })
-        setLastUpdate(new Date())
-      }
+      // Group orders by status
+      const upcoming = transformedOrders.filter((order) => order.status === 'pending')
+      const queue = transformedOrders.filter((order) => 
+        order.status === 'accepted' || order.status === 'preparing'
+      )
+      const ready = transformedOrders.filter((order) => order.status === 'ready')
+
+      setOrders({ upcoming, queue, ready })
+      setSectionCounts({
+        upcoming: upcoming.length,
+        queue: queue.length,
+        ready: ready.length
+      })
+      setLastUpdate(new Date())
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch orders')
       console.error('Failed to fetch vendor orders:', err)

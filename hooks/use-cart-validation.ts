@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react"
-import { useAppAuth } from "@/contexts/app-auth-context"
+import { useUnifiedAuth } from "@/contexts/unified-auth-context"
+import { cartApi, type CartValidationResponse } from "@/lib/api/services/cart"
 
 interface ValidationIssue {
   type: "vendor_offline" | "item_unavailable" | "out_of_stock" | "item_inactive" | "no_stock" | "insufficient_stock"
@@ -16,29 +17,8 @@ interface ValidationResult {
   issues: ValidationIssue[]
 }
 
-interface ValidationSummary {
-  totalItems: number
-  validItems: number
-  invalidItems: number
-  offlineVendors: string[]
-  unavailableItems: string[]
-  stockIssues: Array<{
-    name: string
-    requested: number
-    available: number
-  }>
-}
-
-interface CartValidationResponse {
-  success: boolean
-  valid: boolean
-  message: string
-  validationResults: ValidationResult[]
-  summary: ValidationSummary
-}
-
 export function useCartValidation(courtId: string) {
-  const { user, token } = useAppAuth()
+  const { user, token } = useUnifiedAuth()
   const [validationData, setValidationData] = useState<CartValidationResponse | null>(null)
   const [isValidating, setIsValidating] = useState(false)
   const [lastValidated, setLastValidated] = useState<Date | null>(null)
@@ -48,24 +28,11 @@ export function useCartValidation(courtId: string) {
 
     setIsValidating(true)
     try {
-      const response = await fetch(`/api/app/${courtId}/cart/validate`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-      })
-
-      const data = await response.json()
+      const data = await cartApi.validateCart(courtId)
       
-      if (response.ok) {
-        setValidationData(data)
-        setLastValidated(new Date())
-        return data
-      } else {
-        console.error("Cart validation failed:", data.message)
-        return null
-      }
+      setValidationData(data)
+      setLastValidated(new Date())
+      return data
     } catch (error) {
       console.error("Cart validation error:", error)
       return null
@@ -74,9 +41,9 @@ export function useCartValidation(courtId: string) {
     }
   }
 
-  const getItemValidation = (menuItemId: string) => {
+  const getItemValidation = (menuItemId: string): ValidationResult | null => {
     if (!validationData) return null
-    return validationData.validationResults.find(result => result.menuItemId === menuItemId)
+    return validationData.validationResults.find(result => result.menuItemId === menuItemId) || null
   }
 
   const isItemValid = (menuItemId: string) => {
@@ -84,7 +51,7 @@ export function useCartValidation(courtId: string) {
     return validation ? validation.isValid : true // Default to valid if no validation data
   }
 
-  const getItemIssues = (menuItemId: string) => {
+  const getItemIssues = (menuItemId: string): ValidationIssue[] => {
     const validation = getItemValidation(menuItemId)
     return validation ? validation.issues : []
   }

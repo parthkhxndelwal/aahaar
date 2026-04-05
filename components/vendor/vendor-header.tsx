@@ -2,13 +2,13 @@
 
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
-import { useAuth } from "@/contexts/auth-context"
+import { useUnifiedAuth } from "@/contexts/unified-auth-context"
 import { Bell, User } from "lucide-react"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { useState, useEffect } from "react"
 
 export function VendorHeader() {
-  const { user, logout } = useAuth()
+  const { user, logout } = useUnifiedAuth()
   const [isOnline, setIsOnline] = useState(true)
   const [isMobile, setIsMobile] = useState(false)
 

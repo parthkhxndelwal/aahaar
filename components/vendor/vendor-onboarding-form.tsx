@@ -1,6 +1,6 @@
-"use client"
+﻿"use client"
 
-import React, { useState, useEffect } from "react"
+import React, { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -351,19 +351,19 @@ export function VendorOnboardingForm({ courtId, onSubmit, onCancel }: VendorOnbo
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    console.log("🚀 Form submission started")
-    console.log("📋 Form data:", formData)
+    console.log("ðŸš€ Form submission started")
+    console.log("ðŸ“‹ Form data:", formData)
 
     if (!validateForm()) {
-      console.log("❌ Form validation failed")
+      console.log("âŒ Form validation failed")
       return
     }
 
-    console.log("✅ Form validation passed")
+    console.log("âœ… Form validation passed")
     setIsSubmitting(true)
     setServerError(null)
     try {
-      console.log("📤 Calling onSubmit with data:", {
+      console.log("ðŸ“¤ Calling onSubmit with data:", {
         ...formData,
         status: formData.setAsActive ? "active" : "inactive",
       })
@@ -394,9 +394,9 @@ export function VendorOnboardingForm({ courtId, onSubmit, onCancel }: VendorOnbo
         confirmAccuracy: formData.confirmAccuracy,
       })
 
-      console.log("✅ Form submission successful")
+      console.log("âœ… Form submission successful")
     } catch (error: any) {
-      console.error("❌ Form submission failed:", error)
+      console.error("âŒ Form submission failed:", error)
       // Bubble up error text to inline display
       const message = error?.message || 'An error occurred during onboarding'
       setServerError(message)
@@ -413,107 +413,107 @@ export function VendorOnboardingForm({ courtId, onSubmit, onCancel }: VendorOnbo
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       {serverError && (
-        <div className="bg-red-900/30 border border-red-700 text-red-300 text-sm p-3 rounded">
+        <div className="bg-destructive/10 border border-destructive/30 text-destructive text-sm p-3 rounded">
           {serverError}
         </div>
       )}
       {/* Basic Information */}
-      <Card className="bg-neutral-900 border-neutral-800">
+      <Card >
         <CardHeader>
-          <CardTitle className="text-white">Basic Information</CardTitle>
+          <CardTitle>Basic Information</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <Label htmlFor="stallName" className="text-white">Stall Name *</Label>
+              <Label htmlFor="stallName">Stall Name *</Label>
               <div className="relative">
                 <Input
                   id="stallName"
                   value={formData.stallName}
                   onChange={(e) => handleInputChange("stallName", e.target.value)}
-                  className="bg-neutral-800 border-neutral-700 text-white pr-10"
+                  className="pr-10"
                   placeholder="Enter stall name"
                 />
                 {isValidating.stallName && (
                   <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                    <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                    <div className="w-4 h-4 border-2 border-background border-t-transparent rounded-full animate-spin"></div>
                   </div>
                 )}
               </div>
-              {errors.stallName && <p className="text-red-400 text-sm mt-1">{errors.stallName}</p>}
+              {errors.stallName && <p className="text-destructive text-sm mt-1">{errors.stallName}</p>}
             </div>
 
             <div>
-              <Label htmlFor="vendorName" className="text-white">Vendor Name *</Label>
+              <Label htmlFor="vendorName">Vendor Name *</Label>
               <Input
                 id="vendorName"
                 value={formData.vendorName}
                 onChange={(e) => handleInputChange("vendorName", e.target.value)}
-                className="bg-neutral-800 border-neutral-700 text-white"
+                className=""
                 placeholder="Enter vendor name"
               />
-              {errors.vendorName && <p className="text-red-400 text-sm mt-1">{errors.vendorName}</p>}
+              {errors.vendorName && <p className="text-destructive text-sm mt-1">{errors.vendorName}</p>}
             </div>
 
             <div>
-              <Label htmlFor="contactEmail" className="text-white">Contact Email *</Label>
+              <Label htmlFor="contactEmail">Contact Email *</Label>
               <div className="relative">
                 <Input
                   id="contactEmail"
                   type="email"
                   value={formData.contactEmail}
                   onChange={(e) => handleInputChange("contactEmail", e.target.value)}
-                  className="bg-neutral-800 border-neutral-700 text-white pr-10"
+                  className="pr-10"
                   placeholder="Enter email address"
                 />
                 {isValidating.contactEmail && (
                   <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                    <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                    <div className="w-4 h-4 border-2 border-background border-t-transparent rounded-full animate-spin"></div>
                   </div>
                 )}
               </div>
-              {errors.contactEmail && <p className="text-red-400 text-sm mt-1">{errors.contactEmail}</p>}
+              {errors.contactEmail && <p className="text-destructive text-sm mt-1">{errors.contactEmail}</p>}
             </div>
 
             <div>
-              <Label htmlFor="contactPhone" className="text-white">Contact Phone *</Label>
+              <Label htmlFor="contactPhone">Contact Phone *</Label>
               <div className="relative">
                 <Input
                   id="contactPhone"
                   value={formData.contactPhone}
                   onChange={(e) => handleInputChange("contactPhone", e.target.value)}
-                  className="bg-neutral-800 border-neutral-700 text-white pr-10"
+                  className="pr-10"
                   placeholder="Enter phone number"
                 />
                 {isValidating.contactPhone && (
                   <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                    <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                    <div className="w-4 h-4 border-2 border-background border-t-transparent rounded-full animate-spin"></div>
                   </div>
                 )}
               </div>
-              {errors.contactPhone && <p className="text-red-400 text-sm mt-1">{errors.contactPhone}</p>}
+              {errors.contactPhone && <p className="text-destructive text-sm mt-1">{errors.contactPhone}</p>}
             </div>
 
             <div>
-              <Label htmlFor="stallLocation" className="text-white">Stall Location</Label>
+              <Label htmlFor="stallLocation">Stall Location</Label>
               <Input
                 id="stallLocation"
                 value={formData.stallLocation}
                 onChange={(e) => handleInputChange("stallLocation", e.target.value)}
-                className="bg-neutral-800 border-neutral-700 text-white"
+                className=""
                 placeholder="Enter stall location"
               />
             </div>
 
             <div>
-              <Label htmlFor="cuisineType" className="text-white">Cuisine Type</Label>
+              <Label htmlFor="cuisineType">Cuisine Type</Label>
               <Select value={formData.cuisineType} onValueChange={(value) => handleInputChange("cuisineType", value)}>
-                <SelectTrigger className="bg-neutral-800 border-neutral-700 text-white">
+                <SelectTrigger className="">
                   <SelectValue placeholder="Select cuisine type" />
                 </SelectTrigger>
-                <SelectContent className="bg-neutral-800 border-neutral-700">
+                <SelectContent >
                   {cuisineOptions.map((cuisine) => (
-                    <SelectItem key={cuisine} value={cuisine.toLowerCase()} className="text-white hover:bg-neutral-700">
+                    <SelectItem key={cuisine} value={cuisine.toLowerCase()} className="">
                       {cuisine}
                     </SelectItem>
                   ))}
@@ -523,12 +523,12 @@ export function VendorOnboardingForm({ courtId, onSubmit, onCancel }: VendorOnbo
           </div>
 
           <div>
-            <Label htmlFor="description" className="text-white">Description</Label>
+            <Label htmlFor="description">Description</Label>
             <Textarea
               id="description"
               value={formData.description}
               onChange={(e) => handleInputChange("description", e.target.value)}
-              className="bg-neutral-800 border-neutral-700 text-white"
+              className=""
               placeholder="Enter vendor description"
               rows={3}
             />
@@ -537,97 +537,97 @@ export function VendorOnboardingForm({ courtId, onSubmit, onCancel }: VendorOnbo
       </Card>
 
       {/* Business Information */}
-      <Card className="bg-neutral-900 border-neutral-800">
+      <Card >
         <CardHeader>
-          <CardTitle className="text-white">Business Information</CardTitle>
+          <CardTitle>Business Information</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           {/* Existing business type + PAN/GSTIN UI here */}
           <div>
-            <Label htmlFor="businessType" className="text-white">Business Type *</Label>
+            <Label htmlFor="businessType">Business Type *</Label>
             <Select value={formData.businessType} onValueChange={(value) => handleInputChange("businessType", value)}>
-              <SelectTrigger className="bg-neutral-800 border-neutral-700 text-white">
+              <SelectTrigger className="">
                 <SelectValue placeholder="Select business type" />
               </SelectTrigger>
-              <SelectContent className="bg-neutral-800 border-neutral-700">
-                <SelectItem value="individual" className="text-white hover:bg-neutral-700">Individual</SelectItem>
-                <SelectItem value="proprietorship" className="text-white hover:bg-neutral-700">Proprietorship</SelectItem>
-                <SelectItem value="partnership" className="text-white hover:bg-neutral-700">Partnership</SelectItem>
-                <SelectItem value="company" className="text-white hover:bg-neutral-700">Company</SelectItem>
+              <SelectContent >
+                <SelectItem value="individual" className="">Individual</SelectItem>
+                <SelectItem value="proprietorship" className="">Proprietorship</SelectItem>
+                <SelectItem value="partnership" className="">Partnership</SelectItem>
+                <SelectItem value="company" className="">Company</SelectItem>
               </SelectContent>
             </Select>
-            {errors.businessType && <p className="text-red-400 text-sm mt-1">{errors.businessType}</p>}
+            {errors.businessType && <p className="text-destructive text-sm mt-1">{errors.businessType}</p>}
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <Label htmlFor="panNumber" className="text-white">PAN Number *</Label>
+              <Label htmlFor="panNumber">PAN Number *</Label>
               <div className="relative">
                 <Input
                   id="panNumber"
                   value={formData.panNumber}
                   onChange={(e) => handleInputChange("panNumber", e.target.value.toUpperCase())}
-                  className="bg-neutral-800 border-neutral-700 text-white pr-10"
+                  className="pr-10"
                   placeholder="AAAAA9999A"
                   maxLength={10}
                 />
                 {isValidating.panNumber && (
                   <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                    <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                    <div className="w-4 h-4 border-2 border-background border-t-transparent rounded-full animate-spin"></div>
                   </div>
                 )}
               </div>
-              <p className="text-neutral-400 text-xs mt-1">
+              <p className="text-muted-foreground text-xs mt-1">
                 Format: 5 letters, 4 digits, 1 letter (4th character must be C, H, F, A, T, B, J, G, or L)
               </p>
-              {errors.panNumber && <p className="text-red-400 text-sm mt-1">{errors.panNumber}</p>}
+              {errors.panNumber && <p className="text-destructive text-sm mt-1">{errors.panNumber}</p>}
             </div>
 
             <div>
-              <Label htmlFor="gstin" className="text-white">GSTIN (Optional)</Label>
+              <Label htmlFor="gstin">GSTIN (Optional)</Label>
               <Input
                 id="gstin"
                 value={formData.gstin}
                 onChange={(e) => handleInputChange("gstin", e.target.value.toUpperCase())}
-                className="bg-neutral-800 border-neutral-700 text-white"
+                className=""
                 placeholder="Enter GSTIN"
                 maxLength={15}
               />
-              {errors.gstin && <p className="text-red-400 text-sm mt-1">{errors.gstin}</p>}
+              {errors.gstin && <p className="text-destructive text-sm mt-1">{errors.gstin}</p>}
             </div>
           </div>
 
           {/* Stakeholder Information for non-individual businesses */}
           {formData.businessType !== "individual" && formData.businessType !== "proprietorship" && (
             <>
-              <Separator className="bg-neutral-700" />
+              <Separator />
               <div className="space-y-4">
-                <h4 className="text-white font-medium">Stakeholder Information</h4>
+                <h4 className="font-medium">Stakeholder Information</h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <Label htmlFor="stakeholderName" className="text-white">Stakeholder Name *</Label>
+                    <Label htmlFor="stakeholderName">Stakeholder Name *</Label>
                     <Input
                       id="stakeholderName"
                       value={formData.stakeholderName}
                       onChange={(e) => handleInputChange("stakeholderName", e.target.value)}
-                      className="bg-neutral-800 border-neutral-700 text-white"
+                      className=""
                       placeholder="Enter stakeholder name"
                     />
-                    {errors.stakeholderName && <p className="text-red-400 text-sm mt-1">{errors.stakeholderName}</p>}
+                    {errors.stakeholderName && <p className="text-destructive text-sm mt-1">{errors.stakeholderName}</p>}
                   </div>
 
                   <div>
-                    <Label htmlFor="stakeholderPan" className="text-white">Stakeholder PAN *</Label>
+                    <Label htmlFor="stakeholderPan">Stakeholder PAN *</Label>
                     <Input
                       id="stakeholderPan"
                       value={formData.stakeholderPan}
                       onChange={(e) => handleInputChange("stakeholderPan", e.target.value.toUpperCase())}
-                      className="bg-neutral-800 border-neutral-700 text-white"
+                      className=""
                       placeholder="AAAAA9999A"
                       maxLength={10}
                     />
-                    <p className="text-neutral-400 text-xs mt-1">Must be different from vendor PAN</p>
-                    {errors.stakeholderPan && <p className="text-red-400 text-sm mt-1">{errors.stakeholderPan}</p>}
+                    <p className="text-muted-foreground text-xs mt-1">Must be different from vendor PAN</p>
+                    {errors.stakeholderPan && <p className="text-destructive text-sm mt-1">{errors.stakeholderPan}</p>}
                   </div>
                 </div>
               </div>
@@ -637,111 +637,111 @@ export function VendorOnboardingForm({ courtId, onSubmit, onCancel }: VendorOnbo
       </Card>
 
       {/* Business Address */}
-      <Card className="bg-neutral-900 border-neutral-800">
+      <Card >
         <CardHeader>
-          <CardTitle className="text-white">Business Address</CardTitle>
+          <CardTitle>Business Address</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <Label htmlFor="addressStreet1" className="text-white">Street Address Line 1 *</Label>
-              <Input id="addressStreet1" value={formData.addressStreet1} onChange={(e) => handleInputChange("addressStreet1", e.target.value)} className="bg-neutral-800 border-neutral-700 text-white" />
-              {errors.addressStreet1 && <p className="text-red-400 text-sm mt-1">{errors.addressStreet1}</p>}
+              <Label htmlFor="addressStreet1">Street Address Line 1 *</Label>
+              <Input id="addressStreet1" value={formData.addressStreet1} onChange={(e) => handleInputChange("addressStreet1", e.target.value)} className="" />
+              {errors.addressStreet1 && <p className="text-destructive text-sm mt-1">{errors.addressStreet1}</p>}
             </div>
             <div>
-              <Label htmlFor="addressStreet2" className="text-white">Street Address Line 2</Label>
-              <Input id="addressStreet2" value={formData.addressStreet2} onChange={(e) => handleInputChange("addressStreet2", e.target.value)} className="bg-neutral-800 border-neutral-700 text-white" />
+              <Label htmlFor="addressStreet2">Street Address Line 2</Label>
+              <Input id="addressStreet2" value={formData.addressStreet2} onChange={(e) => handleInputChange("addressStreet2", e.target.value)} className="" />
             </div>
             <div>
-              <Label htmlFor="addressCity" className="text-white">City *</Label>
-              <Input id="addressCity" value={formData.addressCity} onChange={(e) => handleInputChange("addressCity", e.target.value)} className="bg-neutral-800 border-neutral-700 text-white" />
-              {errors.addressCity && <p className="text-red-400 text-sm mt-1">{errors.addressCity}</p>}
+              <Label htmlFor="addressCity">City *</Label>
+              <Input id="addressCity" value={formData.addressCity} onChange={(e) => handleInputChange("addressCity", e.target.value)} className="" />
+              {errors.addressCity && <p className="text-destructive text-sm mt-1">{errors.addressCity}</p>}
             </div>
             <div>
-              <Label htmlFor="addressState" className="text-white">State *</Label>
-              <Input id="addressState" value={formData.addressState} onChange={(e) => handleInputChange("addressState", e.target.value)} className="bg-neutral-800 border-neutral-700 text-white" placeholder="e.g., DELHI" />
-              {errors.addressState && <p className="text-red-400 text-sm mt-1">{errors.addressState}</p>}
+              <Label htmlFor="addressState">State *</Label>
+              <Input id="addressState" value={formData.addressState} onChange={(e) => handleInputChange("addressState", e.target.value)} className="" placeholder="e.g., DELHI" />
+              {errors.addressState && <p className="text-destructive text-sm mt-1">{errors.addressState}</p>}
             </div>
             <div>
-              <Label htmlFor="addressPostalCode" className="text-white">PIN Code *</Label>
-              <Input id="addressPostalCode" value={formData.addressPostalCode} onChange={(e) => handleInputChange("addressPostalCode", e.target.value)} className="bg-neutral-800 border-neutral-700 text-white" />
-              {errors.addressPostalCode && <p className="text-red-400 text-sm mt-1">{errors.addressPostalCode}</p>}
+              <Label htmlFor="addressPostalCode">PIN Code *</Label>
+              <Input id="addressPostalCode" value={formData.addressPostalCode} onChange={(e) => handleInputChange("addressPostalCode", e.target.value)} className="" />
+              {errors.addressPostalCode && <p className="text-destructive text-sm mt-1">{errors.addressPostalCode}</p>}
             </div>
             <div>
-              <Label htmlFor="addressCountry" className="text-white">Country</Label>
-              <Input id="addressCountry" value={formData.addressCountry} disabled className="bg-neutral-800 border-neutral-700 text-white" />
+              <Label htmlFor="addressCountry">Country</Label>
+              <Input id="addressCountry" value={formData.addressCountry} disabled className="" />
             </div>
           </div>
         </CardContent>
       </Card>
 
       {/* Bank Details */}
-      <Card className="bg-neutral-900 border-neutral-800">
+      <Card >
         <CardHeader>
-          <CardTitle className="text-white">Bank Details</CardTitle>
+          <CardTitle>Bank Details</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <Label htmlFor="bankAccountNumber" className="text-white">Account Number *</Label>
+              <Label htmlFor="bankAccountNumber">Account Number *</Label>
               <Input
                 id="bankAccountNumber"
                 value={formData.bankAccountNumber}
                 onChange={(e) => handleInputChange("bankAccountNumber", e.target.value)}
-                className="bg-neutral-800 border-neutral-700 text-white"
+                className=""
                 placeholder="Enter account number"
               />
-              {errors.bankAccountNumber && <p className="text-red-400 text-sm mt-1">{errors.bankAccountNumber}</p>}
+              {errors.bankAccountNumber && <p className="text-destructive text-sm mt-1">{errors.bankAccountNumber}</p>}
             </div>
 
             <div>
-              <Label htmlFor="bankIfscCode" className="text-white">IFSC Code *</Label>
+              <Label htmlFor="bankIfscCode">IFSC Code *</Label>
               <Input
                 id="bankIfscCode"
                 value={formData.bankIfscCode}
                 onChange={(e) => handleInputChange("bankIfscCode", e.target.value.toUpperCase())}
-                className="bg-neutral-800 border-neutral-700 text-white"
+                className=""
                 placeholder="Enter IFSC code"
               />
-              {errors.bankIfscCode && <p className="text-red-400 text-sm mt-1">{errors.bankIfscCode}</p>}
+              {errors.bankIfscCode && <p className="text-destructive text-sm mt-1">{errors.bankIfscCode}</p>}
             </div>
 
             <div>
-              <Label htmlFor="bankAccountHolderName" className="text-white">Account Holder Name *</Label>
+              <Label htmlFor="bankAccountHolderName">Account Holder Name *</Label>
               <Input
                 id="bankAccountHolderName"
                 value={formData.bankAccountHolderName}
                 onChange={(e) => handleInputChange("bankAccountHolderName", e.target.value)}
-                className="bg-neutral-800 border-neutral-700 text-white"
+                className=""
                 placeholder="Enter account holder name"
               />
-              {errors.bankAccountHolderName && <p className="text-red-400 text-sm mt-1">{errors.bankAccountHolderName}</p>}
+              {errors.bankAccountHolderName && <p className="text-destructive text-sm mt-1">{errors.bankAccountHolderName}</p>}
             </div>
 
             <div>
-              <Label htmlFor="bankName" className="text-white">Bank Name *</Label>
+              <Label htmlFor="bankName">Bank Name *</Label>
               <Input
                 id="bankName"
                 value={formData.bankName}
                 onChange={(e) => handleInputChange("bankName", e.target.value)}
-                className="bg-neutral-800 border-neutral-700 text-white"
+                className=""
                 placeholder="Enter bank name"
               />
-              {errors.bankName && <p className="text-red-400 text-sm mt-1">{errors.bankName}</p>}
+              {errors.bankName && <p className="text-destructive text-sm mt-1">{errors.bankName}</p>}
             </div>
           </div>
         </CardContent>
       </Card>
 
       {/* Operational Settings */}
-      <Card className="bg-neutral-900 border-neutral-800">
+      <Card >
         <CardHeader>
-          <CardTitle className="text-white">Operational Settings</CardTitle>
+          <CardTitle>Operational Settings</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <Label htmlFor="maxOrdersPerHour" className="text-white">Max Orders per Hour</Label>
+              <Label htmlFor="maxOrdersPerHour">Max Orders per Hour</Label>
               <Input
                 id="maxOrdersPerHour"
                 type="number"
@@ -749,12 +749,12 @@ export function VendorOnboardingForm({ courtId, onSubmit, onCancel }: VendorOnbo
                 max="100"
                 value={formData.maxOrdersPerHour}
                 onChange={(e) => handleInputChange("maxOrdersPerHour", parseInt(e.target.value))}
-                className="bg-neutral-800 border-neutral-700 text-white"
+                className=""
               />
             </div>
 
             <div>
-              <Label htmlFor="averagePreparationTime" className="text-white">Average Preparation Time (minutes)</Label>
+              <Label htmlFor="averagePreparationTime">Average Preparation Time (minutes)</Label>
               <Input
                 id="averagePreparationTime"
                 type="number"
@@ -762,20 +762,20 @@ export function VendorOnboardingForm({ courtId, onSubmit, onCancel }: VendorOnbo
                 max="120"
                 value={formData.averagePreparationTime}
                 onChange={(e) => handleInputChange("averagePreparationTime", parseInt(e.target.value))}
-                className="bg-neutral-800 border-neutral-700 text-white"
+                className=""
               />
             </div>
           </div>
 
           {/* Vendor Status Setting */}
-          <Separator className="bg-neutral-700" />
+          <Separator />
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
-                <Label htmlFor="setAsActive" className="text-white font-medium">
+                <Label htmlFor="setAsActive" className="font-medium">
                   Set Vendor as Active
                 </Label>
-                <p className="text-sm text-neutral-400">
+                <p className="text-sm text-muted-foreground">
                   Enable this to make the vendor active immediately upon creation. 
                   Active vendors can receive orders and appear in customer listings.
                 </p>
@@ -787,13 +787,13 @@ export function VendorOnboardingForm({ courtId, onSubmit, onCancel }: VendorOnbo
                   handleInputChange("setAsActive", checked)
                   handleInputChange("status", checked ? "active" : "inactive")
                 }}
-                className="data-[state=checked]:bg-blue-600"
+                className="data-[state=checked]:bg-foreground"
               />
             </div>
             {formData.setAsActive && (
-              <div className="bg-blue-900/20 border border-blue-700 rounded-lg p-3">
-                <p className="text-blue-200 text-sm">
-                  ✓ This vendor will be set as <strong>Active</strong> and will be able to receive orders immediately after creation.
+              <div className="bg-muted border rounded-lg p-3">
+                <p className="text-foreground text-sm">
+                  âœ“ This vendor will be set as <strong>Active</strong> and will be able to receive orders immediately after creation.
                 </p>
               </div>
             )}
@@ -802,26 +802,26 @@ export function VendorOnboardingForm({ courtId, onSubmit, onCancel }: VendorOnbo
       </Card>
 
       {/* NEW: Terms and Conditions */}
-      <Card className="bg-neutral-900 border-neutral-800">
+      <Card >
         <CardHeader>
-          <CardTitle className="text-white">Terms and Conditions</CardTitle>
+          <CardTitle>Terms and Conditions</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="flex items-start gap-3">
             <input id="acceptTnC" type="checkbox" checked={formData.acceptTnC} onChange={(e) => handleInputChange("acceptTnC", e.target.checked)} className="mt-1" />
-            <Label htmlFor="acceptTnC" className="text-white">I accept the terms and conditions for vendor registration and payment processing *</Label>
+            <Label htmlFor="acceptTnC">I accept the terms and conditions for vendor registration and payment processing *</Label>
           </div>
-          {errors.acceptTnC && <p className="text-red-400 text-sm">{errors.acceptTnC}</p>}
+          {errors.acceptTnC && <p className="text-destructive text-sm">{errors.acceptTnC}</p>}
           <div className="flex items-start gap-3">
             <input id="acceptSettlementTerms" type="checkbox" checked={formData.acceptSettlementTerms} onChange={(e) => handleInputChange("acceptSettlementTerms", e.target.checked)} className="mt-1" />
-            <Label htmlFor="acceptSettlementTerms" className="text-white">I agree to the settlement terms and fee structure *</Label>
+            <Label htmlFor="acceptSettlementTerms">I agree to the settlement terms and fee structure *</Label>
           </div>
-          {errors.acceptSettlementTerms && <p className="text-red-400 text-sm">{errors.acceptSettlementTerms}</p>}
+          {errors.acceptSettlementTerms && <p className="text-destructive text-sm">{errors.acceptSettlementTerms}</p>}
           <div className="flex items-start gap-3">
             <input id="confirmAccuracy" type="checkbox" checked={formData.confirmAccuracy} onChange={(e) => handleInputChange("confirmAccuracy", e.target.checked)} className="mt-1" />
-            <Label htmlFor="confirmAccuracy" className="text-white">I confirm that all information provided is accurate and up-to-date *</Label>
+            <Label htmlFor="confirmAccuracy">I confirm that all information provided is accurate and up-to-date *</Label>
           </div>
-          {errors.confirmAccuracy && <p className="text-red-400 text-sm">{errors.confirmAccuracy}</p>}
+          {errors.confirmAccuracy && <p className="text-destructive text-sm">{errors.confirmAccuracy}</p>}
         </CardContent>
       </Card>
 
@@ -832,14 +832,14 @@ export function VendorOnboardingForm({ courtId, onSubmit, onCancel }: VendorOnbo
           variant="outline"
           onClick={onCancel}
           disabled={isSubmitting}
-          className="text-white border-neutral-600 hover:bg-neutral-800"
+          className=""
         >
           Cancel
         </Button>
         <Button
           type="submit"
           disabled={isSubmitting}
-          className="bg-blue-600 hover:bg-blue-700 text-white"
+          className="bg-foreground hover:bg-foreground/90 text-background"
         >
           {isSubmitting ? "Creating Vendor..." : "Create Vendor"}
         </Button>

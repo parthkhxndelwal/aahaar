@@ -12,7 +12,8 @@ import { useToast } from "@/hooks/use-toast"
 import { useRouter } from "next/navigation"
 import { Progress } from "@/components/ui/progress"
 import { CheckCircle } from "lucide-react"
-import { useAdminAuth } from "@/contexts/admin-auth-context"
+import { useUnifiedAuth } from "@/contexts/unified-auth-context"
+import { adminCourtApi } from "@/lib/api"
 
 export default function AdminOnboardingPage({ params }: { params: Promise<{ courtId: string }> }) {
   const { courtId } = use(params)
@@ -20,7 +21,7 @@ export default function AdminOnboardingPage({ params }: { params: Promise<{ cour
   const [loading, setLoading] = useState(false)
   const { toast } = useToast()
   const router = useRouter()
-  const { token } = useAdminAuth()
+  const { token } = useUnifiedAuth()
 
   const [courtData, setCourtData] = useState({
     instituteName: "",
@@ -89,17 +90,11 @@ export default function AdminOnboardingPage({ params }: { params: Promise<{ cour
           break
       }
 
-      const response = await fetch("/api/admin/onboarding", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ step: stepName, data: stepData }),
+      const result = await adminCourtApi.updateOnboarding({ 
+        step: stepName as string, 
+        completed: true,
+        data: stepData 
       })
-
-      const result = await response.json()
-      if (!result.success) throw new Error(result.message)
 
       if (step === 4) {
         toast({
@@ -280,9 +275,9 @@ export default function AdminOnboardingPage({ params }: { params: Promise<{ cour
       case 4:
         return (
           <div className="text-center space-y-4">
-            <CheckCircle className="h-16 w-16 text-green-500 mx-auto" />
+            <CheckCircle className="h-16 w-16 text-foreground mx-auto" />
             <h3 className="text-2xl font-bold">Setup Complete!</h3>
-            <p className="text-gray-600">
+            <p className="text-muted-foreground">
               Your food court is now configured and ready to use. You can start adding vendors and managing orders.
             </p>
           </div>
@@ -294,11 +289,11 @@ export default function AdminOnboardingPage({ params }: { params: Promise<{ cour
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-12 px-4">
+    <div className="min-h-screen bg-background py-12 px-4">
       <div className="max-w-4xl mx-auto">
         <div className="mb-8">
           <h1 className="text-3xl font-bold mb-2">Food Court Setup</h1>
-          <p className="text-gray-600">Let's get your food court configured and ready to use.</p>
+          <p className="text-muted-foreground">Let's get your food court configured and ready to use.</p>
         </div>
 
         {/* Progress Steps */}
@@ -309,16 +304,16 @@ export default function AdminOnboardingPage({ params }: { params: Promise<{ cour
                 <div
                   className={`flex items-center justify-center w-8 h-8 rounded-full ${
                     currentStep > step.id
-                      ? "bg-green-500 text-white"
+                      ? "bg-foreground text-background"
                       : currentStep === step.id
-                        ? "bg-blue-500 text-white"
-                        : "bg-gray-300 text-gray-600"
+                        ? "bg-foreground text-background"
+                        : "bg-muted text-muted-foreground"
                   }`}
                 >
                   {currentStep > step.id ? <CheckCircle className="h-5 w-5" /> : step.id}
                 </div>
                 {index < steps.length - 1 && (
-                  <div className={`w-24 h-1 mx-2 ${currentStep > step.id ? "bg-green-500" : "bg-gray-300"}`} />
+                  <div className={`w-24 h-1 mx-2 ${currentStep > step.id ? "bg-foreground" : "bg-muted"}`} />
                 )}
               </div>
             ))}

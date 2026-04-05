@@ -7,8 +7,82 @@ if (typeof window === 'undefined') {
   require('dotenv').config()
 }
 
+/**
+ * Try to get session from NextAuth
+ * This is a dynamic import to avoid issues with Edge runtime
+ */
+const getNextAuthSession = async () => {
+  try {
+    const { auth } = await import("@/auth")
+    return await auth()
+  } catch (error) {
+    // NextAuth not available or session check failed
+    return null
+  }
+}
+
 const authenticateToken = async (request) => {
   try {
+    // First, try NextAuth session (cookie-based authentication)
+    const session = await getNextAuthSession()
+    
+    if (session?.user) {
+      // We have a valid NextAuth session
+      const sessionUser = session.user
+      
+      // Fetch full user data from database
+      const user = await User.findByPk(sessionUser.id, {
+        include: [
+          {
+            model: Court,
+            as: "court",
+            attributes: ["courtId", "instituteName", "status"],
+          },
+          {
+            model: Vendor,
+            as: "vendorProfile",
+            attributes: ["id", "status"],
+            required: false,
+          },
+        ],
+      })
+
+      if (!user) {
+        return NextResponse.json({
+          success: false,
+          message: "User not found",
+        }, { status: 401 })
+      }
+
+      if (user.status !== "active") {
+        return NextResponse.json({
+          success: false,
+          message: "User account is not active",
+        }, { status: 401 })
+      }
+
+      // For vendor users, also check vendor status
+      if (user.role === "vendor" && user.vendorProfile) {
+        if (user.vendorProfile.status !== "active") {
+          return NextResponse.json({
+            success: false,
+            message: "Vendor account is not active. Please contact your admin.",
+          }, { status: 401 })
+        }
+      }
+
+      if (user.court && user.court.status !== "active") {
+        return NextResponse.json({
+          success: false,
+          message: "Court is not active",
+        }, { status: 401 })
+      }
+
+      // Return user data
+      return { user, courtId: user.courtId }
+    }
+
+    // Second, try Bearer token (legacy authentication)
     const authHeader = request.headers.get("authorization")
 
     // Try to extract token - handle both "Bearer <token>" and just "<token>" formats
@@ -29,8 +103,11 @@ const authenticateToken = async (request) => {
       }, { status: 401 })
     }
 
-    // Use JWT_SECRET from env or fallback for development
-    const jwtSecret = process.env.JWT_SECRET || 'fallback-secret-for-dev'
+    // Use JWT_SECRET from env - throw if missing in production
+    const jwtSecret = process.env.JWT_SECRET
+    if (!jwtSecret) {
+      throw new Error('JWT_SECRET environment variable is required')
+    }
 
     let decoded
     try {

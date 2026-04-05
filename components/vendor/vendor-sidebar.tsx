@@ -7,10 +7,18 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import Image from "next/image"
 import { Home, Package, Menu, Settings, ChevronLeft, ChevronRight, Plus, LogOut, Clock, ShoppingBag } from "lucide-react"
-import { useVendorAuth } from "@/contexts/vendor-auth-context"
+import { useUnifiedAuth } from "@/contexts/unified-auth-context"
+import { courtApi } from "@/lib/api"
 
 interface VendorSidebarProps {
   courtId: string
+}
+
+interface CourtInfo {
+  instituteName: string
+  logoUrl?: string
+  bannerUrl?: string
+  address?: string
 }
 
 export function VendorSidebar({ courtId }: VendorSidebarProps) {
@@ -18,8 +26,24 @@ export function VendorSidebar({ courtId }: VendorSidebarProps) {
   const [isMobile, setIsMobile] = useState(false)
   const [showTitle, setShowTitle] = useState(true)
   const [showLink, setShowLink] = useState(true)
+  const [courtInfo, setCourtInfo] = useState<CourtInfo | null>(null)
   const pathname = usePathname()
-  const { logout } = useVendorAuth()
+  const { logout } = useUnifiedAuth()
+
+  // Fetch court info
+  useEffect(() => {
+    const fetchCourtInfo = async () => {
+      try {
+        const response = await courtApi.getById(courtId)
+        if (response.court) {
+          setCourtInfo(response.court)
+        }
+      } catch (error) {
+        console.error("Error fetching court info:", error)
+      }
+    }
+    fetchCourtInfo()
+  }, [courtId])
 
   const navigation = [
     {
@@ -77,7 +101,7 @@ export function VendorSidebar({ courtId }: VendorSidebarProps) {
   // Mobile Bottom Navigation
   if (isMobile) {
     return (
-      <div className="fixed bottom-0 left-0 right-0 bg-black border-t border-neutral-800 z-50">
+      <div className="fixed bottom-0 left-0 right-0 bg-black border-t border-border z-50">
         <div className="flex items-center justify-around py-2">
           {navigation.map((item) => {
             const isActive = pathname === item.href
@@ -88,8 +112,8 @@ export function VendorSidebar({ courtId }: VendorSidebarProps) {
                 className={cn(
                   "flex flex-col items-center py-2 px-3 text-xs font-medium transition-colors rounded-lg",
                   isActive
-                    ? "text-neutral-300 bg-neutral-900"
-                    : "text-neutral-500 hover:text-neutral-300 hover:bg-neutral-950"
+                    ? "text-foreground bg-muted"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted"
                 )}
               >
                 <item.icon className="h-6 w-6 mb-1" />
@@ -101,7 +125,7 @@ export function VendorSidebar({ courtId }: VendorSidebarProps) {
             variant="ghost" 
             size="sm"
             onClick={logout}
-            className="flex flex-col items-center py-2 px-3 text-xs font-medium text-neutral-500 hover:text-neutral-300 hover:bg-neutral-950 rounded-lg"
+            className="flex flex-col items-center py-2 px-3 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg"
           >
             <LogOut className="h-6 w-6 mb-1" />
             <span className="truncate">Logout</span>
@@ -114,11 +138,46 @@ export function VendorSidebar({ courtId }: VendorSidebarProps) {
   // Desktop Sidebar
   return (
     <div className={cn("transition-all duration-300 bg-black flex flex-col h-full", collapsed ? "w-24" : "w-64")}>
+      {/* Court Info Section */}
+      {!collapsed && courtInfo && (
+        <div className="px-4 pt-4">
+          <div className="bg-zinc-800 rounded-xl p-3">
+            <div className="flex items-center gap-3">
+              {courtInfo.logoUrl ? (
+                <Image 
+                  src={courtInfo.logoUrl} 
+                  alt={courtInfo.instituteName}
+                  width={40}
+                  height={40}
+                  className="rounded-lg object-cover"
+                />
+              ) : (
+                <div className="w-10 h-10 rounded-lg bg-zinc-700 flex items-center justify-center">
+                  <span className="text-lg font-bold text-white">
+                    {courtInfo.instituteName?.charAt(0) || 'A'}
+                  </span>
+                </div>
+              )}
+              <div className="flex-1 min-w-0">
+                <h3 className="text-sm font-semibold text-white truncate">
+                  {courtInfo.instituteName}
+                </h3>
+                {courtInfo.address && (
+                  <p className="text-xs text-zinc-400 truncate">
+                    {courtInfo.address}
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center justify-between p-4 mt-2">
         <Image src="/logo.png" alt="Logo" width={32} height={32}></Image>
-        {!collapsed && showTitle && <h2 className="text-xl font-semibold text-neutral-50">Vendor Panel</h2>}
+        {!collapsed && showTitle && <h2 className="text-xl font-semibold">Vendor Panel</h2>}
         <button 
-          className="p-2 hover:bg-neutral-900 rounded-md transition-colors"
+          className="p-2 hover:bg-muted rounded-md transition-colors"
           onClick={() => setCollapsed(!collapsed)}
         >
           {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
@@ -135,8 +194,8 @@ export function VendorSidebar({ courtId }: VendorSidebarProps) {
               className={cn(
                 "flex items-center px-4 py-2.5 my-1 text-sm font-medium transition-colors ml-2 mr-4 rounded-xl",
                 isActive
-                  ? " text-neutral-300 border-r-2 bg-neutral-900 hover:bg-neutral-800 border-neutral-300"
-                  : "text-neutral-500 hover:bg-neutral-950",
+                  ? " text-foreground border-r-2 bg-muted hover:bg-muted/80 border-border"
+                  : "text-muted-foreground hover:bg-muted",
               )}
             >
               <item.icon className={cn("h-5 w-5 mr-3 p-0")} />
@@ -149,7 +208,7 @@ export function VendorSidebar({ courtId }: VendorSidebarProps) {
       {/* Quick Order Button - only in expanded mode */}
       {!collapsed && showLink && (
         <div className="px-6 pb-4">
-          <Button asChild className="w-full bg-neutral-800 hover:bg-neutral-700 text-neutral-100">
+          <Button asChild className="w-full bg-foreground hover:bg-foreground/90 text-background">
             <Link href={`/vendor/${courtId}/orders/manual`}>
               <Plus className="h-4 w-4 mr-2" />
               Quick Order
@@ -173,7 +232,7 @@ export function VendorSidebar({ courtId }: VendorSidebarProps) {
 
           onClick={logout}
           className={cn(
-            "w-full justify-start text-neutral-400 hover:text-neutral-200 hover:bg-neutral-900 transition-colors",
+            "w-full justify-start text-muted-foreground hover:text-foreground hover:bg-muted transition-colors",
             collapsed ? "px-2" : "px-4"
           )}
         >

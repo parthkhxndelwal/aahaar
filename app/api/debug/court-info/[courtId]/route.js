@@ -3,6 +3,10 @@ import { Vendor } from "@/models"
 import { authenticateToken } from "@/middleware/auth"
 
 export async function GET(request, { params }) {
+  if (process.env.NODE_ENV === "production") {
+    return NextResponse.json({ success: false, message: "Debug endpoints disabled in production" }, { status: 404 })
+  }
+
   try {
     const authResult = await authenticateToken(request)
     if (authResult instanceof NextResponse) return authResult

@@ -5,10 +5,10 @@ import "@/app/globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
 import { cn } from "@/lib/utils"
 import { Toaster } from "@/components/ui/toaster"
-import { AuthProvider } from "@/contexts/auth-context"
 import { NetworkProvider } from "@/contexts/network-context"
 import CacheStatus from "@/components/cache-status"
 import OfflineGate from "@/components/offline-gate"
+import { Providers } from "./providers"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -41,10 +41,7 @@ export const viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
-  themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#ffffff' },
-    { media: '(prefers-color-scheme: dark)', color: '#0a0a0a' }
-  ]
+  themeColor: '#ffffff',
 }
 
 export default function RootLayout({
@@ -55,15 +52,15 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={`${inter.className} overflow-x-hidden w-full max-w-full touch-manipulation`} style={{ touchAction: 'manipulation' }}>
-        <ThemeProvider attribute="class" defaultTheme="dark" disableTransitionOnChange>
-          <NetworkProvider>
-            <AuthProvider>
+        <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false} disableTransitionOnChange>
+          <Providers>
+            <NetworkProvider>
               <OfflineGate />
               <CacheStatus />
               {children}
               <Toaster />
-            </AuthProvider>
-          </NetworkProvider>
+            </NetworkProvider>
+          </Providers>
         </ThemeProvider>
       </body>
     </html>

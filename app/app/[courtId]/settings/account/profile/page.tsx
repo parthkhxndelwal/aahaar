@@ -3,7 +3,7 @@ import { use, useState, useEffect, useRef, type SyntheticEvent } from "react"
 import Link from "next/link"
 import { ArrowLeft, Camera, User, Mail, Phone, Calendar, Users, Check, X, Loader2, CropIcon, Trash2Icon, Save } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
-import { useAppAuth } from "@/contexts/app-auth-context"
+import { useUnifiedAuth } from "@/contexts/unified-auth-context"
 import ReactCrop, {
   centerCrop,
   makeAspectCrop,
@@ -481,7 +481,7 @@ function OTPDrawer({ isOpen, onClose, emailOTP, phoneOTP, newEmail, newPhone, on
 
 export default function ProfileSettingsPage({ params }: { params: Promise<{ courtId: string }> }) {
   const { courtId } = use(params)
-  const { token, isAuthenticated, loading: authLoading, refreshUser } = useAppAuth()
+  const { token, isAuthenticated, loading: authLoading, refreshUser } = useUnifiedAuth()
   
   const [profileData, setProfileData] = useState<ProfileData>({
     fullName: "",

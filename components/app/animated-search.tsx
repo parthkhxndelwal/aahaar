@@ -4,7 +4,8 @@ import { useState, useEffect, useRef, useCallback } from "react"
 import { motion, AnimatePresence, LayoutGroup } from "framer-motion"
 import { Search, X, Clock, TrendingUp } from "lucide-react"
 import { ProductCard } from "@/components/app/product-card"
-import { useAppAuth } from "@/contexts/app-auth-context"
+import { useUnifiedAuth } from "@/contexts/unified-auth-context"
+import { courtApi } from "@/lib/api"
 
 interface MenuItem {
   id: string
@@ -38,7 +39,7 @@ interface AnimatedSearchProps {
 const POPULAR_SEARCHES = ["pizza", "burger", "biryani", "coffee", "sandwich", "pasta", "salad", "ice cream", "dal", "roti", "naan", "paratha", "rice", "curry", "paneer", "chicken", "mutton", "fish", "samosa", "pakora", "chaat", "dosa", "idli", "vada", "chole", "rajma", "palak", "aloo gobi", "butter chicken", "tandoori", "kebab", "kulcha", "lassi", "chai"]
 
 export function AnimatedSearch({ courtId, onClose }: AnimatedSearchProps) {
-  const { user, token } = useAppAuth()
+  const { user, token } = useUnifiedAuth()
   const [isExpanded, setIsExpanded] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const [searchResults, setSearchResults] = useState<MenuItem[]>([])
@@ -99,20 +100,9 @@ export function AnimatedSearch({ courtId, onClose }: AnimatedSearchProps) {
     setShowHistory(false)
     
     try {
-      const response = await fetch(`/api/courts/${courtId}/menu-items/search?q=${encodeURIComponent(query)}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
-      
-      const data = await response.json()
-      
-      if (data.success) {
-        setSearchResults(data.data || [])
-        saveToHistory(query)
-      } else {
-        setSearchResults([])
-      }
+      const data = await courtApi.searchMenu(courtId, { query })
+      setSearchResults((data?.items || []) as any)
+      saveToHistory(query)
     } catch (error) {
       console.error("Error searching menu items:", error)
       setSearchResults([])
@@ -265,22 +255,22 @@ export function AnimatedSearch({ courtId, onClose }: AnimatedSearchProps) {
       {!isExpanded ? (
         <motion.div
           layoutId="searchbar"
-          className="relative flex items-center gap-3 bg-white dark:bg-neutral-900 rounded-2xl p-3 cursor-pointer hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors w-full max-w-[680px] md:max-w-[720px] lg:max-w-[820px] xl:max-w-[960px] 2xl:max-w-[1120px] mx-auto"
+          className="relative flex items-center gap-3 bg-background rounded-2xl p-3 cursor-pointer hover:bg-muted/50 transition-colors w-full max-w-[680px] md:max-w-[720px] lg:max-w-[820px] xl:max-w-[960px] 2xl:max-w-[1120px] mx-auto shadow-lg border border-border/50"
           transition={{ duration: layoutDuration, ease: [0.3, 0, 0.3, 1] }}
           onClick={handleExpand}
         >
           <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-neutral-400" />
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <input
               type="text"
               readOnly
               value={""}
               placeholder="Search for food items..."
-              className="w-full pl-10 pr-4 py-2.5 bg-transparent dark:bg-transparent rounded-xl text-sm text-neutral-900 dark:text-white placeholder-neutral-500 focus:outline-none"
+              className="w-full pl-10 pr-4 py-2.5 bg-transparent rounded-xl text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
               style={{ pointerEvents: 'none' }}
             />
           </div>
-          <div className="absolute right-3 text-xs text-neutral-400 bg-neutral-100 dark:bg-neutral-800 px-2 py-1 rounded-lg border">
+          <div className="absolute right-3 text-xs text-muted-foreground bg-muted px-2 py-1 rounded-lg border">
             Tap to search
           </div>
         </motion.div>
@@ -310,7 +300,7 @@ export function AnimatedSearch({ courtId, onClose }: AnimatedSearchProps) {
                 <div className="p-4">
                   <motion.div
                     layoutId="searchbar"
-                    className="flex items-center gap-3 p-3 bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-2xl shadow-sm w-full max-w-[680px] md:max-w-[720px] lg:max-w-[820px] xl:max-w-[960px] 2xl:max-w-[1120px] mx-auto"
+                    className="flex items-center gap-3 p-3 bg-background border border-border rounded-2xl shadow-sm w-full max-w-[680px] md:max-w-[720px] lg:max-w-[820px] xl:max-w-[960px] 2xl:max-w-[1120px] mx-auto"
                     transition={{ duration: layoutDuration, ease: [0.3, 0, 0.3, 1] }}
                     onLayoutAnimationComplete={() => {
                       // When opening completes, reveal overlay chrome
@@ -318,25 +308,25 @@ export function AnimatedSearch({ courtId, onClose }: AnimatedSearchProps) {
                     }}
                   >
                     <div className="flex-1 relative">
-                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-neutral-400" />
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                       <input
                         ref={searchInputRef}
                         type="text"
                         value={searchQuery}
                         onChange={(e) => handleInputChange(e.target.value)}
                         placeholder="Search for food items..."
-                        className="w-full pl-10 pr-4 py-2.5 bg-transparent dark:bg-transparent rounded-xl text-sm text-neutral-900 dark:text-white placeholder-neutral-500 focus:outline-none"
+                        className="w-full pl-10 pr-4 py-2.5 bg-transparent rounded-xl text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
                       />
                     </div>
                     <motion.button
                       onClick={handleCrossClick}
-                      className="p-2 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-lg transition-colors"
+                      className="p-2 hover:bg-muted rounded-lg transition-colors"
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
                       animate={{ opacity: crossVisible ? 1 : 0 }}
                       transition={{ duration: 0.12, ease: 'easeOut' }}
                     >
-                      <X className="h-6 w-6 text-neutral-600 dark:text-neutral-400" />
+                      <X className="h-6 w-6 text-muted-foreground" />
                     </motion.button>
                   </motion.div>
                 </div>
@@ -349,7 +339,7 @@ export function AnimatedSearch({ courtId, onClose }: AnimatedSearchProps) {
                       {/* Popular Searches (always visible when history is shown) */}
                       {showHistory && (
                         <div className="space-y-3">
-                          <h3 className="text-lg font-semibold text-neutral-900 dark:text-white">
+                          <h3 className="text-lg font-semibold text-foreground">
                             🔥 Popular Searches
                           </h3>
                           <div className="[text-align:justify]">
@@ -357,7 +347,7 @@ export function AnimatedSearch({ courtId, onClose }: AnimatedSearchProps) {
                               <button
                                 key={term}
                                 onClick={() => handleHistoryClick(term)}
-                                className="mx-1 inline-block rounded-full border border-neutral-200 dark:border-neutral-600 bg-neutral-50 dark:bg-neutral-900 px-5 py-1.5 text-xs sm:text-sm text-neutral-700 dark:text-neutral-300 hover:bg-blue-50 dark:hover:bg-blue-900.30 hover:border-blue-300 transition-colors mb-2"
+                                className="mx-1 inline-block rounded-full border border-border bg-muted/50 px-5 py-1.5 text-xs sm:text-sm text-foreground hover:bg-muted hover:border-foreground/30 transition-colors mb-2"
                               >
                                 <span className="capitalize">{term}</span>
                               </button>
@@ -372,12 +362,12 @@ export function AnimatedSearch({ courtId, onClose }: AnimatedSearchProps) {
                       {showHistory && searchHistory.length > 0 && (
                         <div className="space-y-4 mt-6">
                           <div className="flex items-center justify-between">
-                            <h3 className="text-lg font-semibold text-neutral-900 dark:text-white">
+                            <h3 className="text-lg font-semibold text-foreground">
                               Recent Searches
                             </h3>
                             <button
                               onClick={clearHistory}
-                              className="text-sm text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300"
+                              className="text-sm text-muted-foreground hover:text-foreground"
                             >
                               Clear All
                             </button>
@@ -387,9 +377,9 @@ export function AnimatedSearch({ courtId, onClose }: AnimatedSearchProps) {
                               <button
                                 key={`${item.query}-${item.timestamp}`}
                                 onClick={() => handleHistoryClick(item.query)}
-                                className="mx-1 inline-flex items-center gap-2 rounded-full border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 px-4 py-1.5 text-xs sm:text-sm text-neutral-700 dark:text-neutral-300 hover:bg-blue-50 dark:hover:bg-blue-900.30 hover:border-blue-300 transition-colors mb-2"
+                                className="mx-1 inline-flex items-center gap-2 rounded-full border border-border bg-muted/50 px-4 py-1.5 text-xs sm:text-sm text-foreground hover:bg-muted hover:border-foreground/30 transition-colors mb-2"
                               >
-                                <Clock className="h-3 w-3 text-neutral-400" />
+                                <Clock className="h-3 w-3 text-muted-foreground" />
                                 <span>{item.query}</span>
                               </button>
                             ))}
@@ -403,8 +393,8 @@ export function AnimatedSearch({ courtId, onClose }: AnimatedSearchProps) {
                       {isLoading && (
                         <div className="flex items-center justify-center py-12">
                           <div className="text-center">
-                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-neutral-900 dark:border-white mx-auto mb-4"></div>
-                            <p className="text-neutral-600 dark:text-neutral-400">
+                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-foreground mx-auto mb-4"></div>
+                            <p className="text-muted-foreground">
                               Searching for "{searchQuery}"...
                             </p>
                           </div>
@@ -415,7 +405,7 @@ export function AnimatedSearch({ courtId, onClose }: AnimatedSearchProps) {
                       {!isLoading && searchResults.length > 0 && (
                         <div className="space-y-4">
                           <div className="flex items-center gap-2">
-                            <h3 className="text-lg font-semibold text-neutral-900 dark:text-white">
+                            <h3 className="text-lg font-semibold text-foreground">
                               Found: {searchResults.length} item{searchResults.length !== 1 ? 's' : ''}
                             </h3>
                           </div>
@@ -446,13 +436,13 @@ export function AnimatedSearch({ courtId, onClose }: AnimatedSearchProps) {
                       {/* No Results */}
                       {!isLoading && !isTyping && !showHistory && searchQuery && searchResults.length === 0 && (
                         <div className="text-center py-12">
-                          <div className="text-neutral-400 mb-4">
+                          <div className="text-muted-foreground mb-4">
                             <Search className="h-16 w-16 mx-auto mb-4" />
                           </div>
-                          <h3 className="text-lg font-semibold text-neutral-900 dark:text-white mb-2">
+                          <h3 className="text-lg font-semibold text-foreground mb-2">
                             No items found
                           </h3>
-                          <p className="text-neutral-600 dark:text-neutral-400">
+                          <p className="text-muted-foreground">
                             We couldn't find any items matching "{searchQuery}". Try searching with different keywords.
                           </p>
                         </div>

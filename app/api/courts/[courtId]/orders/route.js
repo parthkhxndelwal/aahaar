@@ -10,7 +10,14 @@ export async function GET(request, { params }) {
       return errorResponse(authResult.error, authResult.status)
     }
 
+    const { user, courtId: authCourtId } = authResult
     const { courtId } = await params
+
+    // Verify user belongs to requested court (super admins can access any court)
+    if (user.role !== "superadmin" && authCourtId !== courtId) {
+      return errorResponse("Access denied", 403)
+    }
+
     const { searchParams } = new URL(request.url)
 
     const status = searchParams.get("status")
@@ -45,7 +52,14 @@ export async function POST(request, { params }) {
       return errorResponse(authResult.error, authResult.status)
     }
 
+    const { user, courtId: authCourtId } = authResult
     const { courtId } = await params
+
+    // Verify user belongs to requested court (super admins can access any court)
+    if (user.role !== "superadmin" && authCourtId !== courtId) {
+      return errorResponse("Access denied", 403)
+    }
+
     const {
       vendorId,
       items, 

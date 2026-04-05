@@ -1,10 +1,20 @@
 import { NextResponse } from "next/server"
 import { Op } from "sequelize"
 import db from "@/models"
+import { authenticateToken } from "@/middleware/auth"
 
 // GET - Get specific vendor
 export async function GET(request, { params }) {
   try {
+    const authResult = await authenticateToken(request)
+    if (authResult instanceof NextResponse) return authResult
+
+    const { user } = authResult
+
+    if (user.role !== "admin") {
+      return NextResponse.json({ success: false, message: "Admin access required" }, { status: 403 })
+    }
+
     const { id } = await params
     const { searchParams } = new URL(request.url)
     const courtId = searchParams.get('courtId')
@@ -40,6 +50,15 @@ export async function GET(request, { params }) {
 // PATCH - Update vendor
 export async function PATCH(request, { params }) {
   try {
+    const authResult = await authenticateToken(request)
+    if (authResult instanceof NextResponse) return authResult
+
+    const { user } = authResult
+
+    if (user.role !== "admin") {
+      return NextResponse.json({ success: false, message: "Admin access required" }, { status: 403 })
+    }
+
     const { id } = await params
     const body = await request.json()
 
@@ -205,6 +224,15 @@ export async function PATCH(request, { params }) {
 // DELETE - Delete vendor
 export async function DELETE(request, { params }) {
   try {
+    const authResult = await authenticateToken(request)
+    if (authResult instanceof NextResponse) return authResult
+
+    const { user } = authResult
+
+    if (user.role !== "admin") {
+      return NextResponse.json({ success: false, message: "Admin access required" }, { status: 403 })
+    }
+
     const { id } = await params
 
     const vendor = await db.Vendor.findByPk(id)

@@ -1,20 +1,20 @@
 "use client"
 
 import { use } from "react"
-import { useVendorAuth } from "@/contexts/vendor-auth-context"
+import { useUnifiedAuth } from "@/contexts/unified-auth-context"
 import { useVendorOrders } from "@/hooks/use-vendor-orders"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { ClipboardList, Clock, CheckCircle2, AlertCircle } from "lucide-react"
+import { ClipboardList, Clock, CheckCircle2, AlertCircle, UtensilsCrossed, Box } from "lucide-react"
 import Link from "next/link"
 import { formatCurrency } from "@/lib/utils"
 
 export default function VendorDashboard({ params }: { params: Promise<{ courtId: string }> }) {
-  const { user } = useVendorAuth()
+  const { user } = useUnifiedAuth()
   const { courtId } = use(params)
   
-  // Assuming user.id is the vendorId. If user is null, the hook handles it gracefully 
-  const { orders, sectionCounts, isLoading } = useVendorOrders(user?.id || null)
+  // Use vendorProfile.id (Vendor ID), not user.id (User ID)
+  const { orders, sectionCounts, isLoading } = useVendorOrders(user?.vendorProfile?.id || null)
 
   const stats = [
     {
@@ -22,8 +22,8 @@ export default function VendorDashboard({ params }: { params: Promise<{ courtId:
       value: sectionCounts.upcoming,
       description: "Waiting for acceptance",
       icon: AlertCircle,
-      color: "text-blue-500",
-      bg: "bg-blue-500/10"
+      color: "text-foreground",
+      bg: "bg-muted"
     },
     {
       title: "In Kitchen",
@@ -38,8 +38,8 @@ export default function VendorDashboard({ params }: { params: Promise<{ courtId:
       value: sectionCounts.ready,
       description: "Waiting for pickup",
       icon: CheckCircle2,
-      color: "text-green-500",
-      bg: "bg-green-500/10"
+      color: "text-foreground",
+      bg: "bg-muted"
     }
   ]
 
@@ -114,7 +114,7 @@ export default function VendorDashboard({ params }: { params: Promise<{ courtId:
                         <p className="text-sm text-muted-foreground capitalize">{order.items.length} items • {formatCurrency(order.totalAmount)}</p>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">{order.status}</span>
+                        <span className="text-xs bg-muted text-foreground px-2 py-1 rounded-full">{order.status}</span>
                       </div>
                    </div>
                  ))}
@@ -138,17 +138,17 @@ export default function VendorDashboard({ params }: { params: Promise<{ courtId:
             <Button asChild className="w-full justify-start" variant="outline">
               <Link href={`/vendor/${courtId}/queue`}>
                 <ClipboardList className="mr-2 h-4 w-4" />
-                Manage Order Queue
+                Manage Orders
               </Link>
             </Button>
             <Button asChild className="w-full justify-start" variant="outline">
-               <Link href={`/vendor/${courtId}/menu`}>
+              <Link href={`/vendor/${courtId}/menu`}>
                 <UtensilsCrossed className="mr-2 h-4 w-4" />
-                Update Menu Items
+                Manage Menu
               </Link>
             </Button>
             <Button asChild className="w-full justify-start" variant="outline">
-               <Link href={`/vendor/${courtId}/inventory`}>
+              <Link href={`/vendor/${courtId}/inventory`}>
                 <Box className="mr-2 h-4 w-4" />
                 Check Inventory
               </Link>

@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
+import { orderApi, apiClient } from '@/lib/api'
 
 interface OrderItem {
   name: string
@@ -54,6 +55,11 @@ export const useUserOrders = (userId: string | null, courtId: string | null, act
 
   console.log('🔍 [useUserOrders] Hook initialized with userId:', userId)
 
+  // Set up token getter for API client
+  useEffect(() => {
+    apiClient.setTokenGetter(() => localStorage.getItem('app_auth_token'))
+  }, [])
+
   // Fetch user orders from API
   const fetchUserOrders = useCallback(async () => {
     if (!userId || !courtId) {
@@ -65,52 +71,27 @@ export const useUserOrders = (userId: string | null, courtId: string | null, act
       setError(null)
       setIsLoading(true)
 
-      const token = localStorage.getItem('app_auth_token')
-      console.log('🔑 [useUserOrders] Token present:', !!token)
       console.log('👤 [useUserOrders] Fetching orders for userId:', userId)
 
-      if (!token) {
-        throw new Error('No authentication token found. Please log in again.')
-      }
-
-      const response = await fetch(`/api/app/${encodeURIComponent(courtId)}/orders/status`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        }
-      })
-
-      console.log('📡 [useUserOrders] Response status:', response.status)
-      console.log('📡 [useUserOrders] Response ok:', response.ok)
-
-      if (!response.ok) {
-        const errorText = await response.text()
-        console.error('❌ [useUserOrders] Response error:', response.status, errorText)
-
-        if (response.status === 401) {
-          throw new Error('Authentication failed. Please log in again.')
-        } else if (response.status === 403) {
-          throw new Error('Access denied. You may not have permission to view these orders.')
-        } else if (response.status === 404) {
-          throw new Error('User not found or no orders available.')
-        } else {
-          throw new Error(`Failed to fetch user orders (${response.status}): ${errorText || 'Unknown error'}`)
-        }
-      }
-
-      const data = await response.json()
+      const data = await orderApi.getOrderStatusList(courtId, { activeOnly: true })
       console.log('✅ [useUserOrders] Response data:', data)
 
-      if (data.success) {
-        setOrderSummaries(data.data.orderSummaries || [])
-        setLastUpdate(new Date())
-        console.log('✅ [useUserOrders] Successfully updated order summaries:', data.data.orderSummaries?.length || 0, 'orders')
-      } else {
-        throw new Error(data.message || 'Failed to fetch user orders')
+      setOrderSummaries((data as any).orderSummaries || [])
+      setLastUpdate(new Date())
+      console.log('✅ [useUserOrders] Successfully updated order summaries:', (data as any).orderSummaries?.length || 0, 'orders')
+    } catch (err: any) {
+      let errorMessage = 'Failed to fetch user orders'
+      
+      if (err.status === 401) {
+        errorMessage = 'Authentication failed. Please log in again.'
+      } else if (err.status === 403) {
+        errorMessage = 'Access denied. You may not have permission to view these orders.'
+      } else if (err.status === 404) {
+        errorMessage = 'User not found or no orders available.'
+      } else if (err.message) {
+        errorMessage = err.message
       }
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to fetch user orders'
+      
       setError(errorMessage)
       console.error('❌ [useUserOrders] Error:', err)
     } finally {
